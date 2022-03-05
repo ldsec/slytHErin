@@ -4,3 +4,6 @@ Putting ReLU in place of the square seems to solve the problem, even if the arch
 Also initializing weights after the square to small values seems to be good but not enough
 
 Edit: when initializing with lower weights, even if the sigmoid value is kept "small", the gradient is still 0, I don't know why
+
+## SimpleNet
+In the paper the mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training.
