@@ -3,7 +3,9 @@ I managed to identify the problem, with a certain degree of certainty, to the us
 Putting ReLU in place of the square seems to solve the problem, even if the architecture is weird with the sum pooling.
 Also initializing weights after the square to small values seems to be good but not enough
 
-Edit: when initializing with lower weights, even if the sigmoid value is kept "small", the gradient is still 0, I don't know why
-
 ## SimpleNet
-In the paper the mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training. 
+In the paper the mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training.
+Many combinations of activation function (square, relu, polynomial approx of relu up to degree=4) have been experimented. Best seems to be xavier init + relu or square.
+
+## AlexNet
+AlexNet with Sum Pooling instead of MaxPooling...waiting for training. Architecture is been implemented following the PyTorch standard one
