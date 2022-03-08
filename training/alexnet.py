@@ -191,6 +191,7 @@ def plot_history(key, train, history):
   ax[1].legend()
 
   plt.savefig(f"./images/{key}_{when}.png")
+  plt.close()
 
 ## TRAIN
 def train(logger, model, dataHandler, num_epochs, TPU=False):
@@ -275,7 +276,12 @@ def eval(logger, model, dataHandler):
 
   return test_loss, test_accuracy
 
-## PIPELINE
+#########################
+#                       #
+# TRAIN + TEST PIPELINE #
+#                       #
+#########################
+
 model = AlexNet(False).to(device=device)
 train("alex", model, dataHandler, 1, TPU=False)
 eval("alex", model, dataHandler)

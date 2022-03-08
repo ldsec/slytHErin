@@ -1,0 +1,62 @@
+[!] Training Epoch 1, step 100 ==> loss 0.8621053066849709, accuracy 0.7646484375
+[!] Training Epoch 1, step 200 ==> loss 0.5593439283967018, accuracy 0.84853515625
+[!] Training Epoch 2, step 100 ==> loss 0.16501054376363755, accuracy 0.95171875
+[!] Training Epoch 2, step 200 ==> loss 0.1500820904225111, accuracy 0.9562109375
+[!] Training Epoch 3, step 100 ==> loss 0.10387997582554817, accuracy 0.969921875
+[!] Training Epoch 3, step 200 ==> loss 0.10382086203433573, accuracy 0.969921875
+[!] Training Epoch 4, step 100 ==> loss 0.07936767587438226, accuracy 0.977578125
+[!] Training Epoch 4, step 200 ==> loss 0.07917760535143316, accuracy 0.97703125
+[!] Training Epoch 5, step 100 ==> loss 0.06510599210858345, accuracy 0.980078125
+[!] Training Epoch 5, step 200 ==> loss 0.06519431232474744, accuracy 0.98037109375
+[!] Training Epoch 6, step 100 ==> loss 0.05101258143782616, accuracy 0.9846875
+[!] Training Epoch 6, step 200 ==> loss 0.052626068727113305, accuracy 0.9839453125
+[!] Training Epoch 7, step 100 ==> loss 0.04362784964963794, accuracy 0.9859765625
+[!] Training Epoch 7, step 200 ==> loss 0.04575954796047881, accuracy 0.9857421875
+[!] Training Epoch 8, step 100 ==> loss 0.037640916584059596, accuracy 0.98796875
+[!] Training Epoch 8, step 200 ==> loss 0.04055292413104326, accuracy 0.9875
+[!] Training Epoch 9, step 100 ==> loss 0.030087310411036013, accuracy 0.99015625
+[!] Training Epoch 9, step 200 ==> loss 0.03301416683010757, accuracy 0.98900390625
+[!] Training Epoch 10, step 100 ==> loss 0.024519208238925786, accuracy 0.9924609375
+[!] Training Epoch 10, step 200 ==> loss 0.026645818926626815, accuracy 0.991875
+[!] Test batch 2 ==> loss 0.1451890617609024, accuracy 0.9765625
+[!] Test batch 3 ==> loss 0.23519863188266754, accuracy 0.966796875
+[!] Test batch 4 ==> loss 0.04352535679936409, accuracy 0.9713541666666666
+[!] Test batch 5 ==> loss 0.2641793191432953, accuracy 0.96875
+[!] Test batch 6 ==> loss 0.15138381719589233, accuracy 0.96875
+[!] Test batch 7 ==> loss 0.13711430132389069, accuracy 0.9700520833333334
+[!] Test batch 8 ==> loss 0.19035013020038605, accuracy 0.9704241071428571
+[!] Test batch 9 ==> loss 0.13761396706104279, accuracy 0.96875
+[!] Test batch 10 ==> loss 0.08496396243572235, accuracy 0.9704861111111112
+[!] Test batch 11 ==> loss 0.11882207542657852, accuracy 0.9703125
+[!] Test batch 12 ==> loss 0.121076300740242, accuracy 0.9712357954545454
+[!] Test batch 13 ==> loss 0.3488909602165222, accuracy 0.970703125
+[!] Test batch 14 ==> loss 0.08088566362857819, accuracy 0.9711538461538461
+[!] Test batch 15 ==> loss 0.13528652489185333, accuracy 0.970703125
+[!] Test batch 16 ==> loss 0.19671359658241272, accuracy 0.9697916666666667
+[!] Test batch 17 ==> loss 0.09418926388025284, accuracy 0.969970703125
+[!] Test batch 18 ==> loss 0.11876729875802994, accuracy 0.9712775735294118
+[!] Test batch 19 ==> loss 0.16600127518177032, accuracy 0.9715711805555556
+[!] Test batch 20 ==> loss 0.13422371447086334, accuracy 0.9710115131578947
+[!] Test batch 21 ==> loss 0.1397906392812729, accuracy 0.9705078125
+[!] Test batch 22 ==> loss 0.15344418585300446, accuracy 0.9706101190476191
+[!] Test batch 23 ==> loss 0.21250271797180176, accuracy 0.9701704545454546
+[!] Test batch 24 ==> loss 0.06431711465120316, accuracy 0.9707880434782609
+[!] Test batch 25 ==> loss 0.10222514718770981, accuracy 0.9710286458333334
+[!] Test batch 26 ==> loss 0.09141642600297928, accuracy 0.97140625
+[!] Test batch 27 ==> loss 0.1736535280942917, accuracy 0.9713040865384616
+[!] Test batch 28 ==> loss 0.05383878946304321, accuracy 0.9717881944444444
+[!] Test batch 29 ==> loss 0.03642994165420532, accuracy 0.9723772321428571
+[!] Test batch 30 ==> loss 0.14925388991832733, accuracy 0.9718480603448276
+[!] Test batch 31 ==> loss 0.13749480247497559, accuracy 0.971484375
+[!] Test batch 32 ==> loss 0.06427095085382462, accuracy 0.9719002016129032
+[!] Test batch 33 ==> loss 0.1361510008573532, accuracy 0.971923828125
+[!] Test batch 34 ==> loss 0.10995173454284668, accuracy 0.9720643939393939
+[!] Test batch 35 ==> loss 0.09647747874259949, accuracy 0.9719669117647058
+[!] Test batch 36 ==> loss 0.07710270583629608, accuracy 0.9720982142857143
+[!] Test batch 37 ==> loss 0.07744274288415909, accuracy 0.9722222222222222
+[!] Test batch 38 ==> loss 0.07615271210670471, accuracy 0.97265625
+[!] Test batch 39 ==> loss 0.06167072057723999, accuracy 0.9727590460526315
+[!] Test batch 40 ==> loss 0.02798500843346119, accuracy 0.9730568910256411
+=================================
+[+] Average test Loss ==> 0.1268
+[+] Test accuracy ==> 97.31
