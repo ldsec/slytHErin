@@ -4,7 +4,7 @@ Putting ReLU in place of the square seems to solve the problem, even if the arch
 Also initializing weights after the square to small values seems to be good but not enough
 
 ## SimpleNet
-In the paper the mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training.
+In the paper for CryptoNet they mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training.
 Many combinations of activation function (square, relu, polynomial approx of relu up to degree=4) have been experimented. Best seems to be xavier init + relu or square.
 
 ## AlexNet
