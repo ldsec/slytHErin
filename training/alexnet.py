@@ -218,10 +218,6 @@ def train(logger, model, dataHandler, num_epochs, TPU=False):
       loss = criterion(predictions, labels)
       loss.backward()
       
-      if model.verbose:
-        print(f"[?] Step {i+1} Epoch {epoch+1}")
-        plot_grad_flow(model.named_parameters())
-      
       if not TPU:
         optimizer.step()
       else:
