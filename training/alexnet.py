@@ -143,39 +143,25 @@ learning_rate = 3e-4
 total_step = len(dataHandler.train_dl)
 criterion = nn.CrossEntropyLoss()
 
-## DEBUG GRADS
-def plot_grad_flow(named_parameters):
-    ## From https://discuss.pytorch.org/t/check-gradient-flow-in-network/15063
-    ## Beware it's a little bit tricky to interpret results
-    '''Plots the gradients flowing through different layers in the net during training.
-    Can be used for checking for possible gradient vanishing / exploding problems.
-    
-    Usage: Plug this function in Trainer class after loss.backwards() as 
-    "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+class Logger():
+  def __init__(self, path="./logs", name="SimpleNet"):
+    self.path = path
+    self.name = name
+    self.log = []
+  
+  def log_step(self, epoch, step, loss, accuracy):
+    self.log.append(f"[!] Training Epoch {epoch+1}, step {step+1} ==> loss {loss}, accuracy {accuracy}")
+  
+  def log_batch(self, batch, loss, accuracy):
+    self.log.append(f"[!] Test batch {batch+1} ==> loss {loss}, accuracy {accuracy}")
+  
+  def finalize(self, test_loss, test_accuracy):
+    self.log.append("=================================")
+    self.log.append(f"[+] Average test Loss ==> {test_loss:.4f}")
+    self.log.append(f"[+] Test accuracy ==> {test_accuracy * 100:.2f}")
+    with open(self.path+self.name+"_log.txt", "w+") as f:
+      f.write("\n".join(self.log))
 
-    ave_grads = []
-    max_grads = []
-    layers = []
-    for n, p in named_parameters:
-        if(p.requires_grad) and ("bias" not in n):
-            layers.append(n)
-            ave_grads.append(p.grad.abs().mean())
-            max_grads.append(p.grad.abs().max())
-            print(f"Layer {n}, grad avg {p.grad.mean()}, data {p.data.mean()}")
-    plt.bar(np.arange(len(max_grads)), max(max_grads), alpha=0.1, lw=1, color="c")
-    plt.bar(np.arange(len(max_grads)), np.mean(ave_grads), alpha=0.1, lw=1, color="b")
-    plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
-    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-    plt.xlim(left=0, right=len(ave_grads))
-    plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
-    plt.xlabel("Layers")
-    plt.ylabel("average gradient")
-    plt.title("Gradient flow")
-    plt.grid(True)
-    plt.legend([Line2D([0], [0], color="c", lw=4),
-                Line2D([0], [0], color="b", lw=4),
-                Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
-    
 ## PLOT HELPER
 def plot_history(key, train, history):
   """ 
@@ -204,10 +190,10 @@ def plot_history(key, train, history):
   ax[1].grid( True )
   ax[1].legend()
 
-  plt.savefig(f"key_{when}.png")
+  plt.savefig(f"./images/{key}_{when}.png")
 
 ## TRAIN
-def train(key, model, dataHandler, num_epochs, TPU=False):
+def train(logger, model, dataHandler, num_epochs, TPU=False):
   num_epochs = num_epochs
   model.train()
   #optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
@@ -219,7 +205,6 @@ def train(key, model, dataHandler, num_epochs, TPU=False):
 
   for epoch in range(num_epochs):
     epoch_loss = 0
-    epoch_accuracy = 0
     num_correct = 0
     num_samples = 0
     for i, (data, labels) in enumerate(dataHandler.train_dl):
@@ -245,21 +230,19 @@ def train(key, model, dataHandler, num_epochs, TPU=False):
       num_correct += (predicted_labels == labels).sum().item()
       num_samples += predicted_labels.size(0)
       
-      epoch_accuracy += num_correct/num_samples
       epoch_loss += loss.item()
 
       if (i+1) % 100 == 0:
-        print("=====================================================================================================================")
-        print ('[!] Train Epoch [{}/{}], Step [{}/{}] ==> Loss: {:.4f}'.format(epoch + 1, num_epochs, i + 1, total_step, loss.item()))
+        logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)
       
-    trainHistory['loss'].append(epoch_loss/len(dataHandler.train_dl))
-    trainHistory['accuracy'].append(epoch_accuracy/len(dataHandler.train_dl))
+    trainHistory['loss'].append(loss.item())
+    trainHistory['accuracy'].append(num_correct/num_samples)
     
-  plot_history(key, True, trainHistory)
+  plot_history(logger.name, True, trainHistory)
 
 
 ## EVAL 
-def eval(key, model, dataHandler):
+def eval(logger, model, dataHandler):
   num_correct = 0
   num_samples = 0
 
@@ -268,11 +251,11 @@ def eval(key, model, dataHandler):
   testHistory['loss'] = []
   testHistory['accuracy'] = []
   test_loss = 0
-  accuracy = 0
+  test_accuracy = 0
   with torch.no_grad():
-    for _, (data,labels) in enumerate(dataHandler.test_dl):
-        data = data.to(device="cpu")
-        labels = labels.to(device="cpu")
+    for batch, (data,labels) in enumerate(dataHandler.test_dl):
+        data = data.to(device=device)
+        labels = labels.to(device=device)
         ## Forward Pass
         predictions = model(data)
         loss = criterion(predictions, labels).item()
@@ -282,17 +265,17 @@ def eval(key, model, dataHandler):
         num_samples += predicted_labels.size(0)
         testHistory['loss'].append(loss)
         testHistory['accuracy'].append(float(num_correct) / float(num_samples))
-  
-    accuracy = float(num_correct) / float(num_samples)
+        logger.log_batch(batch+1, loss, float(num_correct) / float(num_samples))
+    
+    test_accuracy = float(num_correct) / float(num_samples)
     test_loss = test_loss/len(dataHandler.test_dl)
-    print("=============================")
-    print(f"Average test Loss ==> {test_loss}")
-    print(f"Test accuracy ==> {float(num_correct) / float(num_samples) * 100:.2f}")
+    logger.finalize(test_loss, test_accuracy)
 
-    plot_history(key, False, testHistory)
+    plot_history(logger.name, False, testHistory)
 
-  return test_loss, accuracy
+  return test_loss, test_accuracy
 
+## PIPELINE
 model = AlexNet(False).to(device=device)
 train("alex", model, dataHandler, 1, TPU=False)
 eval("alex", model, dataHandler)
