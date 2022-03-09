@@ -11,19 +11,13 @@ Training of AlexNet with simplified pooling on MNIST
 
 import torch
 import torchvision
-import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-from torchvision.transforms import ToTensor
 from torchvision.datasets import MNIST
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.data import random_split
-from torchvision.utils import save_image
 import torch.optim as optim
-from torch.utils.data import random_split
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import math
 
 ## interactive off
@@ -130,7 +124,7 @@ class DataHandler():
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=True, drop_last=True, num_workers=2, pin_memory=True)
       self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=True, drop_last=True, num_workers=2, pin_memory=True)
 
-dataHandler = DataHandler("MNIST", 256)
+dataHandler = DataHandler("MNIST", 128)
 
 ##################
 #                #
@@ -151,14 +145,18 @@ class Logger():
   
   def log_step(self, epoch, step, loss, accuracy):
     self.log.append(f"[!] Training Epoch {epoch+1}, step {step+1} ==> loss {loss}, accuracy {accuracy}")
-  
+    print(self.log[-1])
   def log_batch(self, batch, loss, accuracy):
     self.log.append(f"[!] Test batch {batch+1} ==> loss {loss}, accuracy {accuracy}")
-  
+    print(self.log[-1])
+
   def finalize(self, test_loss, test_accuracy):
     self.log.append("=================================")
+    print(self.log[-1])
     self.log.append(f"[+] Average test Loss ==> {test_loss:.4f}")
+    print(self.log[-1])
     self.log.append(f"[+] Test accuracy ==> {test_accuracy * 100:.2f}")
+    print(self.log[-1])
     with open(self.path+self.name+"_log.txt", "w+") as f:
       f.write("\n".join(self.log))
 
@@ -217,6 +215,10 @@ def train(logger, model, dataHandler, num_epochs, TPU=False):
       predictions = model(data)
       loss = criterion(predictions, labels)
       loss.backward()
+      
+      if model.verbose:
+        print(f"[?] Step {i+1} Epoch {epoch+1}")
+        #plot_grad_flow(model.named_parameters())
       
       if not TPU:
         optimizer.step()
@@ -277,8 +279,8 @@ def eval(logger, model, dataHandler):
 # TRAIN + TEST PIPELINE #
 #                       #
 #########################
-
+logger = Logger("./logs/",f"AlexNet")
 model = AlexNet(False).to(device=device)
-train("alex", model, dataHandler, 1, TPU=False)
-eval("alex", model, dataHandler)
+train(logger, model, dataHandler, 50, TPU=False)
+eval(logger, model, dataHandler)
 torch.save(model, "AlexNet.pt")
