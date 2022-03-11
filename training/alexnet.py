@@ -53,13 +53,13 @@ class AlexNet(nn.Module):
     self.verbose = verbose
     ## input size for MNIST = 227
     self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=11, stride=4, padding=2)
-    self.pool1 = ScaledAvgPool2d(kernel_size=3, stride=2)
+    self.pool1 = ScaledAvgPool2d(kernel_size=3, stride=2) ##maxpool
     self.conv2 = nn.Conv2d(in_channels=64, out_channels=192, kernel_size=5, stride=1, padding=2)
     self.conv3 = nn.Conv2d(in_channels=192, out_channels=384, kernel_size=3, stride=1, padding=1)
     self.conv4 = nn.Conv2d(in_channels=384, out_channels=256, kernel_size=3, stride=1, padding=1)
     self.conv5 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1)
     self.pool2 = ScaledAvgPool2d(kernel_size=3, stride=1, padding=1)
-    self.ReLU = nn.ReLU(inplace=True)
+    self.ReLU = nn.ReLU(inplace=True) ##poly approximation
     self.classifier = nn.Sequential(
         nn.Dropout(p=0.5),
         nn.Linear(in_features= 9216, out_features= 4096),
@@ -69,13 +69,13 @@ class AlexNet(nn.Module):
         nn.ReLU(inplace=True),
         nn.Linear(in_features= 4096, out_features= 10)
     )
-
     ## init weights
     nn.init.kaiming_uniform_(self.conv1.weight, a=0, mode='fan_in', nonlinearity='relu')
     nn.init.kaiming_uniform_(self.conv2.weight, a=0, mode='fan_in', nonlinearity='relu')
     nn.init.kaiming_uniform_(self.conv3.weight, a=0, mode='fan_in', nonlinearity='relu')
     nn.init.kaiming_uniform_(self.conv4.weight, a=0, mode='fan_in', nonlinearity='relu')
     nn.init.kaiming_uniform_(self.conv5.weight, a=0, mode='fan_in', nonlinearity='relu')
+    
     i = 0
     for layer in self.classifier.children():
       if not isinstance(layer, nn.Dropout) and not isinstance(layer, nn.ReLU):
@@ -279,6 +279,7 @@ def eval(logger, model, dataHandler):
 # TRAIN + TEST PIPELINE #
 #                       #
 #########################
+
 logger = Logger("./logs/",f"AlexNet")
 model = AlexNet(False).to(device=device)
 train(logger, model, dataHandler, 50, TPU=False)
