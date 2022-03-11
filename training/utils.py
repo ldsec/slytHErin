@@ -60,7 +60,7 @@ def plot_history(key, train, history):
 def train(logger, model, dataHandler, num_epochs, TPU=False):
   
   num_epochs = num_epochs
-  optimizer = optim.SGD(model.parameters(), lr=5e-5, momentum=0.9)
+  optimizer = optim.SGD(model.parameters(), lr=0.05, momentum=0.9)
   criterion = nn.MSELoss()
 
   trainHistory = {}
@@ -76,31 +76,31 @@ def train(logger, model, dataHandler, num_epochs, TPU=False):
     
     for i, (data, labels) in enumerate(dataHandler.train_dl):
       data = data.to(device=device)
-      labels = single_to_multi_label(labels)
-      labels = labels.to(device=device)
+      labels_one_hot = single_to_multi_label(labels)
+      labels_one_hot = labels_one_hot.to(device=device)
 
       optimizer.zero_grad()
       
       predictions = model(data)
-      predicted_labels, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
-      
-      loss = criterion(predicted_labels, labels)
-      num_correct += (predicted_labels == labels).sum().item()
-      num_samples += predicted_labels.size(0)
+      predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
+      loss = criterion(predictions, labels_one_hot)
       epoch_loss += loss.item()
-      
-      if model.verbose and (i+1)%100 == 0:
-        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
       
       #loss = Variable(loss, requires_grad = True)
       loss.backward()
-      
       if not TPU:
         optimizer.step()
       else:
         xm.optimizer_step(optimizer, barrier=True) ## if TPU 
-    
-    print(f"[?] Epoch {epoch+1}/{num_epochs} Loss {loss.item():.4f}")
+      
+      if model.verbose and (i+1)%100 == 0:
+        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
+      _, predicted_labels = predictions.max(1)
+      _, labels = labels_one_hot.max(1)
+      num_correct += (predicted_labels == labels).sum().item()
+      num_samples += predicted_labels.size(0)
+
+    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {loss.item():.4f}")
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
     trainHistory['loss'].append(loss.item())
     trainHistory['accuracy'].append(num_correct/num_samples)
