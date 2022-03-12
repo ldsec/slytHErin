@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 """ Approximated polynomial activation functions """
 
 degree = 3
@@ -54,3 +55,19 @@ def sigmoid_approx(x):
       return 0.5 + 1.2010*torch.pow(x/interval,1)-0.8156*torch.pow(x/interval,2)
     if interval == 10:
       return 0.5 + 1.2384*torch.pow(x/interval,1)-0.8647*torch.pow(x/interval,2)
+
+## Wrap as nn modules
+
+class ReLUApprox(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+  def forward(self,x):
+    return relu_approx(x)
+
+class SigmoidApprox(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+  def forward(self,x):
+    return sigmoid_approx(x)

@@ -8,27 +8,17 @@ Original file is located at
 
 Training of AlexNet with simplified pooling on MNIST
 """
-
+import argparse
 import torch
-import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
-from torchvision.datasets import MNIST
-from torch.utils.data.dataloader import DataLoader
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import math
-
-## interactive off
-plt.ioff()
-## setup torch enviro
-torch.manual_seed(42)
-torch.autograd.set_detect_anomaly(True)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(42)
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from activation import ReLUApprox, SigmoidApprox
+from utils import *
+from dataHandler import DataHandlerAlex
+from logger import Logger
 
 ####################
 #                  #
@@ -36,38 +26,39 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #                  #
 ####################
 
-class ScaledAvgPool2d(nn.Module):
-    """Define the ScaledAvgPool layer, a.k.a the Sum Pool"""
-    def __init__(self, kernel_size, stride, padding=0):
-      super().__init__()
-      self.kernel_size = kernel_size
-      self.AvgPool = nn.AvgPool2d(kernel_size=self.kernel_size, stride=stride, padding=padding)
-
-    def forward(self,x):
-      return (self.kernel_size**2)*self.AvgPool(x)
-
 class AlexNet(nn.Module):
-  """ Simplified AlexNet with Sum Pooling """
-  def __init__(self, verbose: bool):
+  """AlexNet"""
+  def __init__(self, simplified : bool, verbose: bool):
     super().__init__()
     self.verbose = verbose
     ## input size for MNIST = 227
+    
+    self.simplified = simplified
+    if self.simplified:
+      self.pool1 = nn.AvgPool2d(kernel_size=3, stride=2)
+      self.pool2 = nn.AvgPool2d(kernel_size=3, stride=1, padding=1)
+      self.relu = ReLUApprox()
+      self.sigmoid = SigmoidApprox()
+    else:
+      self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2)
+      self.pool2 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+      self.relu = nn.ReLU(inplace=True)
+      self.sigmoid = nn.Sigmoid()
+
     self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=11, stride=4, padding=2)
-    self.pool1 = ScaledAvgPool2d(kernel_size=3, stride=2) ##maxpool
     self.conv2 = nn.Conv2d(in_channels=64, out_channels=192, kernel_size=5, stride=1, padding=2)
     self.conv3 = nn.Conv2d(in_channels=192, out_channels=384, kernel_size=3, stride=1, padding=1)
     self.conv4 = nn.Conv2d(in_channels=384, out_channels=256, kernel_size=3, stride=1, padding=1)
     self.conv5 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1)
-    self.pool2 = ScaledAvgPool2d(kernel_size=3, stride=1, padding=1)
-    self.ReLU = nn.ReLU(inplace=True) ##poly approximation
     self.classifier = nn.Sequential(
         nn.Dropout(p=0.5),
         nn.Linear(in_features= 9216, out_features= 4096),
-        nn.ReLU(inplace=True),
+        self.relu,
         nn.Dropout(p=0.5),
         nn.Linear(in_features= 4096, out_features= 4096),
-        nn.ReLU(inplace=True),
-        nn.Linear(in_features= 4096, out_features= 10)
+        self.relu,
+        nn.Linear(in_features= 4096, out_features=10),
+        self.sigmoid
     )
     ## init weights
     nn.init.kaiming_uniform_(self.conv1.weight, a=0, mode='fan_in', nonlinearity='relu')
@@ -78,7 +69,7 @@ class AlexNet(nn.Module):
     
     i = 0
     for layer in self.classifier.children():
-      if not isinstance(layer, nn.Dropout) and not isinstance(layer, nn.ReLU):
+      if isinstance(layer, nn.Linear):
         if i < 2:
           nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='relu')
           i += 1
@@ -88,191 +79,18 @@ class AlexNet(nn.Module):
     
 
   def forward(self,x):
-    x = self.ReLU(self.conv1(x))
+    x = self.relu(self.conv1(x))
     x = self.pool1(x)
-    x = self.ReLU(self.conv2(x))
+    x = self.relu(self.conv2(x))
     x = self.pool1(x)
-    x = self.ReLU(self.conv3(x))
-    x = self.ReLU(self.conv4(x))
-    x = self.ReLU(self.conv5(x))
+    x = self.relu(self.conv3(x))
+    x = self.relu(self.conv4(x))
+    x = self.relu(self.conv5(x))
     x = self.pool1(x)
     x = self.pool2(x)
     x = x.reshape(x.shape[0], -1)
     x = self.classifier(x)
     return x
-
-#################
-#               #
-# DATA HANDLER  #
-#               #
-#################
-
-class DataHandler():
-  def __init__(self, dataset : str, batch_size : int):
-    if dataset == "MNIST":
-      self.batch_size = batch_size
-      normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-      
-      to_rgb = transforms.Lambda(lambda image: image.convert('RGB'))
-      resize = transforms.Resize((227, 227))
-      transform = transforms.Compose([resize, to_rgb, transforms.ToTensor(), normalize])
-
-      train_ds = MNIST("data/", train=True, download=True, transform=transform)
-      test_ds = MNIST("data/", train=False, download=True, transform=transform)
-
-      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=True, drop_last=True, num_workers=2, pin_memory=True)
-      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=True, drop_last=True, num_workers=2, pin_memory=True)
-
-dataHandler = DataHandler("MNIST", 128)
-
-##################
-#                #
-# TRAIN AND EVAL #
-#                #
-##################
-
-## training params setup
-learning_rate = 3e-4
-total_step = len(dataHandler.train_dl)
-criterion = nn.CrossEntropyLoss()
-
-class Logger():
-  def __init__(self, path="./logs", name="SimpleNet"):
-    self.path = path
-    self.name = name
-    self.log = []
-  
-  def log_step(self, epoch, step, loss, accuracy):
-    self.log.append(f"[!] Training Epoch {epoch+1}, step {step+1} ==> loss {loss}, accuracy {accuracy}")
-    print(self.log[-1])
-  def log_batch(self, batch, loss, accuracy):
-    self.log.append(f"[!] Test batch {batch+1} ==> loss {loss}, accuracy {accuracy}")
-    print(self.log[-1])
-
-  def finalize(self, test_loss, test_accuracy):
-    self.log.append("=================================")
-    print(self.log[-1])
-    self.log.append(f"[+] Average test Loss ==> {test_loss:.4f}")
-    print(self.log[-1])
-    self.log.append(f"[+] Test accuracy ==> {test_accuracy * 100:.2f}")
-    print(self.log[-1])
-    with open(self.path+self.name+"_log.txt", "w+") as f:
-      f.write("\n".join(self.log))
-
-## PLOT HELPER
-def plot_history(key, train, history):
-  """ 
-    Plot loss and accuracy history during model run
-    Input:
-          key : str => name of the model
-          train : bool => training 1 or test 0
-          history : dict{str : list of floats}
-  """
-  if train:
-    when = "train"
-  else:
-    when = "test"
-  fig, ax = plt.subplots( 1, 2, figsize = (12,4) )
-  ax[0].plot(history['loss'], label = when+"----"+key)
-  ax[0].set_title( "Loss" )
-  ax[0].set_xlabel( "Epochs" )
-  ax[0].set_ylabel( "Loss" )
-  ax[0].grid( True )
-  ax[0].legend()
-
-  ax[1].plot(history['accuracy'], label = when+"----"+key)
-  ax[1].set_title( "Accuracy" )
-  ax[1].set_xlabel( "Epochs" )
-  ax[1].set_ylabel( "Accuracy" )
-  ax[1].grid( True )
-  ax[1].legend()
-
-  plt.savefig(f"./images/{key}_{when}.png")
-  plt.close()
-
-## TRAIN
-def train(logger, model, dataHandler, num_epochs, TPU=False):
-  num_epochs = num_epochs
-  model.train()
-  #optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-  optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-  trainHistory = {}
-  trainHistory['loss'] = []
-  trainHistory['accuracy'] = []
-
-  for epoch in range(num_epochs):
-    epoch_loss = 0
-    num_correct = 0
-    num_samples = 0
-    for i, (data, labels) in enumerate(dataHandler.train_dl):
-      data = data.to(device=device)
-      labels = labels.to(device=device)
-      #labels = labels.to(torch.float32)
-
-      optimizer.zero_grad()
-      predictions = model(data)
-      loss = criterion(predictions, labels)
-      loss.backward()
-      
-      if model.verbose:
-        print(f"[?] Step {i+1} Epoch {epoch+1}")
-        #plot_grad_flow(model.named_parameters())
-      
-      if not TPU:
-        optimizer.step()
-      else:
-        xm.optimizer_step(optimizer, barrier=True) ## if TPU 
-      
-      _, predicted_labels = predictions.max(1)
-      num_correct += (predicted_labels == labels).sum().item()
-      num_samples += predicted_labels.size(0)
-      
-      epoch_loss += loss.item()
-
-      if (i+1) % 100 == 0:
-        logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)
-      
-    trainHistory['loss'].append(loss.item())
-    trainHistory['accuracy'].append(num_correct/num_samples)
-    
-  plot_history(logger.name, True, trainHistory)
-
-
-## EVAL 
-def eval(logger, model, dataHandler):
-  num_correct = 0
-  num_samples = 0
-
-  model.eval()
-  testHistory = {}
-  testHistory['loss'] = []
-  testHistory['accuracy'] = []
-  test_loss = 0
-  test_accuracy = 0
-  with torch.no_grad():
-    for batch, (data,labels) in enumerate(dataHandler.test_dl):
-        data = data.to(device=device)
-        labels = labels.to(device=device)
-        ## Forward Pass
-        predictions = model(data)
-        loss = criterion(predictions, labels).item()
-        test_loss += loss
-        _, predicted_labels = predictions.max(1)
-        num_correct += (predicted_labels == labels).sum().item()
-        num_samples += predicted_labels.size(0)
-        testHistory['loss'].append(loss)
-        testHistory['accuracy'].append(float(num_correct) / float(num_samples))
-        logger.log_batch(batch+1, loss, float(num_correct) / float(num_samples))
-    
-    test_accuracy = float(num_correct) / float(num_samples)
-    test_loss = test_loss/len(dataHandler.test_dl)
-    logger.finalize(test_loss, test_accuracy)
-
-    plot_history(logger.name, False, testHistory)
-
-  return test_loss, test_accuracy
 
 #########################
 #                       #
@@ -280,8 +98,24 @@ def eval(logger, model, dataHandler):
 #                       #
 #########################
 
-logger = Logger("./logs/",f"AlexNet")
-model = AlexNet(False).to(device=device)
-train(logger, model, dataHandler, 50, TPU=False)
-eval(logger, model, dataHandler)
-torch.save(model, "AlexNet.pt")
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--verbose", help="increase output verbosity", action="store_true")
+  parser.add_argument("--simplified", help="use HE friendly functions and pooling", action="store_true")
+  args = parser.parse_args()
+  if args.verbose:
+    verbose = True
+  else:
+    verbose = False
+  if args.simplified:
+    simplified = True
+    name = "AlexNet_simplified.pt"
+  else:
+    simplified = False
+    name = "AlexNet.pt"
+  dataHandler = DataHandlerAlex("MNIST",128)
+  logger = Logger("./logs/",name)
+  model = AlexNet(simplified=simplified, verbose=verbose).to(device=device)
+  train(logger, model, dataHandler, 3, TPU=False)
+  eval(logger, model, dataHandler)
+  torch.save(model, name)

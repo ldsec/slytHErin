@@ -14,6 +14,16 @@ if torch.cuda.is_available():
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+class ScaledAvgPool2d(nn.Module):
+    """Define the ScaledAvgPool layer, a.k.a the Sum Pool"""
+    def __init__(self, kernel_size, stride, padding=0):
+      super().__init__()
+      self.kernel_size = kernel_size
+      self.AvgPool = nn.AvgPool2d(kernel_size=self.kernel_size, stride=stride, padding=padding)
+
+    def forward(self,x):
+      return (self.kernel_size**2)*self.AvgPool(x)
+
 def single_to_multi_label(y):
   """
     Input: labels in {0,...,9}
