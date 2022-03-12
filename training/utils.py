@@ -67,10 +67,10 @@ def plot_history(key, train, history):
   plt.close()
 
 ## TRAIN
-def train(logger, model, dataHandler, num_epochs, TPU=False):
+def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
   
   num_epochs = num_epochs
-  optimizer = optim.SGD(model.parameters(), lr=0.05, momentum=0.9)
+  optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
   criterion = nn.MSELoss()
 
   trainHistory = {}

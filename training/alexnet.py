@@ -114,14 +114,16 @@ if __name__ == "__main__":
   if args.simplified:
     simplified = True
     name = "AlexNet_simplified.pt"
+    lr = 0.001
   else:
     simplified = False
     name = "AlexNet.pt"
+    lr = 0.05
   
   print(name)
   dataHandler = DataHandlerAlex("MNIST",128)
   logger = Logger("./logs/", name)
   model = AlexNet(simplified=simplified, verbose=verbose).to(device=device)
-  train(logger, model, dataHandler, 50, TPU=False)
+  train(logger, model, dataHandler, 50, lr=lr, TPU=False) ##if simplified set lr=0.001
   eval(logger, model, dataHandler)
   torch.save(model, name)
