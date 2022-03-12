@@ -61,17 +61,17 @@ class AlexNet(nn.Module):
         self.sigmoid
     )
     ## init weights
-    nn.init.kaiming_uniform_(self.conv1.weight, a=0, mode='fan_in', nonlinearity='relu')
-    nn.init.kaiming_uniform_(self.conv2.weight, a=0, mode='fan_in', nonlinearity='relu')
-    nn.init.kaiming_uniform_(self.conv3.weight, a=0, mode='fan_in', nonlinearity='relu')
-    nn.init.kaiming_uniform_(self.conv4.weight, a=0, mode='fan_in', nonlinearity='relu')
-    nn.init.kaiming_uniform_(self.conv5.weight, a=0, mode='fan_in', nonlinearity='relu')
+    nn.init.kaiming_uniform_(self.conv1.weight, a=0, mode='fan_out', nonlinearity='relu')
+    nn.init.kaiming_uniform_(self.conv2.weight, a=0, mode='fan_out', nonlinearity='relu')
+    nn.init.kaiming_uniform_(self.conv3.weight, a=0, mode='fan_out', nonlinearity='relu')
+    nn.init.kaiming_uniform_(self.conv4.weight, a=0, mode='fan_out', nonlinearity='relu')
+    nn.init.kaiming_uniform_(self.conv5.weight, a=0, mode='fan_out', nonlinearity='relu')
     
     i = 0
     for layer in self.classifier.children():
       if isinstance(layer, nn.Linear):
         if i < 2:
-          nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='relu')
+          nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_out', nonlinearity='relu')
           i += 1
         else:
           nn.init.xavier_uniform_(layer.weight, gain=math.sqrt(2))    
@@ -81,13 +81,17 @@ class AlexNet(nn.Module):
   def forward(self,x):
     x = self.relu(self.conv1(x))
     x = self.pool1(x)
+    #print("Conv1-Pool",x.max())
     x = self.relu(self.conv2(x))
     x = self.pool1(x)
+    #print("Conv2-Pool",x.max())
     x = self.relu(self.conv3(x))
     x = self.relu(self.conv4(x))
     x = self.relu(self.conv5(x))
+    #print("Conv5",x.max())
     x = self.pool1(x)
     x = self.pool2(x)
+    #print("Pools",x.max())
     x = x.reshape(x.shape[0], -1)
     x = self.classifier(x)
     return x
@@ -113,9 +117,11 @@ if __name__ == "__main__":
   else:
     simplified = False
     name = "AlexNet.pt"
+  
+  print(name)
   dataHandler = DataHandlerAlex("MNIST",128)
-  logger = Logger("./logs/",name)
+  logger = Logger("./logs/", name)
   model = AlexNet(simplified=simplified, verbose=verbose).to(device=device)
-  train(logger, model, dataHandler, 3, TPU=False)
+  train(logger, model, dataHandler, 50, TPU=False)
   eval(logger, model, dataHandler)
   torch.save(model, name)
