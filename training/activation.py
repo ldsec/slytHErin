@@ -56,6 +56,8 @@ def sigmoid_approx(x):
     if interval == 10:
       return 0.5 + 1.2384*torch.pow(x/interval,1)-0.8647*torch.pow(x/interval,2)
 
+def identity(x):
+  return x
 ## Wrap as nn modules
 
 class ReLUApprox(nn.Module):

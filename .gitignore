@@ -1,2 +1,2 @@
-*.pt
-./training/logs
+./inference
+./matrices

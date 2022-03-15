@@ -1,192 +1,442 @@
-[!] Training Epoch 1, step 234 ==> loss 0.2053936414229564, accuracy 0.21965144230769232
-[!] Training Epoch 2, step 234 ==> loss 0.19525445405489358, accuracy 0.31886017628205127
-[!] Training Epoch 3, step 234 ==> loss 0.19523929084977534, accuracy 0.3749499198717949
-[!] Training Epoch 4, step 234 ==> loss 0.1952264349684756, accuracy 0.4060830662393162
-[!] Training Epoch 5, step 234 ==> loss 0.1952114598109172, accuracy 0.4178852831196581
-[!] Training Epoch 6, step 234 ==> loss 0.19518916143311393, accuracy 0.4147135416666667
-[!] Training Epoch 7, step 234 ==> loss 0.195147934059302, accuracy 0.4045973557692308
-[!] Training Epoch 8, step 234 ==> loss 0.19504833514364356, accuracy 0.39291199252136755
-[!] Training Epoch 9, step 234 ==> loss 0.1946976240246724, accuracy 0.37762086004273504
-[!] Training Epoch 10, step 234 ==> loss 0.19376254260030568, accuracy 0.3703091613247863
-[!] Training Epoch 11, step 234 ==> loss 0.19252167699428704, accuracy 0.39039129273504275
-[!] Training Epoch 12, step 234 ==> loss 0.1910420251198304, accuracy 0.4075186965811966
-[!] Training Epoch 13, step 234 ==> loss 0.1897022628631347, accuracy 0.4715211004273504
-[!] Training Epoch 14, step 234 ==> loss 0.1881015703846247, accuracy 0.5426682692307693
-[!] Training Epoch 15, step 234 ==> loss 0.18644067594128796, accuracy 0.6046006944444444
-[!] Training Epoch 16, step 234 ==> loss 0.18437716810621768, accuracy 0.6899539262820513
-[!] Training Epoch 17, step 234 ==> loss 0.18238652784090775, accuracy 0.7616352831196581
-[!] Training Epoch 18, step 234 ==> loss 0.18065904488420895, accuracy 0.8141693376068376
-[!] Training Epoch 19, step 234 ==> loss 0.17920855993134344, accuracy 0.8527978098290598
-[!] Training Epoch 20, step 234 ==> loss 0.1779152682194343, accuracy 0.8817775106837606
-[!] Training Epoch 21, step 234 ==> loss 0.17692609316008723, accuracy 0.8962506677350427
-[!] Training Epoch 22, step 234 ==> loss 0.17612696177939063, accuracy 0.9043803418803419
-[!] Training Epoch 23, step 234 ==> loss 0.17547548969841412, accuracy 0.9108740651709402
-[!] Training Epoch 24, step 234 ==> loss 0.17492988501858509, accuracy 0.9158653846153846
-[!] Training Epoch 25, step 234 ==> loss 0.17448834966645282, accuracy 0.9197215544871795
-[!] Training Epoch 26, step 234 ==> loss 0.17413977043241516, accuracy 0.9230769230769231
-[!] Training Epoch 27, step 234 ==> loss 0.17383452727753892, accuracy 0.9266159188034188
-[!] Training Epoch 28, step 234 ==> loss 0.17358362700185206, accuracy 0.9293035523504274
-[!] Training Epoch 29, step 234 ==> loss 0.17335927250803027, accuracy 0.9313067574786325
-[!] Training Epoch 30, step 234 ==> loss 0.17316224897264415, accuracy 0.9339443108974359
-[!] Training Epoch 31, step 234 ==> loss 0.17297783564043862, accuracy 0.9354967948717948
-[!] Training Epoch 32, step 234 ==> loss 0.17282133587659934, accuracy 0.9375667735042735
-[!] Training Epoch 33, step 234 ==> loss 0.17266843830927825, accuracy 0.9395032051282052
-[!] Training Epoch 34, step 234 ==> loss 0.17252868725958034, accuracy 0.9407051282051282
-[!] Training Epoch 35, step 234 ==> loss 0.17241209751775122, accuracy 0.942558092948718
-[!] Training Epoch 36, step 234 ==> loss 0.17229127425413865, accuracy 0.9439102564102564
-[!] Training Epoch 37, step 234 ==> loss 0.17218631213037378, accuracy 0.9446781517094017
-[!] Training Epoch 38, step 234 ==> loss 0.17208358460766637, accuracy 0.9458133012820513
-[!] Training Epoch 39, step 234 ==> loss 0.17199023055215168, accuracy 0.9467481303418803
-[!] Training Epoch 40, step 234 ==> loss 0.17189394453397164, accuracy 0.9473657852564102
-[!] Training Epoch 41, step 234 ==> loss 0.17182918026661262, accuracy 0.9482672275641025
-[!] Training Epoch 42, step 234 ==> loss 0.17174647722998235, accuracy 0.9494190705128205
-[!] Training Epoch 43, step 234 ==> loss 0.17167672483075377, accuracy 0.9494023771367521
-[!] Training Epoch 44, step 234 ==> loss 0.17160269681714538, accuracy 0.9505876068376068
-[!] Training Epoch 45, step 234 ==> loss 0.1715431075829726, accuracy 0.9513721955128205
-[!] Training Epoch 46, step 234 ==> loss 0.17147600109505856, accuracy 0.9518563034188035
-[!] Training Epoch 47, step 234 ==> loss 0.1714216050429222, accuracy 0.9524572649572649
-[!] Training Epoch 48, step 234 ==> loss 0.17136562532848781, accuracy 0.9532585470085471
-[!] Training Epoch 49, step 234 ==> loss 0.17130744489084962, accuracy 0.9534922542735043
-[!] Training Epoch 50, step 234 ==> loss 0.1712604634400107, accuracy 0.9534421741452992
-[!] Training Epoch 51, step 234 ==> loss 0.1712122810447318, accuracy 0.9546941773504274
-[!] Training Epoch 52, step 234 ==> loss 0.17115786830838928, accuracy 0.9545272435897436
-[!] Training Epoch 53, step 234 ==> loss 0.17112110319555315, accuracy 0.9547442574786325
-[!] Training Epoch 54, step 234 ==> loss 0.17108188677802044, accuracy 0.955345219017094
-[!] Training Epoch 55, step 234 ==> loss 0.17103618714544508, accuracy 0.9557458600427351
-[!] Training Epoch 56, step 234 ==> loss 0.17100040601868916, accuracy 0.9563134348290598
-[!] Training Epoch 57, step 234 ==> loss 0.17096659706698525, accuracy 0.9563969017094017
-[!] Training Epoch 58, step 234 ==> loss 0.17092372980127987, accuracy 0.9567140758547008
-[!] Training Epoch 59, step 234 ==> loss 0.17088799834506124, accuracy 0.9575320512820513
-[!] Training Epoch 60, step 234 ==> loss 0.17085370555137977, accuracy 0.957298344017094
-[!] Training Epoch 61, step 234 ==> loss 0.17082326502626777, accuracy 0.9573150373931624
-[!] Training Epoch 62, step 234 ==> loss 0.1707914774107118, accuracy 0.9581163194444444
-[!] Training Epoch 63, step 234 ==> loss 0.1707555109109634, accuracy 0.9581663995726496
-[!] Training Epoch 64, step 234 ==> loss 0.17073801338163197, accuracy 0.9585169604700855
-[!] Training Epoch 65, step 234 ==> loss 0.17070621653245047, accuracy 0.9588007478632479
-[!] Training Epoch 66, step 234 ==> loss 0.1706772123137091, accuracy 0.9589342948717948
-[!] Training Epoch 67, step 234 ==> loss 0.17063285053795219, accuracy 0.9593516292735043
-[!] Training Epoch 68, step 234 ==> loss 0.17061651249726614, accuracy 0.9598524305555556
-[!] Training Epoch 69, step 234 ==> loss 0.17060210969713, accuracy 0.9599358974358975
-[!] Training Epoch 70, step 234 ==> loss 0.17056941100929537, accuracy 0.9599692841880342
-[!] Training Epoch 71, step 234 ==> loss 0.17054924133241686, accuracy 0.9603866185897436
-[!] Training Epoch 72, step 234 ==> loss 0.17052407919341683, accuracy 0.9602864583333334
-[!] Training Epoch 73, step 234 ==> loss 0.1705081184577738, accuracy 0.9607538728632479
-[!] Training Epoch 74, step 234 ==> loss 0.17048507107373995, accuracy 0.9607037927350427
-[!] Training Epoch 75, step 234 ==> loss 0.1704585975688747, accuracy 0.9609208066239316
-[!] Training Epoch 76, step 234 ==> loss 0.17043385941248673, accuracy 0.9613548344017094
-[!] Training Epoch 77, step 234 ==> loss 0.17042183481220508, accuracy 0.9619724893162394
-[!] Training Epoch 78, step 234 ==> loss 0.1703947156540349, accuracy 0.9615384615384616
-[!] Training Epoch 79, step 234 ==> loss 0.17038263571568024, accuracy 0.9616720085470085
-[!] Training Epoch 80, step 234 ==> loss 0.1703629979593122, accuracy 0.9617053952991453
-[!] Training Epoch 81, step 234 ==> loss 0.17034306065139607, accuracy 0.9620225694444444
-[!] Training Epoch 82, step 234 ==> loss 0.17032298687686268, accuracy 0.9618723290598291
-[!] Training Epoch 83, step 234 ==> loss 0.17030944496902645, accuracy 0.9624399038461539
-[!] Training Epoch 84, step 234 ==> loss 0.1702928573020503, accuracy 0.9623063568376068
-[!] Training Epoch 85, step 234 ==> loss 0.17028618699465042, accuracy 0.9619557959401709
-[!] Training Epoch 86, step 234 ==> loss 0.17024933725086033, accuracy 0.9627904647435898
-[!] Training Epoch 87, step 234 ==> loss 0.17024741175337735, accuracy 0.9629073183760684
-[!] Training Epoch 88, step 234 ==> loss 0.17022229036968997, accuracy 0.9627570779914529
-[!] Training Epoch 89, step 234 ==> loss 0.17021417917094678, accuracy 0.9627403846153846
-[!] Training Epoch 90, step 234 ==> loss 0.1702036109362912, accuracy 0.9631243322649573
-[!] Training Epoch 91, step 234 ==> loss 0.17018237544430626, accuracy 0.9633413461538461
-[!] Training Epoch 92, step 234 ==> loss 0.1701726061411393, accuracy 0.9633580395299145
-[!] Training Epoch 93, step 234 ==> loss 0.17015957997904885, accuracy 0.9637419871794872
-[!] Training Epoch 94, step 234 ==> loss 0.17014159727045614, accuracy 0.9637419871794872
-[!] Training Epoch 95, step 234 ==> loss 0.17013058461185193, accuracy 0.9641760149572649
-[!] Training Epoch 96, step 234 ==> loss 0.17012195594799825, accuracy 0.9639756944444444
-[!] Training Epoch 97, step 234 ==> loss 0.17010567063449794, accuracy 0.9640758547008547
-[!] Training Epoch 98, step 234 ==> loss 0.170093233195635, accuracy 0.964309561965812
-[!] Training Epoch 99, step 234 ==> loss 0.17008331895638734, accuracy 0.9644431089743589
-[!] Training Epoch 100, step 234 ==> loss 0.17007314108121088, accuracy 0.9648771367521367
-[!] Training Epoch 101, step 234 ==> loss 0.17005866447575071, accuracy 0.9645432692307693
-[!] Training Epoch 102, step 234 ==> loss 0.17004744364665106, accuracy 0.9648938301282052
-[!] Training Epoch 103, step 234 ==> loss 0.17004490312602785, accuracy 0.9645265758547008
-[!] Training Epoch 104, step 234 ==> loss 0.1700172651017833, accuracy 0.9647936698717948
-[!] Training Epoch 105, step 234 ==> loss 0.17000847812901196, accuracy 0.9650440705128205
-[!] Training Epoch 106, step 234 ==> loss 0.169995359184905, accuracy 0.9649939903846154
-[!] Training Epoch 107, step 234 ==> loss 0.1699865909977856, accuracy 0.9651609241452992
-[!] Training Epoch 108, step 234 ==> loss 0.16997868809689823, accuracy 0.9652276976495726
-[!] Training Epoch 109, step 234 ==> loss 0.16996631363772938, accuracy 0.9651943108974359
-[!] Training Epoch 110, step 234 ==> loss 0.16996029032091808, accuracy 0.9655281784188035
-[!] Training Epoch 111, step 234 ==> loss 0.16995148246104902, accuracy 0.9654113247863247
-[!] Training Epoch 112, step 234 ==> loss 0.1699416420908056, accuracy 0.9656784188034188
-[!] Training Epoch 113, step 234 ==> loss 0.16992285159917977, accuracy 0.965645032051282
-[!] Training Epoch 114, step 234 ==> loss 0.1699251780907313, accuracy 0.9659622061965812
-[!] Training Epoch 115, step 234 ==> loss 0.16991248847837123, accuracy 0.9660790598290598
-[!] Training Epoch 116, step 234 ==> loss 0.1699020861942544, accuracy 0.9656951121794872
-[!] Training Epoch 117, step 234 ==> loss 0.1698853580488099, accuracy 0.9661792200854701
-[!] Training Epoch 118, step 234 ==> loss 0.16987626999616623, accuracy 0.9661792200854701
-[!] Training Epoch 119, step 234 ==> loss 0.16987011530715176, accuracy 0.9661792200854701
-[!] Training Epoch 120, step 234 ==> loss 0.16986731554453188, accuracy 0.9662126068376068
-[!] Training Epoch 121, step 234 ==> loss 0.16985481493493432, accuracy 0.965995592948718
-[!] Training Epoch 122, step 234 ==> loss 0.16984300105235514, accuracy 0.9663962339743589
-[!] Training Epoch 123, step 234 ==> loss 0.16983715457539272, accuracy 0.9665798611111112
-[!] Training Epoch 124, step 234 ==> loss 0.16983716648358566, accuracy 0.9662459935897436
-[!] Training Epoch 125, step 234 ==> loss 0.1698235037107753, accuracy 0.9665130876068376
-[!] Training Epoch 126, step 234 ==> loss 0.16982194405590367, accuracy 0.9665965544871795
-[!] Training Epoch 127, step 234 ==> loss 0.16980962130503777, accuracy 0.9665130876068376
-[!] Training Epoch 128, step 234 ==> loss 0.1698049688950563, accuracy 0.9664963942307693
-[!] Training Epoch 129, step 234 ==> loss 0.16978910482592052, accuracy 0.9669638087606838
-[!] Training Epoch 130, step 234 ==> loss 0.16979431118975338, accuracy 0.9669137286324786
-[!] Training Epoch 131, step 234 ==> loss 0.16977707755107146, accuracy 0.9665965544871795
-[!] Training Epoch 132, step 234 ==> loss 0.16977658689531505, accuracy 0.9667467948717948
-[!] Training Epoch 133, step 234 ==> loss 0.16977318599183336, accuracy 0.9665631677350427
-[!] Training Epoch 134, step 234 ==> loss 0.16975973336360392, accuracy 0.9670973557692307
-[!] Training Epoch 135, step 234 ==> loss 0.1697663117805098, accuracy 0.9671975160256411
-[!] Training Epoch 136, step 234 ==> loss 0.16974929166145813, accuracy 0.9671641292735043
-[!] Training Epoch 137, step 234 ==> loss 0.16974303387423867, accuracy 0.9667801816239316
-[!] Training Epoch 138, step 234 ==> loss 0.1697223308122056, accuracy 0.9670806623931624
-[!] Training Epoch 139, step 234 ==> loss 0.16973141905588982, accuracy 0.9671474358974359
-[!] Training Epoch 140, step 234 ==> loss 0.16971927620152122, accuracy 0.9670973557692307
-[!] Training Epoch 141, step 234 ==> loss 0.16971084418205115, accuracy 0.9671808226495726
-[!] Training Epoch 142, step 234 ==> loss 0.16969790182307234, accuracy 0.9673143696581197
-[!] Training Epoch 143, step 234 ==> loss 0.16969798148697257, accuracy 0.9674979967948718
-[!] Training Epoch 144, step 234 ==> loss 0.16969100169391713, accuracy 0.9675146901709402
-[!] Training Epoch 145, step 234 ==> loss 0.16969122667597908, accuracy 0.9673811431623932
-[!] Training Epoch 146, step 234 ==> loss 0.16968013645492047, accuracy 0.967598157051282
-[!] Training Epoch 147, step 234 ==> loss 0.16966820896690726, accuracy 0.9677317040598291
-[!] Training Epoch 148, step 234 ==> loss 0.16967117850087646, accuracy 0.9677984775641025
-[!] Training Epoch 149, step 234 ==> loss 0.16965882951377803, accuracy 0.9676983173076923
-[!] Training Epoch 150, step 234 ==> loss 0.16965148986404777, accuracy 0.967598157051282
-[!] Test batch 2 ==> loss 0.40234375, accuracy 0.97265625
-[!] Test batch 3 ==> loss 0.26171875, accuracy 0.9765625
-[!] Test batch 4 ==> loss 0.24609375, accuracy 0.9765625
-[!] Test batch 5 ==> loss 0.2578125, accuracy 0.9794921875
-[!] Test batch 6 ==> loss 0.83203125, accuracy 0.9765625
-[!] Test batch 7 ==> loss 1.21875, accuracy 0.9739583333333334
-[!] Test batch 8 ==> loss 0.75, accuracy 0.97265625
-[!] Test batch 9 ==> loss 0.70703125, accuracy 0.97119140625
-[!] Test batch 10 ==> loss 0.28125, accuracy 0.9713541666666666
-[!] Test batch 11 ==> loss 0.4453125, accuracy 0.971484375
-[!] Test batch 12 ==> loss 1.421875, accuracy 0.9691051136363636
-[!] Test batch 13 ==> loss 0.38671875, accuracy 0.970703125
-[!] Test batch 14 ==> loss 0.60546875, accuracy 0.9696514423076923
-[!] Test batch 15 ==> loss 0.78125, accuracy 0.9693080357142857
-[!] Test batch 16 ==> loss 0.7109375, accuracy 0.9684895833333333
-[!] Test batch 17 ==> loss 0.85546875, accuracy 0.96875
-[!] Test batch 18 ==> loss 0.73828125, accuracy 0.9680606617647058
-[!] Test batch 19 ==> loss 1.37890625, accuracy 0.966796875
-[!] Test batch 20 ==> loss 0.84765625, accuracy 0.9662828947368421
-[!] Test batch 21 ==> loss 0.7109375, accuracy 0.966015625
-[!] Test batch 22 ==> loss 0.83984375, accuracy 0.9654017857142857
-[!] Test batch 23 ==> loss 0.69140625, accuracy 0.9655539772727273
-[!] Test batch 24 ==> loss 0.73046875, accuracy 0.9653532608695652
-[!] Test batch 25 ==> loss 0.44921875, accuracy 0.96484375
-[!] Test batch 26 ==> loss 0.28125, accuracy 0.96484375
-[!] Test batch 27 ==> loss 0.62109375, accuracy 0.9642427884615384
-[!] Test batch 28 ==> loss 1.18359375, accuracy 0.9636863425925926
-[!] Test batch 29 ==> loss 0.79296875, accuracy 0.9640066964285714
-[!] Test batch 30 ==> loss 0.21875, accuracy 0.9645743534482759
-[!] Test batch 31 ==> loss 0.9140625, accuracy 0.9645833333333333
-[!] Test batch 32 ==> loss 0.91796875, accuracy 0.9640877016129032
-[!] Test batch 33 ==> loss 0.55078125, accuracy 0.9639892578125
-[!] Test batch 34 ==> loss 0.3671875, accuracy 0.9644886363636364
-[!] Test batch 35 ==> loss 0.65234375, accuracy 0.9641544117647058
-[!] Test batch 36 ==> loss 0.4140625, accuracy 0.9645089285714286
-[!] Test batch 37 ==> loss 0.7421875, accuracy 0.9641927083333334
-[!] Test batch 38 ==> loss 0.91015625, accuracy 0.9641047297297297
-[!] Test batch 39 ==> loss 0.421875, accuracy 0.9642269736842105
-[!] Test batch 40 ==> loss 0.79296875, accuracy 0.9642427884615384
+[!] Training Epoch 1, step 234 ==> loss 0.14867101329514104, accuracy 0.2899806356837607
+[!] Training Epoch 2, step 234 ==> loss 0.08051622232310793, accuracy 0.5136551816239316
+[!] Training Epoch 3, step 234 ==> loss 0.0736382863460443, accuracy 0.6191907051282052
+[!] Training Epoch 4, step 234 ==> loss 0.0671713090955447, accuracy 0.6767995459401709
+[!] Training Epoch 5, step 234 ==> loss 0.06134711766344869, accuracy 0.7097021901709402
+[!] Training Epoch 6, step 234 ==> loss 0.05648807727564604, accuracy 0.7357772435897436
+[!] Training Epoch 7, step 234 ==> loss 0.05267417106108788, accuracy 0.7575287126068376
+[!] Training Epoch 8, step 234 ==> loss 0.04976321268094401, accuracy 0.7749565972222222
+[!] Training Epoch 9, step 234 ==> loss 0.04752889464999366, accuracy 0.7903311965811965
+[!] Training Epoch 10, step 234 ==> loss 0.04578438273861877, accuracy 0.8003472222222222
+[!] Training Epoch 11, step 234 ==> loss 0.044411725133784816, accuracy 0.8103131677350427
+[!] Training Epoch 12, step 234 ==> loss 0.043294177271234684, accuracy 0.8176081730769231
+[!] Training Epoch 13, step 234 ==> loss 0.042365052299494416, accuracy 0.8240017361111112
+[!] Training Epoch 14, step 234 ==> loss 0.04156689591005317, accuracy 0.8301949786324786
+[!] Training Epoch 15, step 234 ==> loss 0.04089822518265145, accuracy 0.834785657051282
+[!] Training Epoch 16, step 234 ==> loss 0.04029967061156391, accuracy 0.8391426282051282
+[!] Training Epoch 17, step 234 ==> loss 0.03979075403931814, accuracy 0.8429153311965812
+[!] Training Epoch 18, step 234 ==> loss 0.039313831247198276, accuracy 0.8454694177350427
+[!] Training Epoch 19, step 234 ==> loss 0.0389073875406359, accuracy 0.8481236645299145
+[!] Training Epoch 20, step 234 ==> loss 0.03853654130720175, accuracy 0.8503438835470085
+[!] Training Epoch 21, step 234 ==> loss 0.03819331478996155, accuracy 0.8523137019230769
+[!] Training Epoch 22, step 234 ==> loss 0.03788189473760943, accuracy 0.8542668269230769
+[!] Training Epoch 23, step 234 ==> loss 0.03759351192822314, accuracy 0.8557859241452992
+[!] Training Epoch 24, step 234 ==> loss 0.03733726382319234, accuracy 0.857421875
+[!] Training Epoch 25, step 234 ==> loss 0.03709206486550661, accuracy 0.8586237980769231
+[!] Training Epoch 26, step 234 ==> loss 0.03685609948558685, accuracy 0.8594250801282052
+[!] Training Epoch 27, step 234 ==> loss 0.03664698606181858, accuracy 0.8601095085470085
+[!] Training Epoch 28, step 234 ==> loss 0.036440081822757535, accuracy 0.8612112713675214
+[!] Training Epoch 29, step 234 ==> loss 0.03624657113264259, accuracy 0.8624298878205128
+[!] Training Epoch 30, step 234 ==> loss 0.0360589179282005, accuracy 0.8630308493589743
+[!] Training Epoch 31, step 234 ==> loss 0.0358745166952284, accuracy 0.8635817307692307
+[!] Training Epoch 32, step 234 ==> loss 0.035708946701234735, accuracy 0.8643496260683761
+[!] Training Epoch 33, step 234 ==> loss 0.035550148162640564, accuracy 0.8650340544871795
+[!] Training Epoch 34, step 234 ==> loss 0.03537593580559533, accuracy 0.866386217948718
+[!] Training Epoch 35, step 234 ==> loss 0.035222274004521534, accuracy 0.8667701655982906
+[!] Training Epoch 36, step 234 ==> loss 0.03505640130681105, accuracy 0.8678552350427351
+[!] Training Epoch 37, step 234 ==> loss 0.034898079772535555, accuracy 0.8684895833333334
+[!] Training Epoch 38, step 234 ==> loss 0.03475037473452906, accuracy 0.8691740117521367
+[!] Training Epoch 39, step 234 ==> loss 0.03460219043155766, accuracy 0.8696915064102564
+[!] Training Epoch 40, step 234 ==> loss 0.03445368385117533, accuracy 0.8704427083333334
+[!] Training Epoch 41, step 234 ==> loss 0.034291877339665704, accuracy 0.8711772168803419
+[!] Training Epoch 42, step 234 ==> loss 0.03415701724588871, accuracy 0.8717447916666666
+[!] Training Epoch 43, step 234 ==> loss 0.03400108793702645, accuracy 0.8726128472222222
+[!] Training Epoch 44, step 234 ==> loss 0.03386071349024518, accuracy 0.8729300213675214
+[!] Training Epoch 45, step 234 ==> loss 0.033706762230931185, accuracy 0.8739316239316239
+[!] Training Epoch 46, step 234 ==> loss 0.03356045859459883, accuracy 0.8745492788461539
+[!] Training Epoch 47, step 234 ==> loss 0.03340474532073379, accuracy 0.8750667735042735
+[!] Training Epoch 48, step 234 ==> loss 0.03326119395753003, accuracy 0.8758680555555556
+[!] Training Epoch 49, step 234 ==> loss 0.033111568245813884, accuracy 0.8761351495726496
+[!] Training Epoch 50, step 234 ==> loss 0.03294961715642458, accuracy 0.876953125
+[!] Training Epoch 51, step 234 ==> loss 0.032786701973050066, accuracy 0.8779213408119658
+[!] Training Epoch 52, step 234 ==> loss 0.032634216917949356, accuracy 0.8785723824786325
+[!] Training Epoch 53, step 234 ==> loss 0.032477430776398405, accuracy 0.87890625
+[!] Training Epoch 54, step 234 ==> loss 0.03230734916133249, accuracy 0.8798410790598291
+[!] Training Epoch 55, step 234 ==> loss 0.032153414029023074, accuracy 0.8806757478632479
+[!] Training Epoch 56, step 234 ==> loss 0.03198488005715558, accuracy 0.8812266292735043
+[!] Training Epoch 57, step 234 ==> loss 0.03182624766014071, accuracy 0.8822282318376068
+[!] Training Epoch 58, step 234 ==> loss 0.03166381402625742, accuracy 0.8827290331196581
+[!] Training Epoch 59, step 234 ==> loss 0.031488661089131974, accuracy 0.8839142628205128
+[!] Training Epoch 60, step 234 ==> loss 0.03132936255767559, accuracy 0.8842147435897436
+[!] Training Epoch 61, step 234 ==> loss 0.03115554939573392, accuracy 0.8853665865384616
+[!] Training Epoch 62, step 234 ==> loss 0.03099409953301024, accuracy 0.8860343215811965
+[!] Training Epoch 63, step 234 ==> loss 0.03081477816320128, accuracy 0.8870860042735043
+[!] Training Epoch 64, step 234 ==> loss 0.030656501531409912, accuracy 0.8876702724358975
+[!] Training Epoch 65, step 234 ==> loss 0.030475296175632723, accuracy 0.8887052617521367
+[!] Training Epoch 66, step 234 ==> loss 0.030309321828441232, accuracy 0.8894063835470085
+[!] Training Epoch 67, step 234 ==> loss 0.030130400059696954, accuracy 0.8903078258547008
+[!] Training Epoch 68, step 234 ==> loss 0.02996079349078429, accuracy 0.8908253205128205
+[!] Training Epoch 69, step 234 ==> loss 0.029790550374831908, accuracy 0.8916432959401709
+[!] Training Epoch 70, step 234 ==> loss 0.0296150703365222, accuracy 0.8925280448717948
+[!] Training Epoch 71, step 234 ==> loss 0.029441916964884497, accuracy 0.8933293269230769
+[!] Training Epoch 72, step 234 ==> loss 0.02928087266528199, accuracy 0.8938635149572649
+[!] Training Epoch 73, step 234 ==> loss 0.029098065960037913, accuracy 0.8949986645299145
+[!] Training Epoch 74, step 234 ==> loss 0.02892409862839004, accuracy 0.8956163194444444
+[!] Training Epoch 75, step 234 ==> loss 0.028752107961246602, accuracy 0.8965845352564102
+[!] Training Epoch 76, step 234 ==> loss 0.028587120338382885, accuracy 0.8972522702991453
+[!] Training Epoch 77, step 234 ==> loss 0.02840367328120857, accuracy 0.8977196848290598
+[!] Training Epoch 78, step 234 ==> loss 0.028236659792944405, accuracy 0.8987880608974359
+[!] Training Epoch 79, step 234 ==> loss 0.028068581118415564, accuracy 0.8996060363247863
+[!] Training Epoch 80, step 234 ==> loss 0.027898891120512262, accuracy 0.9002570779914529
+[!] Training Epoch 81, step 234 ==> loss 0.02772732063109039, accuracy 0.9009748931623932
+[!] Training Epoch 82, step 234 ==> loss 0.027556062628252383, accuracy 0.9018930288461539
+[!] Training Epoch 83, step 234 ==> loss 0.02739769073091766, accuracy 0.9024772970085471
+[!] Training Epoch 84, step 234 ==> loss 0.02723222251376535, accuracy 0.9031784188034188
+[!] Training Epoch 85, step 234 ==> loss 0.027060725598826878, accuracy 0.9037960737179487
+[!] Training Epoch 86, step 234 ==> loss 0.02690260727595315, accuracy 0.9045138888888888
+[!] Training Epoch 87, step 234 ==> loss 0.02675202973664571, accuracy 0.9049979967948718
+[!] Training Epoch 88, step 234 ==> loss 0.026591821804515317, accuracy 0.9056991185897436
+[!] Training Epoch 89, step 234 ==> loss 0.026432722225848936, accuracy 0.9060663728632479
+[!] Training Epoch 90, step 234 ==> loss 0.02627249729907156, accuracy 0.9069678151709402
+[!] Training Epoch 91, step 234 ==> loss 0.026132937552582506, accuracy 0.9077190170940171
+[!] Training Epoch 92, step 234 ==> loss 0.02598025616353903, accuracy 0.9080194978632479
+[!] Training Epoch 93, step 234 ==> loss 0.025827809125503413, accuracy 0.9088040865384616
+[!] Training Epoch 94, step 234 ==> loss 0.02569271230067198, accuracy 0.9090377938034188
+[!] Training Epoch 95, step 234 ==> loss 0.0255532145468343, accuracy 0.9095219017094017
+[!] Training Epoch 96, step 234 ==> loss 0.025406355826327436, accuracy 0.9104066506410257
+[!] Training Epoch 97, step 234 ==> loss 0.025280978976406604, accuracy 0.9111244658119658
+[!] Training Epoch 98, step 234 ==> loss 0.02514829331388076, accuracy 0.9114750267094017
+[!] Training Epoch 99, step 234 ==> loss 0.025014726819199883, accuracy 0.9123931623931624
+[!] Training Epoch 100, step 234 ==> loss 0.02490151629775253, accuracy 0.9126936431623932
+[!] Training Epoch 101, step 234 ==> loss 0.024769995242166214, accuracy 0.9132779113247863
+[!] Training Epoch 102, step 234 ==> loss 0.024645377690784443, accuracy 0.9138788728632479
+[!] Training Epoch 103, step 234 ==> loss 0.024525674832109202, accuracy 0.9144965277777778
+[!] Training Epoch 104, step 234 ==> loss 0.02441153933222477, accuracy 0.9151475694444444
+[!] Training Epoch 105, step 234 ==> loss 0.02430509423248024, accuracy 0.9154981303418803
+[!] Training Epoch 106, step 234 ==> loss 0.024186918559746865, accuracy 0.9162326388888888
+[!] Training Epoch 107, step 234 ==> loss 0.02408295279193638, accuracy 0.9166833600427351
+[!] Training Epoch 108, step 234 ==> loss 0.02397228833128754, accuracy 0.9174011752136753
+[!] Training Epoch 109, step 234 ==> loss 0.02386109885942732, accuracy 0.9175514155982906
+[!] Training Epoch 110, step 234 ==> loss 0.02375755205941506, accuracy 0.9182859241452992
+[!] Training Epoch 111, step 234 ==> loss 0.02365136968019681, accuracy 0.9189536591880342
+[!] Training Epoch 112, step 234 ==> loss 0.023559979409870938, accuracy 0.9191873664529915
+[!] Training Epoch 113, step 234 ==> loss 0.023467944242442265, accuracy 0.9194377670940171
+[!] Training Epoch 114, step 234 ==> loss 0.02338072386944396, accuracy 0.9200387286324786
+[!] Training Epoch 115, step 234 ==> loss 0.023275819431958545, accuracy 0.9204393696581197
+[!] Training Epoch 116, step 234 ==> loss 0.023180347532989122, accuracy 0.9206229967948718
+[!] Training Epoch 117, step 234 ==> loss 0.023105989504828412, accuracy 0.9210236378205128
+[!] Training Epoch 118, step 234 ==> loss 0.023012707344232462, accuracy 0.9214576655982906
+[!] Training Epoch 119, step 234 ==> loss 0.022924077888138782, accuracy 0.9220085470085471
+[!] Training Epoch 120, step 234 ==> loss 0.02284004803524058, accuracy 0.9222923344017094
+[!] Training Epoch 121, step 234 ==> loss 0.0227583524508354, accuracy 0.9226595886752137
+[!] Training Epoch 122, step 234 ==> loss 0.0226746713822214, accuracy 0.9228599091880342
+[!] Training Epoch 123, step 234 ==> loss 0.02259137221158315, accuracy 0.9234107905982906
+[!] Training Epoch 124, step 234 ==> loss 0.02251456591149426, accuracy 0.9236111111111112
+[!] Training Epoch 125, step 234 ==> loss 0.022428480327193044, accuracy 0.9239783653846154
+[!] Training Epoch 126, step 234 ==> loss 0.02236225692412028, accuracy 0.924362313034188
+[!] Training Epoch 127, step 234 ==> loss 0.02228770101777254, accuracy 0.9246127136752137
+[!] Training Epoch 128, step 234 ==> loss 0.02220579136449557, accuracy 0.9250300480769231
+[!] Training Epoch 129, step 234 ==> loss 0.022143041492145285, accuracy 0.9251302083333334
+[!] Training Epoch 130, step 234 ==> loss 0.022069473368808244, accuracy 0.9256810897435898
+[!] Training Epoch 131, step 234 ==> loss 0.02199597937715614, accuracy 0.9262152777777778
+[!] Training Epoch 132, step 234 ==> loss 0.021929651259993896, accuracy 0.9267160790598291
+[!] Training Epoch 133, step 234 ==> loss 0.021857896318229344, accuracy 0.9269998664529915
+[!] Training Epoch 134, step 234 ==> loss 0.02179233566658874, accuracy 0.9271167200854701
+[!] Training Epoch 135, step 234 ==> loss 0.021728065350435227, accuracy 0.9275507478632479
+[!] Training Epoch 136, step 234 ==> loss 0.02165957821262443, accuracy 0.9279013087606838
+[!] Training Epoch 137, step 234 ==> loss 0.021600335645369995, accuracy 0.9279847756410257
+[!] Training Epoch 138, step 234 ==> loss 0.021537451471528437, accuracy 0.9283353365384616
+[!] Training Epoch 139, step 234 ==> loss 0.021462798309631836, accuracy 0.9291700053418803
+[!] Training Epoch 140, step 234 ==> loss 0.02141737028892733, accuracy 0.928886217948718
+[!] Training Epoch 141, step 234 ==> loss 0.02135166612604999, accuracy 0.9293870192307693
+[!] Training Epoch 142, step 234 ==> loss 0.021286301338710845, accuracy 0.9294871794871795
+[!] Training Epoch 143, step 234 ==> loss 0.021237731767961614, accuracy 0.9297876602564102
+[!] Training Epoch 144, step 234 ==> loss 0.021177065319930896, accuracy 0.9301382211538461
+[!] Training Epoch 145, step 234 ==> loss 0.021114701930529032, accuracy 0.9304720886752137
+[!] Training Epoch 146, step 234 ==> loss 0.021062994487265237, accuracy 0.9307057959401709
+[!] Training Epoch 147, step 234 ==> loss 0.021006516785894193, accuracy 0.9311398237179487
+[!] Training Epoch 148, step 234 ==> loss 0.020951017809028808, accuracy 0.9313401442307693
+[!] Training Epoch 149, step 234 ==> loss 0.02089267373721824, accuracy 0.9317741720085471
+[!] Training Epoch 150, step 234 ==> loss 0.020846302366345867, accuracy 0.9317240918803419
+[!] Training Epoch 151, step 234 ==> loss 0.020785958474326845, accuracy 0.9322248931623932
+[!] Training Epoch 152, step 234 ==> loss 0.02073599283511822, accuracy 0.9325420673076923
+[!] Training Epoch 153, step 234 ==> loss 0.02068159697402237, accuracy 0.9328759348290598
+[!] Training Epoch 154, step 234 ==> loss 0.020626929620455984, accuracy 0.9330428685897436
+[!] Training Epoch 155, step 234 ==> loss 0.02058118262574968, accuracy 0.9331764155982906
+[!] Training Epoch 156, step 234 ==> loss 0.020528496131619327, accuracy 0.9335603632478633
+[!] Training Epoch 157, step 234 ==> loss 0.020480281760932036, accuracy 0.9337773771367521
+[!] Training Epoch 158, step 234 ==> loss 0.020425071239344075, accuracy 0.9343282585470085
+[!] Training Epoch 159, step 234 ==> loss 0.020388453036674067, accuracy 0.9345786591880342
+[!] Training Epoch 160, step 234 ==> loss 0.020333003479605302, accuracy 0.9345452724358975
+[!] Training Epoch 161, step 234 ==> loss 0.02028366842935992, accuracy 0.9349125267094017
+[!] Training Epoch 162, step 234 ==> loss 0.020251449547771715, accuracy 0.9351462339743589
+[!] Training Epoch 163, step 234 ==> loss 0.02019420110930999, accuracy 0.9355802617521367
+[!] Training Epoch 164, step 234 ==> loss 0.020141076455768358, accuracy 0.9357305021367521
+[!] Training Epoch 165, step 234 ==> loss 0.020101597277909264, accuracy 0.9356971153846154
+[!] Training Epoch 166, step 234 ==> loss 0.020064411971431512, accuracy 0.9359141292735043
+[!] Training Epoch 167, step 234 ==> loss 0.020017919138583362, accuracy 0.9362479967948718
+[!] Training Epoch 168, step 234 ==> loss 0.019974843996903326, accuracy 0.9365484775641025
+[!] Training Epoch 169, step 234 ==> loss 0.019931090040466726, accuracy 0.9368823450854701
+[!] Training Epoch 170, step 234 ==> loss 0.01988751287611886, accuracy 0.9370325854700855
+[!] Training Epoch 171, step 234 ==> loss 0.019837913190961905, accuracy 0.9372495993589743
+[!] Training Epoch 172, step 234 ==> loss 0.019802086126918975, accuracy 0.9374165331196581
+[!] Training Epoch 173, step 234 ==> loss 0.01975951385962912, accuracy 0.9376502403846154
+[!] Training Epoch 174, step 234 ==> loss 0.019717921542688314, accuracy 0.9379507211538461
+[!] Training Epoch 175, step 234 ==> loss 0.0196791409721805, accuracy 0.9379674145299145
+[!] Training Epoch 176, step 234 ==> loss 0.019639587368115656, accuracy 0.9382345085470085
+[!] Training Epoch 177, step 234 ==> loss 0.01960055861606175, accuracy 0.9383179754273504
+[!] Training Epoch 178, step 234 ==> loss 0.01955674837828956, accuracy 0.9385016025641025
+[!] Training Epoch 179, step 234 ==> loss 0.01951467438449717, accuracy 0.938918936965812
+[!] Training Epoch 180, step 234 ==> loss 0.01947069928272922, accuracy 0.9387853899572649
+[!] Training Epoch 181, step 234 ==> loss 0.01943895724625924, accuracy 0.9388354700854701
+[!] Training Epoch 182, step 234 ==> loss 0.019404158242938355, accuracy 0.9393696581196581
+[!] Training Epoch 183, step 234 ==> loss 0.01935907875179735, accuracy 0.9394030448717948
+[!] Training Epoch 184, step 234 ==> loss 0.01932494144918572, accuracy 0.9396534455128205
+[!] Training Epoch 185, step 234 ==> loss 0.01928498450284585, accuracy 0.9401041666666666
+[!] Training Epoch 186, step 234 ==> loss 0.019254236669144314, accuracy 0.9400040064102564
+[!] Training Epoch 187, step 234 ==> loss 0.01921854481403517, accuracy 0.9400874732905983
+[!] Training Epoch 188, step 234 ==> loss 0.019181544164147895, accuracy 0.9403545673076923
+[!] Training Epoch 189, step 234 ==> loss 0.019135408362166748, accuracy 0.9408386752136753
+[!] Training Epoch 190, step 234 ==> loss 0.01910878620389053, accuracy 0.9409722222222222
+[!] Training Epoch 191, step 234 ==> loss 0.01907426257753092, accuracy 0.9411892361111112
+[!] Training Epoch 192, step 234 ==> loss 0.019039273851065554, accuracy 0.9413060897435898
+[!] Training Epoch 193, step 234 ==> loss 0.01900466998370412, accuracy 0.9413895566239316
+[!] Training Epoch 194, step 234 ==> loss 0.018964972486321487, accuracy 0.9418569711538461
+[!] Training Epoch 195, step 234 ==> loss 0.018932001908015236, accuracy 0.9415564903846154
+[!] Training Epoch 196, step 234 ==> loss 0.018900179726063695, accuracy 0.9419738247863247
+[!] Training Epoch 197, step 234 ==> loss 0.018865751930409007, accuracy 0.9421908386752137
+[!] Training Epoch 198, step 234 ==> loss 0.018833751861865703, accuracy 0.9423076923076923
+[!] Training Epoch 199, step 234 ==> loss 0.018804214182349607, accuracy 0.9423076923076923
+[!] Training Epoch 200, step 234 ==> loss 0.01877403264451358, accuracy 0.9426582532051282
+[!] Training Epoch 201, step 234 ==> loss 0.01873754031367154, accuracy 0.9428585737179487
+[!] Training Epoch 202, step 234 ==> loss 0.01870685219207508, accuracy 0.9427751068376068
+[!] Training Epoch 203, step 234 ==> loss 0.01866704649411333, accuracy 0.943092280982906
+[!] Training Epoch 204, step 234 ==> loss 0.018644835628792007, accuracy 0.9431590544871795
+[!] Training Epoch 205, step 234 ==> loss 0.018613655717136003, accuracy 0.9433426816239316
+[!] Training Epoch 206, step 234 ==> loss 0.018582150196799867, accuracy 0.9434595352564102
+[!] Training Epoch 207, step 234 ==> loss 0.01854562234435963, accuracy 0.9437266292735043
+[!] Training Epoch 208, step 234 ==> loss 0.018519899322309047, accuracy 0.9437934027777778
+[!] Training Epoch 209, step 234 ==> loss 0.018493246040346786, accuracy 0.9439102564102564
+[!] Training Epoch 210, step 234 ==> loss 0.018455760235078316, accuracy 0.9438768696581197
+[!] Training Epoch 211, step 234 ==> loss 0.018427721093384884, accuracy 0.9441272702991453
+[!] Training Epoch 212, step 234 ==> loss 0.018395786189561725, accuracy 0.9442775106837606
+[!] Training Epoch 213, step 234 ==> loss 0.018368969126166697, accuracy 0.9444444444444444
+[!] Training Epoch 214, step 234 ==> loss 0.018336848351849705, accuracy 0.9445446047008547
+[!] Training Epoch 215, step 234 ==> loss 0.01831037701609043, accuracy 0.9445279113247863
+[!] Training Epoch 216, step 234 ==> loss 0.01828447910041636, accuracy 0.9447616185897436
+[!] Training Epoch 217, step 234 ==> loss 0.018254318437738042, accuracy 0.9448283920940171
+[!] Training Epoch 218, step 234 ==> loss 0.018222180338433154, accuracy 0.9450120192307693
+[!] Training Epoch 219, step 234 ==> loss 0.01819298976761663, accuracy 0.9453125
+[!] Training Epoch 220, step 234 ==> loss 0.018164984993318208, accuracy 0.9451121794871795
+[!] Training Epoch 221, step 234 ==> loss 0.018140766208466046, accuracy 0.9453458867521367
+[!] Training Epoch 222, step 234 ==> loss 0.018112500564346455, accuracy 0.945579594017094
+[!] Training Epoch 223, step 234 ==> loss 0.018092670772447545, accuracy 0.9455462072649573
+[!] Training Epoch 224, step 234 ==> loss 0.01806078661774468, accuracy 0.9460803952991453
+[!] Training Epoch 225, step 234 ==> loss 0.01803247678754294, accuracy 0.9459468482905983
+[!] Training Epoch 226, step 234 ==> loss 0.018007740048038907, accuracy 0.9460970886752137
+[!] Training Epoch 227, step 234 ==> loss 0.017979240391212396, accuracy 0.9461805555555556
+[!] Training Epoch 228, step 234 ==> loss 0.01794701237947895, accuracy 0.9464476495726496
+[!] Training Epoch 229, step 234 ==> loss 0.017928992537383594, accuracy 0.9464810363247863
+[!] Training Epoch 230, step 234 ==> loss 0.017901913199223515, accuracy 0.946464342948718
+[!] Training Epoch 231, step 234 ==> loss 0.017876407708654292, accuracy 0.9467147435897436
+[!] Training Epoch 232, step 234 ==> loss 0.01783827457847631, accuracy 0.9468816773504274
+[!] Training Epoch 233, step 234 ==> loss 0.01781613922590374, accuracy 0.9471320779914529
+[!] Training Epoch 234, step 234 ==> loss 0.01779429143310612, accuracy 0.9471320779914529
+[!] Training Epoch 235, step 234 ==> loss 0.017771134956970684, accuracy 0.9472322382478633
+[!] Training Epoch 236, step 234 ==> loss 0.01774491855683617, accuracy 0.9472489316239316
+[!] Training Epoch 237, step 234 ==> loss 0.017716965665961176, accuracy 0.9472823183760684
+[!] Training Epoch 238, step 234 ==> loss 0.017701765976082057, accuracy 0.9472823183760684
+[!] Training Epoch 239, step 234 ==> loss 0.01767399075289822, accuracy 0.9475494123931624
+[!] Training Epoch 240, step 234 ==> loss 0.01765381669004758, accuracy 0.9475494123931624
+[!] Training Epoch 241, step 234 ==> loss 0.01762695115409855, accuracy 0.9476328792735043
+[!] Training Epoch 242, step 234 ==> loss 0.01759792426521452, accuracy 0.9479333600427351
+[!] Training Epoch 243, step 234 ==> loss 0.01757998446512044, accuracy 0.9480168269230769
+[!] Training Epoch 244, step 234 ==> loss 0.017554203919970836, accuracy 0.9479500534188035
+[!] Training Epoch 245, step 234 ==> loss 0.017537010582880333, accuracy 0.9482505341880342
+[!] Training Epoch 246, step 234 ==> loss 0.01750872544466685, accuracy 0.9483673878205128
+[!] Training Epoch 247, step 234 ==> loss 0.01748156889827333, accuracy 0.9485009348290598
+[!] Training Epoch 248, step 234 ==> loss 0.01745551077521637, accuracy 0.9485677083333334
+[!] Training Epoch 249, step 234 ==> loss 0.017438131137790844, accuracy 0.9487012553418803
+[!] Training Epoch 250, step 234 ==> loss 0.017417016809280865, accuracy 0.9488014155982906
+[!] Training Epoch 251, step 234 ==> loss 0.017393869121009722, accuracy 0.9487847222222222
+[!] Training Epoch 252, step 234 ==> loss 0.017372363660898473, accuracy 0.9490351228632479
+[!] Training Epoch 253, step 234 ==> loss 0.017347404410919316, accuracy 0.9492354433760684
+[!] Training Epoch 254, step 234 ==> loss 0.017326026951941926, accuracy 0.9490518162393162
+[!] Training Epoch 255, step 234 ==> loss 0.01730605677709493, accuracy 0.9494524572649573
+[!] Training Epoch 256, step 234 ==> loss 0.017283024732023478, accuracy 0.9493189102564102
+[!] Training Epoch 257, step 234 ==> loss 0.017254111735134296, accuracy 0.9495693108974359
+[!] Training Epoch 258, step 234 ==> loss 0.017241203242069125, accuracy 0.9495526175213675
+[!] Training Epoch 259, step 234 ==> loss 0.017224458400478475, accuracy 0.9496360844017094
+[!] Training Epoch 260, step 234 ==> loss 0.017193162849602792, accuracy 0.9498864850427351
+[!] Training Epoch 261, step 234 ==> loss 0.01717233629976837, accuracy 0.9500367254273504
+[!] Training Epoch 262, step 234 ==> loss 0.0171543940798276, accuracy 0.9499532585470085
+[!] Training Epoch 263, step 234 ==> loss 0.017135881134269074, accuracy 0.950020032051282
+[!] Training Epoch 264, step 234 ==> loss 0.01710484578855272, accuracy 0.9499699519230769
+[!] Training Epoch 265, step 234 ==> loss 0.017096547863613337, accuracy 0.9500033386752137
+[!] Training Epoch 266, step 234 ==> loss 0.017071762969956186, accuracy 0.9500868055555556
+[!] Training Epoch 267, step 234 ==> loss 0.01705768046518549, accuracy 0.9504540598290598
+[!] Training Epoch 268, step 234 ==> loss 0.01703555368953663, accuracy 0.9501368856837606
+[!] Training Epoch 269, step 234 ==> loss 0.01701728033268044, accuracy 0.9505041399572649
+[!] Training Epoch 270, step 234 ==> loss 0.0169908151579782, accuracy 0.9504373664529915
+[!] Training Epoch 271, step 234 ==> loss 0.01697254240210367, accuracy 0.9507044604700855
+[!] Training Epoch 272, step 234 ==> loss 0.01695199618832423, accuracy 0.9507378472222222
+[!] Training Epoch 273, step 234 ==> loss 0.016929664338628452, accuracy 0.9506710737179487
+[!] Training Epoch 274, step 234 ==> loss 0.016906715316586513, accuracy 0.9508547008547008
+[!] Training Epoch 275, step 234 ==> loss 0.016896803827526476, accuracy 0.9510216346153846
+[!] Training Epoch 276, step 234 ==> loss 0.01687457479743494, accuracy 0.9510717147435898
+[!] Training Epoch 277, step 234 ==> loss 0.016853932936031085, accuracy 0.9511217948717948
+[!] Training Epoch 278, step 234 ==> loss 0.016834198385795467, accuracy 0.9513555021367521
+[!] Training Epoch 279, step 234 ==> loss 0.01682432674062558, accuracy 0.951171875
+[!] Training Epoch 280, step 234 ==> loss 0.016804286445944738, accuracy 0.9511551816239316
+[!] Training Epoch 281, step 234 ==> loss 0.01677373358104219, accuracy 0.9514556623931624
+[!] Training Epoch 282, step 234 ==> loss 0.01675757497517217, accuracy 0.9515391292735043
+[!] Training Epoch 283, step 234 ==> loss 0.016745492545330625, accuracy 0.9517227564102564
+[!] Training Epoch 284, step 234 ==> loss 0.01673069629722681, accuracy 0.9516726762820513
+[!] Training Epoch 285, step 234 ==> loss 0.016712958773231913, accuracy 0.951973157051282
+[!] Training Epoch 286, step 234 ==> loss 0.01668923867579836, accuracy 0.9518896901709402
+[!] Training Epoch 287, step 234 ==> loss 0.01667087350008834, accuracy 0.9519063835470085
+[!] Training Epoch 288, step 234 ==> loss 0.016659255609171003, accuracy 0.951973157051282
+[!] Training Epoch 289, step 234 ==> loss 0.016636879059971653, accuracy 0.9522569444444444
+[!] Training Epoch 290, step 234 ==> loss 0.0166251549226606, accuracy 0.9521734775641025
+[!] Training Epoch 291, step 234 ==> loss 0.016606876972871713, accuracy 0.9524071848290598
+[!] Training Epoch 292, step 234 ==> loss 0.0165818109192973, accuracy 0.9522569444444444
+[!] Training Epoch 293, step 234 ==> loss 0.016563044916679207, accuracy 0.9524906517094017
+[!] Training Epoch 294, step 234 ==> loss 0.01655149082135823, accuracy 0.9525240384615384
+[!] Training Epoch 295, step 234 ==> loss 0.01653205695299384, accuracy 0.952590811965812
+[!] Training Epoch 296, step 234 ==> loss 0.016517537116654154, accuracy 0.9527076655982906
+[!] Training Epoch 297, step 234 ==> loss 0.016497687695340976, accuracy 0.9528245192307693
+[!] Training Epoch 298, step 234 ==> loss 0.016481403050482527, accuracy 0.9528745993589743
+[!] Training Epoch 299, step 234 ==> loss 0.016465540525591016, accuracy 0.9530749198717948
+[!] Training Epoch 300, step 234 ==> loss 0.016442161626540698, accuracy 0.9529580662393162
+[!] Training Epoch 301, step 234 ==> loss 0.016431537532430682, accuracy 0.9532418536324786
+[!] Training Epoch 302, step 234 ==> loss 0.016417097160990678, accuracy 0.9531750801282052
+[!] Training Epoch 303, step 234 ==> loss 0.016402090302644633, accuracy 0.953392094017094
+[!] Training Epoch 304, step 234 ==> loss 0.01638413939035983, accuracy 0.9534421741452992
+[!] Training Epoch 305, step 234 ==> loss 0.016367555607874423, accuracy 0.9537760416666666
+[!] Training Epoch 306, step 234 ==> loss 0.01634875665474524, accuracy 0.9535757211538461
+[!] Training Epoch 307, step 234 ==> loss 0.016332221866195273, accuracy 0.953926282051282
+[!] Training Epoch 308, step 234 ==> loss 0.016320348128230654, accuracy 0.9538595085470085
+[!] Training Epoch 309, step 234 ==> loss 0.016307297103011455, accuracy 0.9537259615384616
+[!] Training Epoch 310, step 234 ==> loss 0.016289596752319325, accuracy 0.9541432959401709
+[!] Training Epoch 311, step 234 ==> loss 0.0162671079309896, accuracy 0.9540264423076923
+[!] Training Epoch 312, step 234 ==> loss 0.016255785914090198, accuracy 0.9540765224358975
+[!] Training Epoch 313, step 234 ==> loss 0.016242371171585515, accuracy 0.9539930555555556
+[!] Training Epoch 314, step 234 ==> loss 0.016217891425371934, accuracy 0.954276842948718
+[!] Training Epoch 315, step 234 ==> loss 0.01620962875139, accuracy 0.9542601495726496
+[!] Training Epoch 316, step 234 ==> loss 0.016195547480422717, accuracy 0.9544771634615384
+[!] Training Epoch 317, step 234 ==> loss 0.016181944491357632, accuracy 0.9543436164529915
+[!] Training Epoch 318, step 234 ==> loss 0.016159511501622252, accuracy 0.954543936965812
+[!] Training Epoch 319, step 234 ==> loss 0.016145088526810337, accuracy 0.9544437767094017
+[!] Training Epoch 320, step 234 ==> loss 0.01613742278681861, accuracy 0.9546607905982906
+[!] Training Epoch 321, step 234 ==> loss 0.016119124606633797, accuracy 0.9548277243589743
+[!] Training Epoch 322, step 234 ==> loss 0.016104394124231786, accuracy 0.9547943376068376
+[!] Training Epoch 323, step 234 ==> loss 0.01609429995664674, accuracy 0.9547108707264957
+[!] Training Epoch 324, step 234 ==> loss 0.016076749505109, accuracy 0.9551115117521367
+[!] Training Epoch 325, step 234 ==> loss 0.016058190618283473, accuracy 0.9551448985042735
+[!] Training Epoch 326, step 234 ==> loss 0.016045677937312514, accuracy 0.9551282051282052
+[!] Training Epoch 327, step 234 ==> loss 0.01602817688567134, accuracy 0.9550948183760684
+[!] Training Epoch 328, step 234 ==> loss 0.01602058118989325, accuracy 0.9552283653846154
+[!] Training Epoch 329, step 234 ==> loss 0.01599766954811465, accuracy 0.9553952991452992
+[!] Training Epoch 330, step 234 ==> loss 0.015986159634895813, accuracy 0.9554286858974359
+[!] Training Epoch 331, step 234 ==> loss 0.015974303647780266, accuracy 0.9555622329059829
+[!] Training Epoch 332, step 234 ==> loss 0.015963513794172015, accuracy 0.9556456997863247
+[!] Training Epoch 333, step 234 ==> loss 0.015948380208295636, accuracy 0.9555956196581197
+[!] Training Epoch 334, step 234 ==> loss 0.015924399551481772, accuracy 0.9557124732905983
+[!] Training Epoch 335, step 234 ==> loss 0.015917738274726857, accuracy 0.9557792467948718
+[!] Training Epoch 336, step 234 ==> loss 0.015904202655308012, accuracy 0.9558126335470085
+[!] Training Epoch 337, step 234 ==> loss 0.01589467250702218, accuracy 0.9559628739316239
+[!] Training Epoch 338, step 234 ==> loss 0.015881790954651486, accuracy 0.9559795673076923
+[!] Training Epoch 339, step 234 ==> loss 0.015865569138246723, accuracy 0.9560630341880342
+[!] Training Epoch 340, step 234 ==> loss 0.01585044335319191, accuracy 0.9560129540598291
+[!] Training Epoch 341, step 234 ==> loss 0.01583717178362302, accuracy 0.9560964209401709
+[!] Training Epoch 342, step 234 ==> loss 0.015818118842111692, accuracy 0.9562466613247863
+[!] Training Epoch 343, step 234 ==> loss 0.015810322171698015, accuracy 0.9563301282051282
+[!] Training Epoch 344, step 234 ==> loss 0.01579637688974667, accuracy 0.9564803685897436
+[!] Training Epoch 345, step 234 ==> loss 0.015790501354723915, accuracy 0.9562800480769231
+[!] Training Epoch 346, step 234 ==> loss 0.015776518780069474, accuracy 0.956497061965812
+[!] Training Epoch 347, step 234 ==> loss 0.01574505891841956, accuracy 0.9566306089743589
+[!] Training Epoch 348, step 234 ==> loss 0.015742948445945214, accuracy 0.9566639957264957
+[!] Training Epoch 349, step 234 ==> loss 0.015727666433518514, accuracy 0.9568643162393162
+[!] Training Epoch 350, step 234 ==> loss 0.015719551207004193, accuracy 0.9566139155982906
+[!] Training Epoch 351, step 234 ==> loss 0.015703915964621, accuracy 0.9567140758547008
+[!] Training Epoch 352, step 234 ==> loss 0.015696520340016, accuracy 0.9569477831196581
+[!] Training Epoch 353, step 234 ==> loss 0.01567865553128923, accuracy 0.9568142361111112
+[!] Training Epoch 354, step 234 ==> loss 0.0156716214827238, accuracy 0.95703125
+[!] Training Epoch 355, step 234 ==> loss 0.01566016781502045, accuracy 0.9569811698717948
+[!] Training Epoch 356, step 234 ==> loss 0.015637585706212837, accuracy 0.9570479433760684
+[!] Training Epoch 357, step 234 ==> loss 0.015624341141018603, accuracy 0.9571481036324786
+[!] Training Epoch 358, step 234 ==> loss 0.015613990561224712, accuracy 0.9572816506410257
+[!] Training Epoch 359, step 234 ==> loss 0.015600034557123724, accuracy 0.9571981837606838
+[!] Training Epoch 360, step 234 ==> loss 0.015598808391354023, accuracy 0.9572315705128205
+[!] Training Epoch 361, step 234 ==> loss 0.01558195660686773, accuracy 0.9575153579059829
+[!] Training Epoch 362, step 234 ==> loss 0.015565639520939598, accuracy 0.9574652777777778
+[!] Training Epoch 363, step 234 ==> loss 0.015557158925435226, accuracy 0.9574318910256411
+[!] Training Epoch 364, step 234 ==> loss 0.015545890945145208, accuracy 0.9575821314102564
+[!] Training Epoch 365, step 234 ==> loss 0.015529043435190733, accuracy 0.9577156784188035
+[!] Training Epoch 366, step 234 ==> loss 0.015520703931076404, accuracy 0.9577156784188035
+[!] Training Epoch 367, step 234 ==> loss 0.01550377333839225, accuracy 0.9577323717948718
+[!] Training Epoch 368, step 234 ==> loss 0.015490206869908122, accuracy 0.9578158386752137
+[!] Training Epoch 369, step 234 ==> loss 0.015484874287986347, accuracy 0.9578993055555556
+[!] Training Epoch 370, step 234 ==> loss 0.015474677141596619, accuracy 0.9577824519230769
+[!] Training Epoch 371, step 234 ==> loss 0.015460679749361215, accuracy 0.9579827724358975
+[!] Training Epoch 372, step 234 ==> loss 0.015450103017382132, accuracy 0.9579326923076923
+[!] Training Epoch 373, step 234 ==> loss 0.015434300690157037, accuracy 0.9578659188034188
+[!] Training Epoch 374, step 234 ==> loss 0.015430742086699376, accuracy 0.9579827724358975
+[!] Training Epoch 375, step 234 ==> loss 0.015412943155114722, accuracy 0.9580161591880342
+[!] Training Epoch 376, step 234 ==> loss 0.015398114207240507, accuracy 0.9583166399572649
+[!] Training Epoch 377, step 234 ==> loss 0.015391971127918134, accuracy 0.9581997863247863
+[!] Training Epoch 378, step 234 ==> loss 0.015370731779302541, accuracy 0.9583333333333334
+[!] Training Epoch 379, step 234 ==> loss 0.015372206560439534, accuracy 0.9582832532051282
+[!] Training Epoch 380, step 234 ==> loss 0.015355234476140676, accuracy 0.9584835737179487
+[!] Training Epoch 381, step 234 ==> loss 0.015350640042979494, accuracy 0.958450186965812
+[!] Training Epoch 382, step 234 ==> loss 0.015332452638440916, accuracy 0.9587005876068376
+[!] Training Epoch 383, step 234 ==> loss 0.015322000982287603, accuracy 0.9585503472222222
+[!] Training Epoch 384, step 234 ==> loss 0.015310568719083427, accuracy 0.9586171207264957
+[!] Training Epoch 385, step 234 ==> loss 0.015303871168508234, accuracy 0.9584668803418803
+[!] Training Epoch 386, step 234 ==> loss 0.01528650019556666, accuracy 0.9586838942307693
+[!] Training Epoch 387, step 234 ==> loss 0.015276354355498767, accuracy 0.9589509882478633
+[!] Training Epoch 388, step 234 ==> loss 0.01526469662069128, accuracy 0.9589342948717948
+[!] Training Epoch 389, step 234 ==> loss 0.015249753553961586, accuracy 0.9588508279914529
+[!] Training Epoch 390, step 234 ==> loss 0.01524675796684037, accuracy 0.9590344551282052
+[!] Training Epoch 391, step 234 ==> loss 0.015236901716353038, accuracy 0.9591179220085471
+[!] Training Epoch 392, step 234 ==> loss 0.015222741911808649, accuracy 0.9591513087606838
+[!] Training Epoch 393, step 234 ==> loss 0.01521445888405045, accuracy 0.9591846955128205
+[!] Training Epoch 394, step 234 ==> loss 0.01520334449238502, accuracy 0.9591179220085471
+[!] Training Epoch 395, step 234 ==> loss 0.01518783811877808, accuracy 0.9594350961538461
+[!] Training Epoch 396, step 234 ==> loss 0.015183860639062447, accuracy 0.959251469017094
+[!] Training Epoch 397, step 234 ==> loss 0.015159317686294135, accuracy 0.9596854967948718
+[!] Training Epoch 398, step 234 ==> loss 0.015157853782527212, accuracy 0.9596020299145299
+[!] Training Epoch 399, step 234 ==> loss 0.015152756347615495, accuracy 0.9594017094017094
+[!] Training Epoch 400, step 234 ==> loss 0.015140924949007921, accuracy 0.9597355769230769
+[!] Test batch 2 ==> loss 0.875, accuracy 0.94921875
+[!] Test batch 3 ==> loss 0.70703125, accuracy 0.958984375
+[!] Test batch 4 ==> loss 0.86328125, accuracy 0.9583333333333334
+[!] Test batch 5 ==> loss 0.23828125, accuracy 0.9638671875
+[!] Test batch 6 ==> loss 0.53125, accuracy 0.965625
+[!] Test batch 7 ==> loss 0.30078125, accuracy 0.9654947916666666
+[!] Test batch 8 ==> loss 0.58984375, accuracy 0.9631696428571429
+[!] Test batch 9 ==> loss 0.5, accuracy 0.96337890625
+[!] Test batch 10 ==> loss 0.91796875, accuracy 0.9605034722222222
+[!] Test batch 11 ==> loss 1.36328125, accuracy 0.958203125
+[!] Test batch 12 ==> loss 1.359375, accuracy 0.9566761363636364
+[!] Test batch 13 ==> loss 1.1953125, accuracy 0.9560546875
+[!] Test batch 14 ==> loss 0.421875, accuracy 0.9573317307692307
+[!] Test batch 15 ==> loss 0.26953125, accuracy 0.9584263392857143
+[!] Test batch 16 ==> loss 0.7578125, accuracy 0.9591145833333333
+[!] Test batch 17 ==> loss 0.56640625, accuracy 0.959228515625
+[!] Test batch 18 ==> loss 0.671875, accuracy 0.9602481617647058
+[!] Test batch 19 ==> loss 0.87890625, accuracy 0.9596354166666666
+[!] Test batch 20 ==> loss 0.8359375, accuracy 0.9590871710526315
+[!] Test batch 21 ==> loss 1.08203125, accuracy 0.9583984375
+[!] Test batch 22 ==> loss 0.2578125, accuracy 0.9594494047619048
+[!] Test batch 23 ==> loss 0.39453125, accuracy 0.9604048295454546
+[!] Test batch 24 ==> loss 0.6796875, accuracy 0.9602581521739131
+[!] Test batch 25 ==> loss 1.0546875, accuracy 0.9599609375
+[!] Test batch 26 ==> loss 1.14453125, accuracy 0.9590625
+[!] Test batch 27 ==> loss 1.1171875, accuracy 0.9583834134615384
+[!] Test batch 28 ==> loss 0.52734375, accuracy 0.9586226851851852
+[!] Test batch 29 ==> loss 0.62890625, accuracy 0.9585658482142857
+[!] Test batch 30 ==> loss 0.69921875, accuracy 0.9587823275862069
+[!] Test batch 31 ==> loss 0.890625, accuracy 0.95859375
+[!] Test batch 32 ==> loss 0.69140625, accuracy 0.9587953629032258
+[!] Test batch 33 ==> loss 1.3203125, accuracy 0.958251953125
+[!] Test batch 34 ==> loss 1.2890625, accuracy 0.9580965909090909
+[!] Test batch 35 ==> loss 0.5078125, accuracy 0.9586397058823529
+[!] Test batch 36 ==> loss 0.75390625, accuracy 0.9590401785714285
+[!] Test batch 37 ==> loss 0.86328125, accuracy 0.9590928819444444
+[!] Test batch 38 ==> loss 0.7421875, accuracy 0.9592483108108109
+[!] Test batch 39 ==> loss 0.64453125, accuracy 0.9592927631578947
+[!] Test batch 40 ==> loss 0.953125, accuracy 0.9594350961538461
 =================================
-[+] Average test Loss ==> 0.6752
-[+] Test accuracy ==> 96.42
+[+] Average test Loss ==> 0.7714
+[+] Test accuracy ==> 95.94

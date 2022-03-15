@@ -110,7 +110,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
       num_correct += (predicted_labels == labels).sum().item()
       num_samples += predicted_labels.size(0)
 
-    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {loss.item():.4f}")
+    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f}")
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
     trainHistory['loss'].append(loss.item())
     trainHistory['accuracy'].append(num_correct/num_samples)
