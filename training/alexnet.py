@@ -107,6 +107,7 @@ if __name__ == "__main__":
   parser.add_argument("--verbose", help="increase output verbosity", action="store_true")
   parser.add_argument("--simplified", help="use HE friendly functions and pooling", action="store_true")
   args = parser.parse_args()
+  
   if args.verbose:
     verbose = True
   else:

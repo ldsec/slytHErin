@@ -1,2 +1,6 @@
-./inference
 ./new_poseidon
+/.idea
+*.pt
+.pyc
+*.json
+*.xml
