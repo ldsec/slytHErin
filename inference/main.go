@@ -1,12 +1,20 @@
 package main
 
+/*
+
+
+
 import (
-	"fmt"
+	//"fmt"
 	//"github.com/ldsec/dnn-inference/inference/plainUtils"
+	//"github.com/tuneinsight/lattigo/v3/ckks"
+	//"github.com/tuneinsight/lattigo/v3/rlwe"
+	//"time"
+	//"math"
+	"fmt"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"time"
-	//"math"
 )
 
 func main() {
@@ -114,7 +122,7 @@ func main() {
 	}
 	fmt.Println(plainUtils.Vectorize(X))
 	P := plainUtils.GenPaddingMatrixes(3,1)
-	*/
+
 }
 
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
@@ -238,3 +246,4 @@ func Dense(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ci
 
 	return
 }
+*/

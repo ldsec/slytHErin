@@ -52,32 +52,54 @@ def extract_simpleNet(model):
     for p_name, param in model.named_parameters():
         layer_name = p_name.split(".")[0]
         layer_type = p_name.split(".")[1]
-        serialized[layer_name][layer_type] = {}
         if 'weight' in p_name:
+            serialized[layer_name][layer_type] = []
             data = param.data.cpu().numpy()
             if 'conv1' in p_name:
                 kernels = data.reshape(1,5,5,5)
+                fl_kernels = []
                 for i,filter in enumerate(kernels):
-                    serialized[layer_name][layer_type]['k_'+str(i)]={}
+                    channels = []
                     for j,channel in enumerate(filter):
-                        serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)] = []
                         m = gen_kernel_matrix(channel,5,2,29)
+                        w = []
+                        rows = len(m)
+                        cols = len(m[0])
                         for r in m:
                             for c in r:    
-                                serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)].append(float(c))
+                                w.append(float(c))
+                        channel = {'w':w, 'rows':rows, 'cols':cols}
+                        channels.append(channel)
+                    fl_kernels.append({'channels':channels})
+                serialized[layer_name][layer_type] = fl_kernels
             else:                
                 if 'pool1' in p_name:
                     kernels = data.reshape(100,5,13,13)
+                    rows = cols = 13
                 if 'pool2' in p_name:
                     kernels = data.reshape(10,1,100,1)
+                    rows = 100
+                    cols = 1
+                fl_kernels = []
                 for i,filter in enumerate(kernels):
-                    serialized[layer_name][layer_type]['k_'+str(i)]={}
+                    channels = []
                     for j,channel in enumerate(filter):
                         m = channel
-                        serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)] = [x.item() for x in m.flatten()]
+                        w = []
+                        rows = len(m)
+                        cols = len(m[0])
+                        for r in m:
+                            for c in r:
+                                w.append(float(c))
+                        channel = {'w':w, 'rows':rows, 'cols':cols}
+                        channels.append(channel)
+                    fl_kernels.append({'channels':channels})
+                serialized[layer_name][layer_type] = fl_kernels
         if 'bias' in p_name:
+            serialized[layer_name][layer_type] = {}
             data = param.data.cpu().numpy().flatten()
             serialized[layer_name][layer_type]['b']=[]
+            serialized[layer_name][layer_type]['len']=len(data)
             for x in data:
                 serialized[layer_name][layer_type]['b'].append(x.item())
     
