@@ -130,7 +130,7 @@ def extract_param(model_name, param_name, param):
             k = k.flatten()
             for x in k:
                 weights.append(x.item()) ##convert to json-serializable
-    if 'bias' in p_name:
+    if 'bias' in param_name:
         weights = []
         data = param.data.cpu().numpy().flatten()
         for k in data:

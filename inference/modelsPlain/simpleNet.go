@@ -34,7 +34,7 @@ type SimpleNet struct {
 	//reluApprox ckks.Polynomial //this will store the coefficients of the poly approximating ReLU
 }
 
-func LoadSimpleNet(path string) SimpleNet {
+func LoadSimpleNet(path string) *SimpleNet {
 	//jsonFile, err := os.Open("../../training/models/simpleNet.json")
 	jsonFile, err := os.Open(path)
 	if err != nil {
@@ -45,6 +45,5 @@ func LoadSimpleNet(path string) SimpleNet {
 
 	var res SimpleNet
 	json.Unmarshal([]byte(byteValue), &res)
-	fmt.Println(res.Conv1)
-	return res
+	return &res
 }
