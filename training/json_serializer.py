@@ -7,6 +7,7 @@ from alexnet import AlexNet
 from torch.nn.parameter import Parameter
 import json
 import time
+from conv_transform import gen_kernel_matrix
 
 os.chdir("./models")
 
@@ -42,8 +43,52 @@ def format_AlexNet(serialized):
             l_dict[t] = serialized[l+"."+t]
         formatted[l] = l_dict
     return formatted
-        
-def extract_param(param_name, param):
+
+def extract_simpleNet(model):
+    serialized = {}
+    serialized['conv1'] = {}
+    serialized['pool1'] = {}
+    serialized['pool2'] = {}
+    for p_name, param in model.named_parameters():
+        layer_name = p_name.split(".")[0]
+        layer_type = p_name.split(".")[1]
+        serialized[layer_name][layer_type] = {}
+        if 'weight' in p_name:
+            data = param.data.cpu().numpy()
+            if 'conv1' in p_name:
+                kernels = data.reshape(1,5,5,5)
+                for i,filter in enumerate(kernels):
+                    serialized[layer_name][layer_type]['k_'+str(i)]={}
+                    for j,channel in enumerate(filter):
+                        serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)] = []
+                        m = gen_kernel_matrix(channel,5,2,29)
+                        for r in m:
+                            for c in r:    
+                                serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)].append(float(c))
+            else:                
+                if 'pool1' in p_name:
+                    kernels = data.reshape(100,5,13,13)
+                if 'pool2' in p_name:
+                    kernels = data.reshape(10,1,100,1)
+                for i,filter in enumerate(kernels):
+                    serialized[layer_name][layer_type]['k_'+str(i)]={}
+                    for j,channel in enumerate(filter):
+                        m = channel
+                        serialized[layer_name][layer_type]['k_'+str(i)]['ch_'+str(j)] = [x.item() for x in m.flatten()]
+        if 'bias' in p_name:
+            data = param.data.cpu().numpy().flatten()
+            serialized[layer_name][layer_type]['b']=[]
+            for x in data:
+                serialized[layer_name][layer_type]['b'].append(x.item())
+    
+    return serialized
+
+#def extract_alexNet_simplified(model):
+#    serialized = {}
+#    for p_name, param in model.named_parameters():
+
+
+def extract_param(model_name, param_name, param):
     """
         Params are extracted in row-major order:
         suppose you have a CONV layer with (k,C,W,H), 
@@ -53,7 +98,7 @@ def extract_param(param_name, param):
     """
     if 'weight' in param_name:
         weights = []
-        data = param.data.cpu().numpy()
+        data = param.data.cpu().numpy()            
         if 'classifier' in param_name:
             ## for linear layer in AlexNet, transpose first
             data = data.transpose() 
@@ -65,28 +110,31 @@ def extract_param(param_name, param):
                 weights.append(x.item()) ##convert to json-serializable
     if 'bias' in p_name:
         weights = []
-        data = param.data.cpu().numpy()
+        data = param.data.cpu().numpy().flatten()
         for k in data:
             weights.append(k.item())
     return weights
 
-
-models = [(x,torch.load(x)) for x in glob.iglob("*.pt")]
-for name,m in models:
-    if "SimpleNet" in name:
-        j_name = "simpleNet"
-        format = format_SimpleNet
-    elif "AlexNet" in name:
-        j_name = "alexNet"
-        format = format_AlexNet
-        if "simplified" in name:
-            j_name += "_simplified"
-    print(f"Serializing {j_name}...")
-    serialized = {}
-    for p_name, param in m.named_parameters():
-        serialized[p_name] = extract_param(p_name, param)
-    serialized = format(serialized)
-    with open(f'{j_name}.json', 'w') as f:
-        json.dump(serialized, f)
-    print()
-    print("Done!")
+if __name__ == '__main__':
+    models = [(x,torch.load(x)) for x in glob.iglob("*.pt") if 'SimpleNet' in x]
+    for name,m in models:
+        if "SimpleNet" in name:
+            j_name = "simpleNet"
+            format = format_SimpleNet
+            serialized = extract_simpleNet(m)
+            with open(f'{j_name}2.json', 'w') as f:
+                json.dump(serialized, f)
+        #elif "AlexNet" in name:
+        #    j_name = "alexNet"
+        #    format = format_AlexNet
+        #    if "simplified" in name:
+        #        j_name += "_simplified"
+        #print(f"Serializing {j_name}...")
+        #serialized = {}
+        #for p_name, param in m.named_parameters():
+        #    serialized[p_name] = extract_param(j_name, p_name, param)
+        #serialized = format(serialized)
+        #with open(f'{j_name}.json', 'w') as f:
+        #    json.dump(serialized, f)
+        #print()
+        #print("Done!")

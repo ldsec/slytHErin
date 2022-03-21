@@ -5,7 +5,7 @@ import math
 from collections import deque
 '''
 ## JP function
-def GenKernelMatrix(kernel, stride_h, stride_v, dim):
+def gen_kernel_matrix(kernel, stride_h, stride_v, dim):
     m = [[0 for i in range(dim*dim)] for j in range(dim*dim)]
 
     kernel_flattened = [0 for i in range(len(kernel) * dim - (dim-len(kernel)))]
@@ -30,7 +30,7 @@ def rotR(a,k):
     rot_a.rotate(k)
     return list(rot_a)
 
-def GenKernelMatrix(kernel, kernel_size, stride, dim):
+def gen_kernel_matrix(kernel, kernel_size, stride, dim):
     """
     Transform each kernel of a conv layer in a matrix m:
         Conv(input,k) --> m @ input.flatten()
@@ -75,7 +75,7 @@ kernel_size = 2
 stride = 2
 input_size = 4
 k = np.random.rand(kernel_size,kernel_size)        
-m = GenKernelMatrix(k,kernel_size,stride,input_size)
+m = gen_kernel_matrix(k,kernel_size,stride,input_size)
 m = np.array(m)
 a = np.random.rand(input_size,input_size)
 r = m @ a.flatten()
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     #    k = np.array(model['conv1']['weight']).reshape(5,5,5)
     #    M = []
     #    for kernel in k:
-    #        M.append(GenKernelMatrix(kernel,5,2,29))
+    #        M.append(gen_kernel_matrix(kernel,5,2,29))
     #    data = np.random.rand(29,29)
     #    data_t = torch.from_numpy(data).reshape(1,1,29,29)
     #    k_t = torch.from_numpy(k).reshape(5,1,5,5)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
         #print(kernel.shape)
         flattened_kernel = []
         for channel in kernel:
-            m = GenKernelMatrix(channel,kernel_size=kernel_size,stride=stride,dim=input_size)
+            m = gen_kernel_matrix(channel,kernel_size=kernel_size,stride=stride,dim=input_size)
             flattened_kernel.append(m)
         flattened_kernels.append(flattened_kernel)
     

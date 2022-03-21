@@ -2,25 +2,27 @@ package main
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	//"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"time"
+	//"math"
 )
 
 func main() {
 
-	/*
 		LDim := []int{3, 3}
 		W0Dim := []int{3, 3}
 		W1Dim := []int{3, 3}
 
-		r := rand.New(rand.NewSource(0))
+		//r := rand.New(rand.NewSource(0))
 
 		L := make([][]float64, LDim[0])
 		for i := range L {
 			L[i] = make([]float64, LDim[1])
 
 			for j := range L[i] {
-				L[i][j] = r.NormFloat64()
+				L[i][j] = float64(i*LDim[0]+j)
 			}
 		}
 		fmt.Println("L:", L)
@@ -29,7 +31,7 @@ func main() {
 			W0[i] = make([]float64, W0Dim[1])
 
 			for j := range W0[i] {
-				W0[i][j] = float64(i*4 + j)
+				W0[i][j]=float64(i*W0Dim[0]+j)
 			}
 		}
 		fmt.Println("W0:", W0)
@@ -39,7 +41,7 @@ func main() {
 			W1[i] = make([]float64, W1Dim[1])
 
 			for j := range W1[i] {
-				W1[i][j] = float64(i*2 + j)
+				W1[i][j]=float64(i*W1Dim[0]+j)
 			}
 		}
 		fmt.Println("W1", W1)
@@ -81,7 +83,7 @@ func main() {
 		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 		enc := ckks.NewEncryptor(params, sk)
-		//dec := ckks.NewDecryptor(params, sk)
+		dec := ckks.NewDecryptor(params, sk)
 		ecd := ckks.NewEncoder(params)
 		eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
 
@@ -98,8 +100,11 @@ func main() {
 		C := Dense(B, len(L), len(W1), len(W1[0]), ctW1, true, true, params, eval, ecd)
 		// -> Activate
 		fmt.Println("Done:", time.Since(now))
-		_ = C
-	*/
+		resPt := dec.DecryptNew(C)
+		resArray := ecd.DecodeSlots(resPt, 14)
+
+	fmt.Println(resArray[0:9])
+	/*
 	X := make([][]float64, 3)
 	for i := range X {
 		X[i] = make([]float64, 3)
@@ -108,7 +113,8 @@ func main() {
 		}
 	}
 	fmt.Println(plainUtils.Vectorize(X))
-	P := Gen
+	P := plainUtils.GenPaddingMatrixes(3,1)
+	*/
 }
 
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
@@ -126,7 +132,7 @@ func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 			fmt.Println("cImag", cImag)
 
 			for k := 0; k < leftdim; k++ {
-				fmt.Printf("m value at place %d,%d = 0.5(%f, i%f)\n", i, j*leftdim+k, cReal, -cImag)
+				fmt.Printf("m value at place %d,%d = 0.5(%f, %f.i)\n", i, j*leftdim+k, cReal, -cImag)
 				m[i][j*leftdim+k] = 0.5 * complex(cReal, -cImag) // 0.5 factor for imaginary part cleaning: (a+bi) + (a-bi) = 2a
 			}
 		}
@@ -141,6 +147,7 @@ func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 		for j := 0; j < len(w[0]); j++ {
 			cReal := w[(idx*2+j)%len(w)][j]
 			for k := 0; k < leftdim; k++ {
+				fmt.Printf("m value at place %d,%d = 0.5(%f, %f.i)\n", idx, j*leftdim+k, cReal, 0.0)
 				m[idx][j*leftdim+k] = 0.5 * complex(cReal, 0)
 			}
 		}
@@ -160,6 +167,8 @@ func EncryptWeights(level int, w [][]float64, leftdim int, params ckks.Parameter
 	ctW = make([]*ckks.Ciphertext, len(wF))
 
 	for i := range ctW {
+		//this puts the values in the plaintext in a way such that homomorphic elem-wise mult
+		//is preserved
 		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
 		ctW[i] = enc.EncryptNew(pt)
 	}
@@ -191,11 +200,13 @@ func EncryptInput(level int, w [][]float64, params ckks.Parameters, ecd ckks.Enc
 func Dense(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, params ckks.Parameters, eval ckks.Evaluator, ecd ckks.Encoder) (res *ckks.Ciphertext) {
 
 	var tmp *ckks.Ciphertext
-	// Pack value for complex dot-product
+	// Pack input value for complex dot-product
+	//	weight     input
+	// formatted   packed
 	// (a - bi) * (c + di) = (ac + bd) + i*garbage
 	// This repack can be done during the refresh to save noise and reduce the number of slots used.
 	if prepack {
-		tmp = eval.RotateNew(input, -dimMid*dimIn)
+		tmp = eval.RotateNew(input, -dimMid*dimIn) // e.g if we are multiplying a 2*2 x 2*2 this is rot -4
 		eval.Add(tmp, input, tmp)
 
 		img := eval.MultByiNew(tmp)

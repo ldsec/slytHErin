@@ -19,7 +19,11 @@ func Vectorize(X [][]float64, transpose bool) []float64 {
 
 		X = |a b|
 			|c d|
-		output = [a ,b, c, d] tranposed
+
+		if tranpose true:
+			output = [a ,b, c, d] column vector
+		else:
+			output = [a ,c, b, d] column vector
 
 		for reference: https://en.wikipedia.org/wiki/Vectorization_(mathematics)
 	*/
