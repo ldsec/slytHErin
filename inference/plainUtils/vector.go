@@ -11,33 +11,34 @@ func eye(n int) *mat.Dense {
 	return mat.NewDense(n, n, d)
 }
 
+/*
+	Input: matrix X
+	Output: column array of vectorized X
+	Example:
+
+	X = |a b|
+		|c d|
+
+	if tranpose false:
+		output = [a ,b, c, d] column vector
+	else:
+		output = [a ,c, b, d] column vector
+
+	for reference: https://en.wikipedia.org/wiki/Vectorization_(mathematics)
+*/
 func Vectorize(X [][]float64, transpose bool) []float64 {
-	/*
-		Input: matrix X
-		Output: column array of vectorized X
-		Example:
-
-		X = |a b|
-			|c d|
-
-		if tranpose true:
-			output = [a ,b, c, d] column vector
-		else:
-			output = [a ,c, b, d] column vector
-
-		for reference: https://en.wikipedia.org/wiki/Vectorization_(mathematics)
-	*/
 	rows := len(X)
 	cols := len(X[0])
 	X_flat := make([]float64, rows*cols)
-	// tranpose X
-	if transpose {
+	if !transpose {
+		// tranpose X --> output will be flatten(X)
 		for j := 0; j < cols; j++ {
 			for i := 0; i < rows; i++ {
 				X_flat[j*rows+i] = X[i][j]
 			}
 		}
 	} else {
+		// do not tranpose X --> output will be flatten(X.T)
 		for i := 0; i < rows; i++ {
 			for j := 0; j < cols; j++ {
 				X_flat[i*cols+j] = X[i][j]
