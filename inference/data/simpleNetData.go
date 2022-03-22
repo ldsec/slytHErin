@@ -24,3 +24,5 @@ func LoadSimpleNetData(path string) *DataSimpleNet {
 	json.Unmarshal([]byte(byteValue), &res)
 	return &res
 }
+
+// to do take the batch func (data *DataSimpleNet)
