@@ -60,14 +60,8 @@ if __name__=="__main__":
     for data,label in dataHandler.test_dl:
       data = F.pad(data, (1,0,1,0)).numpy().flatten()
       sample = [x.item() for x in data] 
-      label_one_hot = []
-      for i in range(10):
-        if i == label:
-          label_one_hot.append(1.0)
-        else:
-          label_one_hot.append(0.0)
       dataset['X'].append(sample)
-      dataset['Y'].append(label_one_hot)
+      dataset['Y'].append(label)
     with open('./data/simpleNet_data.json','w') as f:
       json.dump(dataset,f)
 

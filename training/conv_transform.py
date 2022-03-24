@@ -1,8 +1,11 @@
+from re import A
 import numpy as np
 import torch
 import json
 import math
 from collections import deque
+
+from dataHandler import DataHandler
 
 ## JP function
 def gen_kernel_matrix_JP(kernel, stride_h, stride_v, dim):
@@ -78,23 +81,19 @@ def gen_kernel_matrix(kernel, kernel_size, stride, dim, tranpose=False):
     return m
 
 
-#kernel_size = 2
-#stride = 2
-#input_size = 4
-#k = np.random.rand(kernel_size,kernel_size)        
-#m = gen_kernel_matrix(k,kernel_size,stride,input_size)
-#m = np.array(m)
-#a = np.random.rand(input_size,input_size)
-#r = m @ a.flatten()
-#a_t = torch.from_numpy(a.flatten()).reshape(1,1,input_size,input_size)
-#k_t = torch.from_numpy(k).reshape(1,1,kernel_size,kernel_size)
-#c = torch.nn.functional.conv2d(a_t,k_t,stride=stride)
-#print(c.shape)
-#print(c.flatten())
-#print(r)
+"""
+    This script contains test evaluated with the original model in pytorch
+    of different linear approximations of the convolutional layers
+    to be evalauted in the inference directory, in Go, under
+    homomorphic encryption
 
+    Python allows developing quick PoC for various methods, and also allows
+    quick packaging of matrix with numpy agility
+
+    Code not meant to be understood :)
+"""
 if __name__ == "__main__":
-    ## TEST 1 --> simpleNet simple convolution 
+    ### TEST 1 --> simpleNet simple convolution 
     #with open("./models/simpleNet.json") as f:
     #    model = json.loads(f.read())
     #    k = np.array(model['conv1']['weight']).reshape(5,5,5)
@@ -102,21 +101,27 @@ if __name__ == "__main__":
     #    M_JP = []
     #    for kernel in k:
     #        M_JP.append(gen_kernel_matrix_JP(kernel,2,2,29))
-    #        M.append(gen_kernel_matrix(kernel,5,2,29))
+    #        M.append(gen_kernel_matrix(kernel,5,2,29,True))
 #
-    #    data = np.random.rand(29,29)
-    #    data_t = torch.from_numpy(data).reshape(1,1,29,29)
+    #    data = np.random.rand(2,29,29)
+#
+    #    data_t = torch.from_numpy(data).reshape(2,1,29,29)
     #    k_t = torch.from_numpy(k).reshape(5,1,5,5)
-    #    c = torch.nn.functional.conv2d(data_t,k_t,stride=2).reshape(5,13,13)
+    #    c = torch.nn.functional.conv2d(data_t,k_t,stride=2, groups=1).reshape(2,5,13,13)
+    #    c_1 = torch.nn.functional.conv2d(data_t[0].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
+    #    c_2 = torch.nn.functional.conv2d(data_t[1].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
     #    loss = []
-    #    for i,m in enumerate(M):
-    #        a = c[i].flatten()
-    #        b = m @ data.flatten()
-    #        #print("Diff between conv and transform_conv:")
-    #        dist = np.linalg.norm(a.numpy()-b)
-    #        #print("conv:",a.numpy())
-    #        #print("linear:",b)
-    #        loss.append(dist)
+    #    data = data.reshape(2,841)
+    #    for j in range(2):
+    #        for i,m in enumerate(M):
+    #            a = c[j][i].flatten()
+    #            a = a.flatten()
+    #            b = data @ m
+    #            #print("Diff between conv and transform_conv:")
+    #            dist = np.linalg.norm(a.numpy()-b[j].flatten())
+    #            #print("conv:",a.numpy())
+    #            #print("linear:",b)
+    #            loss.append(dist)
     #    print("Avg euclidean distance between conv and transform_conv:")
     #    print(abs(np.average(np.array(loss))))
 #
@@ -159,42 +164,115 @@ if __name__ == "__main__":
     #print("Avg euclidean distance between conv and transform_conv:")
     #print(abs(np.average(np.array(loss))))
 #
-    # TEST 3 --> SimpleNet pooling
-    ##btw pooling is for free, it is simply element wise multiplication plus sum of all elements, so log(n) rots
+    ## TEST 3 --> SimpleNet pooling
+    ###btw pooling is for free, it is simply element wise multiplication plus sum of all elements, so log(n) rots
+    #with open("./models/simpleNet.json") as f:
+    #    batch = 2
+    #    model = json.loads(f.read())
+    #    k = np.array(model['pool2']['weight']).reshape(10,1,100,1)
+    #    #k = np.zeros((4,1,2,1))
+    #    #for i in range(2):
+    #    #    for j in range(2):
+    #    #        k[i][0][j] = 2*i+2*j
+    #    k_t = torch.from_numpy(k)
+    #    data = np.random.rand(batch,1,100,1)
+    #    #data = np.zeros((2,1,2,1))
+    #    #for i in range(2):
+    #    #    for j in range(2):
+    #    #        data[i][0][j] = i+j
+    #    c = torch.nn.functional.conv2d(torch.from_numpy(data),k_t,stride=1)
+    #    print("data",data)
+    #    print("k",k)
+    #    print(c)
+    #    output = np.zeros((10,batch))
+    #    for i,kernel in enumerate(k):
+    #        res_kernel = np.zeros((batch,1))
+    #        for j,channel in enumerate(kernel[0]):
+    #            d = np.zeros((batch,1))
+    #            for z in range(batch):
+    #                d[z] = data[z][0][j]
+    #            vector_channel = np.ones((batch,1))*channel
+    #            #print("channel", vector_channel)
+    #            res_kernel = res_kernel + vector_channel * d
+    #        output[i] = res_kernel.T
+    #    print(c.reshape(batch,10)-output.T)
+    #   
+    ##TEST 4 -> simplenet pipeline
     with open("./models/simpleNet.json") as f:
         model = json.loads(f.read())
-        k = np.array(model['pool1']['weight']).reshape(100,5,13,13)
+        conv1 = np.array(model['conv1']['weight']).reshape(5,1,5,5)
+        pool1 = np.array(model['pool1']['weight']).reshape(100,5,13,13)
+        pool2 = np.array(model['pool2']['weight']).reshape(10,1,100,1)
+        b1 = np.array(model['conv1']['bias'])
+        b2 = np.array(model['pool1']['bias'])
+        b3 = np.array(model['pool2']['bias'])
+        dh = DataHandler("MNIST", 64)
 
+        ## pack kernel matrixes
         flattened_kernels = []
-        for kernel in k:
-            ## each kernel has 5 filter, 1 per channel
+        for kernel in conv1:
+            ## each kernel has 3 filter, 1 per channel
             #print(kernel.shape)
-            flattened_kernel = []
+            channel = kernel[0]
+            m = gen_kernel_matrix(channel,kernel_size=5,stride=2,dim=29)
+            flattened_kernels.append(np.array(m))
+        conv1M = np.vstack(flattened_kernels)
+        print(conv1M.shape)
+
+        ## block matrix of 100 channels stacked vertically, stacked horizontaly
+        kernel_matrices = []
+        for kernel in pool1:
+            channels = []
             for channel in kernel:
-                m = channel.flatten()
-                flattened_kernel.append(m)
-            flattened_kernels.append(flattened_kernel)
-        
-        data = np.random.rand(5,13,13)
+                channels.append(channel.flatten().T)
+            channel_matrix = np.vstack(channels).flatten().T
+            kernel_matrices.append(channel_matrix)
+        pool1M = np.vstack(kernel_matrices)
+        print(pool1M.shape)
 
-        k_t = torch.from_numpy(k).reshape(100,5,13,13)
-        data_t = torch.from_numpy(data).reshape(1,5,13,13)
-        c = torch.nn.functional.conv2d(data_t,k_t,stride=1000).reshape(100,1)
-        loss = []
-        for i,fl_k in enumerate(flattened_kernels):
-            a = c[i]
-            b = 0
-            for channel,d in zip(fl_k,data):
-                ## compute the linearized conv for each channel and sum'em up
-                #print(d.shape)
-                #print(f.shape)
-                b = b +  np.sum(channel * d.flatten())
-            print("conv:",a)
-            print("linear:",b)
-            dist = np.linalg.norm(a-b)
-            loss.append(dist)
-        print("Avg euclidean distance between conv and transform_conv:")
-        print(abs(np.average(np.array(loss))))
+        kernel_matrices = []
+        for kernel in pool2:
+            channels = []
+            for channel in kernel:
+                channels.append(channel.flatten().T)
+            channel_matrix = np.vstack(channels).flatten().T
+            kernel_matrices.append(channel_matrix)
+        pool2M = np.vstack(kernel_matrices)
+        print(pool2M.shape)
+
+        for X,Y in dh.train_dl:
+            X = X.double()
+            X = torch.nn.functional.pad(X,(1,0,1,0))
+            X_t = X
+            X = X_t.numpy()
+            X_flat = np.zeros((64,841))
+            for i in range(64):
+                X_flat[i] = X[i][0].flatten()
+            c1 = torch.nn.functional.conv2d(X_t,torch.from_numpy(conv1),stride=2)
+            d1 = X_flat @ conv1M.T
+            print(c1.shape)
+            print(d1.shape)
+            c1_flat = np.zeros(d1.shape)
+            for i,c in enumerate(c1):
+                r = []
+                for ch in c:
+                    r.append(ch.flatten())
+                c1_flat[i] = np.hstack(r)
+            
+            dist = np.linalg.norm(c1_flat-d1)
+            print("conv1", dist)
+
+            c2 = torch.nn.functional.conv2d(c1, torch.from_numpy(pool1), stride=1)
+            c2_f = c2.reshape(c2.shape[0],-1)
+            d2 = d1 @ pool1M.T
+            dist = np.linalg.norm(c2_f.numpy()-d2)
+            print("pool1", dist)
+
+            c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2), stride=1)
+            c3 = c3.reshape(c3.shape[0],-1)
+            d3 = d2 @ pool2M.T
+            dist = np.linalg.norm(c3.numpy()-d3)
+            print("pool2", dist)
+            break
 
 
-        
