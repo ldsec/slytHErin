@@ -4,7 +4,7 @@ import torch
 import json
 import math
 from collections import deque
-
+from activation import relu_approx
 from dataHandler import DataHandler
 
 ## JP function
@@ -90,7 +90,19 @@ def gen_kernel_matrix(kernel, kernel_size, stride, dim, tranpose=False):
     Python allows developing quick PoC for various methods, and also allows
     quick packaging of matrix with numpy agility
 
-    Code not meant to be understood :)
+    The idea:
+        gen_kernel_matrix(k) returns for each channel of a kernel, a matrix m s.t
+        m @ x.T = conv(k,x)
+
+        if we have n kernels , we can generate a matrix M
+
+        M = | m_1 |
+            | m_2 |
+            | ... |
+            | m_n |
+
+        s.t 
+
 """
 if __name__ == "__main__":
     ### TEST 1 --> simpleNet simple convolution 
@@ -240,7 +252,10 @@ if __name__ == "__main__":
         pool2M = np.vstack(kernel_matrices)
         print(pool2M.shape)
 
-        for X,Y in dh.train_dl:
+        correct_conv = 0
+        correct_linear = 0
+        tot = 0
+        for X,Y in dh.test_dl:
             X = X.double()
             X = torch.nn.functional.pad(X,(1,0,1,0))
             X_t = X
@@ -248,31 +263,56 @@ if __name__ == "__main__":
             X_flat = np.zeros((64,841))
             for i in range(64):
                 X_flat[i] = X[i][0].flatten()
-            c1 = torch.nn.functional.conv2d(X_t,torch.from_numpy(conv1),stride=2)
+            c1 = torch.nn.functional.conv2d(X_t,torch.from_numpy(conv1),bias=torch.from_numpy(b1),stride=2)
+            c1 = relu_approx(c1)
             d1 = X_flat @ conv1M.T
-            print(c1.shape)
-            print(d1.shape)
+            
+            bias = np.ones(d1.shape)
+            for i in range(d1.shape[0]):
+                for j in range(d1.shape[1]):
+                    idx = j // 169
+                    d1[i][j] = d1[i][j] + b1[idx] 
+            
             c1_flat = np.zeros(d1.shape)
             for i,c in enumerate(c1):
                 r = []
                 for ch in c:
                     r.append(ch.flatten())
                 c1_flat[i] = np.hstack(r)
-            
+            d1 = relu_approx(torch.from_numpy(d1)).numpy()
             dist = np.linalg.norm(c1_flat-d1)
             print("conv1", dist)
 
-            c2 = torch.nn.functional.conv2d(c1, torch.from_numpy(pool1), stride=1)
+            c2 = torch.nn.functional.conv2d(c1, torch.from_numpy(pool1),bias=torch.from_numpy(b2),stride=1000)
+            c2 = relu_approx(c2)
             c2_f = c2.reshape(c2.shape[0],-1)
             d2 = d1 @ pool1M.T
+            bias = np.ones(d2.shape)
+            
+            for j in range(d2.shape[1]):
+                for i in range(d2.shape[0]):
+                    bias[i][j] = bias[i][j]*b2[j]
+            d2 = relu_approx(torch.from_numpy(d2+bias)).numpy()
             dist = np.linalg.norm(c2_f.numpy()-d2)
             print("pool1", dist)
 
-            c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2), stride=1)
+            c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2),bias=torch.from_numpy(b3), stride=1000)
             c3 = c3.reshape(c3.shape[0],-1)
             d3 = d2 @ pool2M.T
+            bias = np.ones(d3.shape)
+            for j in range(d3.shape[1]):
+                for i in range(d3.shape[0]):
+                    bias[i][j] = bias[i][j]*b3[j]
+            d3 = d3+bias
             dist = np.linalg.norm(c3.numpy()-d3)
             print("pool2", dist)
-            break
+            print(d3.shape)
+            _,pred_c = c3.max(1)
+            pred_l = np.argmax(d3,axis=1)
+            correct_conv = correct_conv + (pred_c == Y).sum().item()
+            correct_linear = correct_linear + np.sum(pred_l == Y.numpy())
+            tot = tot + Y.shape[0]
 
+        print(f"Accuracy conv {correct_conv/tot}")
+        print(f"Accuracy linear {correct_linear/tot}")
 
