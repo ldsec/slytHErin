@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import json
 
 class DataHandler():
-  def __init__(self, dataset : str, batch_size : int):
+  def __init__(self, dataset : str, batch_size : int, shuffle=True):
     if dataset == "MNIST":
       self.batch_size = batch_size
       if batch_size == None:
@@ -20,11 +20,11 @@ class DataHandler():
 
       train_ds = MNIST("data/", train=True, download=True, transform=transform)
       test_ds = MNIST("data/", train=False, download=True, transform=transform)
-      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last,num_workers=2, pin_memory=True)
-      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last,num_workers=2, pin_memory=True)
+      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
+      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
 
 class DataHandlerAlex():
-  def __init__(self, dataset : str, batch_size : int):
+  def __init__(self, dataset : str, batch_size : int, shuffle=True):
     if dataset == "MNIST":
       self.batch_size = batch_size
       if batch_size == None:
@@ -41,8 +41,8 @@ class DataHandlerAlex():
       train_ds = MNIST("data/", train=True, download=True, transform=transform)
       test_ds = MNIST("data/", train=False, download=True, transform=transform)
 
-      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last, num_workers=2, pin_memory=True)
-      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last, num_workers=2, pin_memory=True)
+      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
+      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
 
 #dataHandler = DataHandler("MNIST", 128)
 
@@ -55,7 +55,7 @@ if __name__=="__main__":
   
   args = parser.parse_args()
   if args.model == "simplenet":
-    dataHandler = DataHandler("MNIST", None)
+    dataHandler = DataHandler("MNIST", None, shuffle = False)
     dataset = {'X':[], 'Y':[]}
     for data,label in dataHandler.test_dl:
       data = F.pad(data, (1,0,1,0)).numpy().flatten()

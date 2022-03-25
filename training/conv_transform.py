@@ -1,12 +1,12 @@
 from re import A
 import numpy as np
 import torch
-import json
 import math
 from collections import deque
 from activation import relu_approx
 from dataHandler import DataHandler
 from cryptonet import SimpleNet
+
 """
 This script contains helpers and tests for transforming a convolutional model in a linear
 model which can be easily evaluated under encryption
@@ -244,7 +244,13 @@ def pack_simpleNet(model):
 
         The output is going to be a matrix b x (output_dim**2)*n
         where n is the number of output channels (i.e kernels)
-        and output_dim is the dimention of a single convolution between x_i and a channel j of a kernel i
+        and output_dim is the dimention of a single convolution between x_i and a channel j of a kernel i,
+        so 
+        X @ M.T =
+         |x1 * k1|...|x1 * kn|
+         |x2 * k1|...|x2 * kn|
+         |...................|
+         |xb * k1|...|xb * kn| 
 
         Following this, is easy to pack the subsequent layers as the output format is consistent with the input
 """
@@ -369,7 +375,7 @@ if __name__ == "__main__":
     b1 = np.array(model['conv1']['bias'])
     b2 = np.array(model['pool1']['bias'])
     b3 = np.array(model['pool2']['bias'])
-    dh = DataHandler("MNIST", 64)
+    dh = DataHandler("MNIST", 64, False)
     correct_conv = 0
     correct_linear = 0
     correct_pytorch = 0

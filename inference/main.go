@@ -81,7 +81,7 @@ func main() {
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 	enc := ckks.NewEncryptor(params, sk)
-	dec := ckks.NewDecryptor(params, sk)
+	//dec := ckks.NewDecryptor(params, sk)
 	ecd := ckks.NewEncoder(params)
 	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
 

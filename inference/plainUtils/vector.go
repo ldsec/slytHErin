@@ -2,6 +2,15 @@ package plainUtils
 
 import "gonum.org/v1/gonum/mat"
 
+//replicates v ,n times
+func Replicate(v float64, n int) []float64 {
+	res := make([]float64, n)
+	for i := 0; i < n; i++ {
+		res[i] = v
+	}
+	return res
+}
+
 // eye returns a new identity matrix of size n×n.
 func eye(n int) *mat.Dense {
 	d := make([]float64, n*n)
@@ -45,31 +54,33 @@ func Vectorize(X [][]float64, transpose bool) []float64 {
 			}
 		}
 	}
-	X_mat := mat.NewDense(rows, cols, X_flat)
+	/*
+		X_mat := mat.NewDense(rows, cols, X_flat)
 
-	// create #cols canon-basis vectors. Each i-th vector has 1 in the i-th position
-	c_bases := make([]*mat.Dense, cols)
-	for i := 0; i < cols; i++ {
-		c_bases[i] = mat.NewDense(cols, 1, nil)
-		c_bases[i].Set(i, 0, 1)
-	}
-	// create the block matrixes
-	B := make([]*mat.Dense, cols)
-	for i := 0; i < cols; i++ {
-		B[i] = mat.NewDense(rows*cols, rows, nil)
-		I := eye(rows)
-		B[i].Kronecker(c_bases[i], I)
-	}
-	X_vec := mat.NewDense(rows*cols, 1, nil)
-	for i := 0; i < cols; i++ {
-		tmpA := mat.NewDense(rows, 1, nil)
-		tmpA.Mul(X_mat, c_bases[i])
-		tmpB := mat.NewDense(rows*cols, 1, nil)
-		tmpB.Mul(B[i], tmpA)
-		X_vec.Add(X_vec, tmpB)
-	}
-	for i := 0; i < rows*cols; i++ {
-		X_flat[i] = X_vec.At(i, 0)
-	}
+		// create #cols canon-basis vectors. Each i-th vector has 1 in the i-th position
+		c_bases := make([]*mat.Dense, cols)
+		for i := 0; i < cols; i++ {
+			c_bases[i] = mat.NewDense(cols, 1, nil)
+			c_bases[i].Set(i, 0, 1)
+		}
+		// create the block matrixes
+		B := make([]*mat.Dense, cols)
+		for i := 0; i < cols; i++ {
+			B[i] = mat.NewDense(rows*cols, rows, nil)
+			I := eye(rows)
+			B[i].Kronecker(c_bases[i], I)
+		}
+		X_vec := mat.NewDense(rows*cols, 1, nil)
+		for i := 0; i < cols; i++ {
+			tmpA := mat.NewDense(rows, 1, nil)
+			tmpA.Mul(X_mat, c_bases[i])
+			tmpB := mat.NewDense(rows*cols, 1, nil)
+			tmpB.Mul(B[i], tmpA)
+			X_vec.Add(X_vec, tmpB)
+		}
+		for i := 0; i < rows*cols; i++ {
+			X_flat[i] = X_vec.At(i, 0)
+		}
+	*/
 	return X_flat
 }

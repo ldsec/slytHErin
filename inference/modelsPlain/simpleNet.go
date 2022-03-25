@@ -4,29 +4,28 @@ import (
 	//"github.com/tuneinsight/lattigo/v3/ckks"
 	"encoding/json"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"math"
 	"os"
+
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"gonum.org/v1/gonum/mat"
 )
 
 type Bias struct {
 	B   []float64 `json:"b"`
 	Len int       `json:"len"`
 }
-type Channel struct {
-	W    []float64 `json:"w"` //this should be the row-flattening of the tranpsosed kernel matrix
+
+type Kernel struct {
+	W    []float64 `json:"w"` //Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample
 	Rows int       `json:"rows"`
 	Cols int       `json:"cols"`
 }
-type Kernel struct {
-	Channels []Channel `json:"channels"`
-}
 
 type ConvLayer struct {
-	Weight                                               []Kernel `json:"weight"`
-	Bias                                                 Bias     `json:"bias"`
+	Weight                                               Kernel `json:"weight"`
+	Bias                                                 Bias   `json:"bias"`
 	kernelSize, inChans, outChans, stride, inDim, outDim int
 }
 type PolyApprox struct {
@@ -58,49 +57,6 @@ func LoadSimpleNet(path string) *SimpleNet {
 	return &res
 }
 
-func convolutionPlain(layer ConvLayer, Xmat *mat.Dense) []*mat.Dense {
-	OutConv := make([]*mat.Dense, layer.outChans)
-	for i := 0; i < layer.outChans; i++ {
-		//for every kernel
-		var kernelRes *mat.Dense
-		for j := 0; j < layer.inChans; j++ {
-			channel := layer.Weight[i].Channels[j]
-			channelMat := mat.NewDense(channel.Rows, channel.Cols, channel.W)
-			var res *mat.Dense
-			res.Mul(Xmat, channelMat)
-			kernelRes.Add(kernelRes, res)
-		}
-		rows, cols := kernelRes.Dims()
-		biasFlat := make([]float64, rows*cols)
-		for k := 0; k < rows*cols; k++ {
-			biasFlat[k] = layer.Bias.B[i]
-		}
-		biasMat := mat.NewDense(rows, cols, biasFlat)
-		kernelRes.Add(kernelRes, biasMat)
-		OutConv[i] = kernelRes
-	}
-	return OutConv
-}
-
-func poolElemWisePlain(pool ConvLayer, X []*mat.Dense) []*mat.Dense {
-	OutPool := make([]*mat.Dense, pool.outChans)
-	for i := 0; i < pool.outChans; i++ {
-		var kernelRes float64
-		for j := 0; j < pool.inChans; j++ {
-			kernelChannel := mat.NewDense(pool.Weight[i].Channels[j].Rows,
-				pool.Weight[i].Channels[j].Cols,
-				pool.Weight[i].Channels[j].W)
-			inputChannel := OutPool[i]
-			var res *mat.Dense
-			res.MulElem(inputChannel, kernelChannel)
-			kernelRes += mat.Sum(res)
-		}
-		kernelRes += pool.Bias.B[i]
-		OutPool[i] = mat.NewDense(1, 1, []float64{kernelRes})
-	}
-	return OutPool
-}
-
 /****************
 SIMPLENET METHODS
  ***************/
@@ -118,8 +74,8 @@ func (sn *SimpleNet) InitDim() {
 	sn.Pool1.inChans = 5    //#filters per kernel
 	sn.Pool1.outChans = 100 //#kernels
 
-	sn.Pool2.kernelSize = 10
-	sn.Pool2.inDim = 13
+	sn.Pool2.kernelSize = 1
+	sn.Pool2.inDim = 1
 	sn.Pool2.outDim = 1
 	sn.Pool2.inChans = 100 //#filters per kernel
 	sn.Pool2.outChans = 10 //#kernels
@@ -131,42 +87,72 @@ func (sn *SimpleNet) InitActivation() {
 	sn.ReLUApprox.Coeffs = make([]float64, sn.ReLUApprox.Degree)
 	sn.ReLUApprox.Coeffs[0] = 1.1155
 	sn.ReLUApprox.Coeffs[1] = 5
-	sn.ReLUApprox.Coeffs[2] = 4.003
+	sn.ReLUApprox.Coeffs[2] = 4.4003
 }
 
-func (sn *SimpleNet) ActivatePlain(X []*mat.Dense) {
+func buildKernelMatrix(k Kernel) *mat.Dense {
+	return mat.NewDense(k.Rows, k.Cols, k.W)
+}
+
+func buildBiasMatrix(b Bias, batchSize int) *mat.Dense {
+	res := mat.NewDense(batchSize, b.Len, nil)
+	for i := 0; i < batchSize; i++ {
+		res.SetRow(i, b.B)
+	}
+	return res
+}
+
+func (sn *SimpleNet) ActivatePlain(X *mat.Dense) {
 	/*
 		Apply the activation function elementwise
 	*/
-	for i := range X {
-		x := X[i]
-		rows, cols := x.Dims()
-		for r := 0; r < rows; r++ {
-			for c := 0; c < cols; c++ {
-				v := x.At(r, c) / float64(sn.ReLUApprox.Interval)
-				res := 0.0
-				for deg := 0; deg < sn.ReLUApprox.Degree; deg++ {
-					res += (math.Pow(v, float64(deg)) * sn.ReLUApprox.Coeffs[deg])
-				}
-				x.Set(r, c, res)
+	rows, cols := X.Dims()
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			v := X.At(r, c) / float64(sn.ReLUApprox.Interval)
+			res := 0.0
+			for deg := 0; deg < sn.ReLUApprox.Degree; deg++ {
+				res += (math.Pow(v, float64(deg)) * sn.ReLUApprox.Coeffs[deg])
 			}
+			X.Set(r, c, res)
 		}
 	}
 }
 
-func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y [][]float64) {
-	Xflat := plainUtils.Vectorize(Xbatch, false)
+func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int) int {
+	batchSize := len(Xbatch)
+	Xflat := plainUtils.Vectorize(Xbatch, true) //tranpose true needed for now
 	Xmat := mat.NewDense(len(Xbatch), len(Xbatch[0]), Xflat)
 
-	//Conv1
-	OutConv1 := convolutionPlain(sn.Conv1, Xmat)
-	sn.ActivatePlain(OutConv1) //check if this is by reference
+	var OutConv1 mat.Dense
+	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight))
+	OutConv1.Add(&OutConv1, buildBiasMatrix(sn.Conv1.Bias, batchSize))
 
-	//Pool1 as elementwise
-	OutPool1 := poolElemWisePlain(sn.Pool1, OutConv1)
-	sn.ActivatePlain(OutPool1)
+	var OutPool1 mat.Dense
+	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight))
+	OutPool1.Add(&OutPool1, buildBiasMatrix(sn.Pool1.Bias, batchSize))
+	sn.ActivatePlain(&OutPool1)
 
-	OutPool2 := poolElemWisePlain(sn.Pool2, OutPool1)
-	r, c := OutPool2[0].Dims()
-	fmt.Println(len(OutPool2), r, c)
+	var OutPool2 mat.Dense
+	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight))
+	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, batchSize))
+	sn.ActivatePlain(&OutPool2)
+	predictions := make([]int, batchSize)
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < 10; j++ {
+			confidence := OutPool2.At(i, j)
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	return corrects
 }
