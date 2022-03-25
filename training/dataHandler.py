@@ -44,7 +44,7 @@ class DataHandlerAlex():
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last, num_workers=2, pin_memory=True)
       self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=True, drop_last=drop_last, num_workers=2, pin_memory=True)
 
-dataHandler = DataHandler("MNIST", 128)
+#dataHandler = DataHandler("MNIST", 128)
 
 if __name__=="__main__":
   

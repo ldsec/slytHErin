@@ -6,7 +6,7 @@ import math
 from collections import deque
 from activation import relu_approx
 from dataHandler import DataHandler
-
+from cryptonet import SimpleNet
 ## JP function
 def gen_kernel_matrix_JP(kernel, stride_h, stride_v, dim):
     m = [[0 for i in range(dim*dim)] for j in range(dim*dim)]
@@ -211,6 +211,13 @@ if __name__ == "__main__":
     #   
     ##TEST 4 -> simplenet pipeline
     with open("./models/simpleNet.json") as f:
+        device = torch.device('cpu')
+        #torch_model = SimpleNet(64, 'relu_approx', 'none', 'xavier', False)
+        #torch_model.load_state_dict(torch.load("./models/SimpleNet_xavier_relu_approx.pt",map_location=device))
+        torch_model = torch.load("./models/SimpleNet_xavier_relu_approx.pt",map_location=device).double()
+        torch_model.batch_size = 64
+        torch_model.eval()
+        
         model = json.loads(f.read())
         conv1 = np.array(model['conv1']['weight']).reshape(5,1,5,5)
         pool1 = np.array(model['pool1']['weight']).reshape(100,5,13,13)
@@ -229,7 +236,7 @@ if __name__ == "__main__":
             m = gen_kernel_matrix(channel,kernel_size=5,stride=2,dim=29)
             flattened_kernels.append(np.array(m))
         conv1M = np.vstack(flattened_kernels)
-        print(conv1M.shape)
+        #print(conv1M.shape)
 
         ## block matrix of 100 channels stacked vertically, stacked horizontaly
         kernel_matrices = []
@@ -240,7 +247,7 @@ if __name__ == "__main__":
             channel_matrix = np.vstack(channels).flatten().T
             kernel_matrices.append(channel_matrix)
         pool1M = np.vstack(kernel_matrices)
-        print(pool1M.shape)
+        #print(pool1M.shape)
 
         kernel_matrices = []
         for kernel in pool2:
@@ -250,13 +257,15 @@ if __name__ == "__main__":
             channel_matrix = np.vstack(channels).flatten().T
             kernel_matrices.append(channel_matrix)
         pool2M = np.vstack(kernel_matrices)
-        print(pool2M.shape)
+        #print(pool2M.shape)
 
         correct_conv = 0
         correct_linear = 0
+        correct_pytorch = 0
         tot = 0
         for X,Y in dh.test_dl:
             X = X.double()
+            X_torch = X
             X = torch.nn.functional.pad(X,(1,0,1,0))
             X_t = X
             X = X_t.numpy()
@@ -264,7 +273,6 @@ if __name__ == "__main__":
             for i in range(64):
                 X_flat[i] = X[i][0].flatten()
             c1 = torch.nn.functional.conv2d(X_t,torch.from_numpy(conv1),bias=torch.from_numpy(b1),stride=2)
-            c1 = relu_approx(c1)
             d1 = X_flat @ conv1M.T
             
             bias = np.ones(d1.shape)
@@ -279,7 +287,6 @@ if __name__ == "__main__":
                 for ch in c:
                     r.append(ch.flatten())
                 c1_flat[i] = np.hstack(r)
-            d1 = relu_approx(torch.from_numpy(d1)).numpy()
             dist = np.linalg.norm(c1_flat-d1)
             print("conv1", dist)
 
@@ -297,22 +304,27 @@ if __name__ == "__main__":
             print("pool1", dist)
 
             c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2),bias=torch.from_numpy(b3), stride=1000)
+            c3 = relu_approx(c3)
             c3 = c3.reshape(c3.shape[0],-1)
             d3 = d2 @ pool2M.T
             bias = np.ones(d3.shape)
             for j in range(d3.shape[1]):
                 for i in range(d3.shape[0]):
                     bias[i][j] = bias[i][j]*b3[j]
-            d3 = d3+bias
+            d3 = relu_approx(torch.from_numpy(d3+bias)).numpy()
             dist = np.linalg.norm(c3.numpy()-d3)
             print("pool2", dist)
-            print(d3.shape)
+            #print(d3.shape)
+
+            _,pred = torch_model(X_torch.double()).max(1)
             _,pred_c = c3.max(1)
             pred_l = np.argmax(d3,axis=1)
+            correct_pytorch = correct_pytorch + (pred == Y).sum().item()
             correct_conv = correct_conv + (pred_c == Y).sum().item()
             correct_linear = correct_linear + np.sum(pred_l == Y.numpy())
             tot = tot + Y.shape[0]
 
+        print(f"Accuracy torch {correct_pytorch/tot}")
         print(f"Accuracy conv {correct_conv/tot}")
         print(f"Accuracy linear {correct_linear/tot}")
 
