@@ -91,13 +91,29 @@ func (sn *SimpleNet) InitActivation() {
 }
 
 func buildKernelMatrix(k Kernel) *mat.Dense {
+	//returns the kernel matrix in a square form with even dimentions to apply the complex trick
+	var dimention int
+	if k.Rows > k.Cols {
+		dimention = k.Rows
+	} else {
+		dimention = k.Cols
+	}
+	for (dimention % 2) != 0 {
+		dimention++
+	}
+	res := mat.NewDense(dimention, dimention, nil)
+	for i := 0; i < k.Rows; i++ {
+		for j := 0; j < k.Cols; j++ {
+			res.Set(i, j, k.W[i*k.Cols+j])
+		}
+	}
 	return mat.NewDense(k.Rows, k.Cols, k.W)
 }
 
-func buildBiasMatrix(b Bias, batchSize int) *mat.Dense {
-	res := mat.NewDense(batchSize, b.Len, nil)
+func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
+	res := mat.NewDense(batchSize, cols, nil)
 	for i := 0; i < batchSize; i++ {
-		res.SetRow(i, b.B)
+		res.SetRow(i, plainUtils.Pad(b.B, cols-len(b.B)))
 	}
 	return res
 }
@@ -126,16 +142,19 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int) int {
 
 	var OutConv1 mat.Dense
 	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight))
-	OutConv1.Add(&OutConv1, buildBiasMatrix(sn.Conv1.Bias, batchSize))
+	_, cols := OutConv1.Dims()
+	OutConv1.Add(&OutConv1, buildBiasMatrix(sn.Conv1.Bias, cols, batchSize))
 
 	var OutPool1 mat.Dense
 	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight))
-	OutPool1.Add(&OutPool1, buildBiasMatrix(sn.Pool1.Bias, batchSize))
+	_, cols = OutPool1.Dims()
+	OutPool1.Add(&OutPool1, buildBiasMatrix(sn.Pool1.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool1)
 
 	var OutPool2 mat.Dense
 	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight))
-	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, batchSize))
+	cols, cols = OutPool2.Dims()
+	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool2)
 	predictions := make([]int, batchSize)
 	corrects := 0

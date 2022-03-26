@@ -10,6 +10,15 @@ type Padding struct {
 	padding  int
 }
 
+//pads v with n 0s
+func Pad(v []float64, n int) []float64 {
+	res := make([]float64, len(v)+n)
+	for i := range v {
+		res[i] = v[i]
+	}
+	return res
+}
+
 /*
 		Returns P1 and P2 matrixes such that:
 			P2 * X * P1 = padded X, where * is the matrix product
