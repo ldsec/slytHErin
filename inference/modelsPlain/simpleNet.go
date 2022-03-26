@@ -39,6 +39,13 @@ type SimpleNet struct {
 
 	ReLUApprox PolyApprox //this will store the coefficients of the poly approximating ReLU
 }
+type SimpleNetPipeLine struct {
+	//stores intermediate results of SimpleNetPipeline --> useful to be compared in encrypted pipeline
+	OutConv1 *mat.Dense
+	OutPool1 *mat.Dense
+	OutPool2 *mat.Dense
+	Corrects int
+}
 
 /***************************
 HELPERS
@@ -90,16 +97,19 @@ func (sn *SimpleNet) InitActivation() {
 	sn.ReLUApprox.Coeffs[2] = 4.4003
 }
 
-func buildKernelMatrix(k Kernel) *mat.Dense {
+func buildKernelMatrix(k Kernel, dimention int) *mat.Dense {
 	//returns the kernel matrix in a square form with even dimentions to apply the complex trick
-	var dimention int
-	if k.Rows > k.Cols {
-		dimention = k.Rows
-	} else {
-		dimention = k.Cols
-	}
-	for (dimention % 2) != 0 {
-		dimention++
+	//Reference: pg.3 of https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
+	if dimention == -1 {
+		//means this if the layer we should extrapolate the max dimention of the network
+		if k.Rows > k.Cols {
+			dimention = k.Rows
+		} else {
+			dimention = k.Cols
+		}
+		for (dimention % 2) != 0 {
+			dimention++
+		}
 	}
 	res := mat.NewDense(dimention, dimention, nil)
 	for i := 0; i < k.Rows; i++ {
@@ -107,7 +117,7 @@ func buildKernelMatrix(k Kernel) *mat.Dense {
 			res.Set(i, j, k.W[i*k.Cols+j])
 		}
 	}
-	return mat.NewDense(k.Rows, k.Cols, k.W)
+	return res
 }
 
 func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
@@ -135,24 +145,24 @@ func (sn *SimpleNet) ActivatePlain(X *mat.Dense) {
 	}
 }
 
-func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int) int {
+func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels int) *SimpleNetPipeLine {
 	batchSize := len(Xbatch)
 	Xflat := plainUtils.Vectorize(Xbatch, true) //tranpose true needed for now
 	Xmat := mat.NewDense(len(Xbatch), len(Xbatch[0]), Xflat)
 
 	var OutConv1 mat.Dense
-	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight))
+	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight, -1))
 	_, cols := OutConv1.Dims()
 	OutConv1.Add(&OutConv1, buildBiasMatrix(sn.Conv1.Bias, cols, batchSize))
 
 	var OutPool1 mat.Dense
-	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight))
+	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight, maxDim))
 	_, cols = OutPool1.Dims()
 	OutPool1.Add(&OutPool1, buildBiasMatrix(sn.Pool1.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool1)
 
 	var OutPool2 mat.Dense
-	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight))
+	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight, maxDim))
 	cols, cols = OutPool2.Dims()
 	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool2)
@@ -161,7 +171,7 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int) int {
 	for i := 0; i < batchSize; i++ {
 		maxIdx := 0
 		maxConfidence := 0.0
-		for j := 0; j < 10; j++ {
+		for j := 0; j < labels; j++ {
 			confidence := OutPool2.At(i, j)
 			if confidence > maxConfidence {
 				maxConfidence = confidence
@@ -173,5 +183,20 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int) int {
 			corrects += 1
 		}
 	}
-	return corrects
+	return &SimpleNetPipeLine{
+		OutConv1: &OutConv1,
+		OutPool1: &OutPool1,
+		OutPool2: &OutPool2,
+		Corrects: corrects,
+	}
 }
+
+/*
+func EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, glassDoor bool) *ckks.Ciphertext {
+	if glassDoor {
+
+	} else {
+
+	}
+}
+*/
