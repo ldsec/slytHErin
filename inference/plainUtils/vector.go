@@ -1,6 +1,47 @@
 package plainUtils
 
-import "gonum.org/v1/gonum/mat"
+import (
+	"gonum.org/v1/gonum/mat"
+)
+
+func ComplexToReal(v []complex128) []float64 {
+	c := make([]float64, len(v))
+	for i := range v {
+		c[i] = real(v[i])
+	}
+	return c
+}
+
+func RealToComplex(v []float64) []complex128 {
+	c := make([]complex128, len(v))
+	for i := range v {
+		c[i] = complex(v[i], 0.0)
+	}
+	return c
+}
+func MatToArray(m *mat.Dense) [][]float64 {
+	v := make([][]float64, NumRows(m))
+	for i := 0; i < NumRows(m); i++ {
+		v[i] = mat.Row(nil, i, m)
+	}
+	return v
+}
+func RowFlatten(m *mat.Dense) []float64 {
+	v := make([][]float64, NumRows(m))
+	for i := 0; i < NumRows(m); i++ {
+		v[i] = mat.Row(nil, i, m)
+	}
+	return Vectorize(v, true)
+}
+func NumRows(m *mat.Dense) int {
+	rows, _ := m.Dims()
+	return rows
+}
+
+func NumCols(m *mat.Dense) int {
+	_, cols := m.Dims()
+	return cols
+}
 
 //replicates v ,n times
 func Replicate(v float64, n int) []float64 {

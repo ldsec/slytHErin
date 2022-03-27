@@ -2,16 +2,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"gonum.org/v1/gonum/mat"
 	"time"
 )
 
 func main() {
 
-	LDim := []int{3, 3}
-	W0Dim := []int{3, 3}
-	W1Dim := []int{3, 3}
+	LDim := []int{2, 2}
+	W0Dim := []int{2, 3}
+	W1Dim := []int{3, 2}
 
 	//r := rand.New(rand.NewSource(0))
 
@@ -43,6 +45,9 @@ func main() {
 		}
 	}
 	fmt.Println("W1", W1)
+	Lmat := mat.NewDense(LDim[0], LDim[1], plainUtils.Vectorize(L, true))
+	W0mat := mat.NewDense(W0Dim[0], W0Dim[1], plainUtils.Vectorize(W0, true))
+	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
 
 	// Schemes parameters are created from scratch
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -81,7 +86,7 @@ func main() {
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 	enc := ckks.NewEncryptor(params, sk)
-	//dec := ckks.NewDecryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
 	ecd := ckks.NewEncoder(params)
 	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
 
@@ -95,11 +100,21 @@ func main() {
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	_ = Dense(B, len(L), len(W1), len(W1[0]), ctW1, true, true, params, eval, ecd)
+	C := Dense(B, len(L), len(W1), len(W1[0]), ctW1, true, true, params, eval, ecd)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
-	//resPt := dec.DecryptNew(C)
-	//resArray := ecd.DecodeSlots(resPt, 14)
+	resPt := dec.DecryptNew(C)
+	resArray := ecd.DecodeSlots(resPt, 14)
+	resReal := plainUtils.ComplexToReal(resArray)[:(2 * 2)]
+	var tmp mat.Dense
+	tmp.Mul(Lmat, W0mat)
+	var res mat.Dense
+	res.Mul(&tmp, W1mat)
+	fmt.Println("________________-")
+	fmt.Println(plainUtils.RowFlatten(&res))
+	fmt.Println("________________-")
+	fmt.Println(resReal)
+
 }
 
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
@@ -122,14 +137,14 @@ func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 			fmt.Println("cImag", cImag)
 
 			for k := 0; k < leftdim; k++ {
-				fmt.Printf("m value at place %d,%d = 0.5(%f, %f.i)\n", i, j*leftdim+k, cReal, -cImag)
+				//fmt.Printf("m value at place %d,%d = 0.5(%f, %f.i)\n", i, j*leftdim+k, cReal, -cImag)
 				m[i][j*leftdim+k] = 0.5 * complex(cReal, -cImag) // 0.5 factor for imaginary part cleaning: (a+bi) + (a-bi) = 2a
 			}
 		}
 	}
 
 	if len(w)&1 == 1 {
-
+		//if odd
 		idx := len(m) - 1
 
 		m[idx] = make([]complex128, leftdim*len(w[0]))
@@ -176,8 +191,8 @@ func FormatInput(w [][]float64) (v []float64) {
 			v[i*len(w)+j] = w[j][i]
 		}
 	}
-	fmt.Println("Input:", w)
-	fmt.Println("Formatted Input:", v)
+	//fmt.Println("Input:", w)
+	//fmt.Println("Formatted Input:", v)
 	return
 }
 

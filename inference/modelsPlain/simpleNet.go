@@ -4,9 +4,13 @@ import (
 	//"github.com/tuneinsight/lattigo/v3/ckks"
 	"encoding/json"
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"io/ioutil"
 	"math"
 	"os"
+	"reflect"
+	"sync"
 
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"gonum.org/v1/gonum/mat"
@@ -41,10 +45,11 @@ type SimpleNet struct {
 }
 type SimpleNetPipeLine struct {
 	//stores intermediate results of SimpleNetPipeline --> useful to be compared in encrypted pipeline
-	OutConv1 *mat.Dense
-	OutPool1 *mat.Dense
-	OutPool2 *mat.Dense
-	Corrects int
+	OutConv1    *mat.Dense
+	OutPool1    *mat.Dense
+	OutPool2    *mat.Dense
+	Predictions []int
+	Corrects    int
 }
 
 /***************************
@@ -97,21 +102,24 @@ func (sn *SimpleNet) InitActivation() {
 	sn.ReLUApprox.Coeffs[2] = 4.4003
 }
 
-func buildKernelMatrix(k Kernel, dimention int) *mat.Dense {
-	//returns the kernel matrix in a square form with even dimentions to apply the complex trick
-	//Reference: pg.3 of https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
-	if dimention == -1 {
-		//means this if the layer we should extrapolate the max dimention of the network
+func buildKernelMatrix(k Kernel, dimension int) *mat.Dense {
+	/*
+		Returns a matrix M s.t X.M = conv(x,layer)
+		kernel matrix is in a square form with even dimensions to apply the complex trick
+		Reference: pg.3 of https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
+	*/
+	if dimension == -1 {
+		//means this if the layer we should extrapolate the max dimension of the network
 		if k.Rows > k.Cols {
-			dimention = k.Rows
+			dimension = k.Rows
 		} else {
-			dimention = k.Cols
+			dimension = k.Cols
 		}
-		for (dimention % 2) != 0 {
-			dimention++
+		for (dimension % 2) != 0 {
+			dimension++
 		}
 	}
-	res := mat.NewDense(dimention, dimention, nil)
+	res := mat.NewDense(dimension, dimension, nil)
 	for i := 0; i < k.Rows; i++ {
 		for j := 0; j < k.Cols; j++ {
 			res.Set(i, j, k.W[i*k.Cols+j])
@@ -121,6 +129,7 @@ func buildKernelMatrix(k Kernel, dimention int) *mat.Dense {
 }
 
 func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
+	// Compute a matrix containing the bias of the layer, to be added to the result
 	res := mat.NewDense(batchSize, cols, nil)
 	for i := 0; i < batchSize; i++ {
 		res.SetRow(i, plainUtils.Pad(b.B, cols-len(b.B)))
@@ -166,6 +175,7 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels 
 	cols, cols = OutPool2.Dims()
 	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool2)
+
 	predictions := make([]int, batchSize)
 	corrects := 0
 	for i := 0; i < batchSize; i++ {
@@ -184,19 +194,63 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels 
 		}
 	}
 	return &SimpleNetPipeLine{
-		OutConv1: &OutConv1,
-		OutPool1: &OutPool1,
-		OutPool2: &OutPool2,
-		Corrects: corrects,
+		OutConv1:    &OutConv1,
+		OutPool1:    &OutPool1,
+		OutPool2:    &OutPool2,
+		Predictions: predictions,
+		Corrects:    corrects,
 	}
 }
 
-/*
-func EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, glassDoor bool) *ckks.Ciphertext {
+func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
+	var plainResults *SimpleNetPipeLine
 	if glassDoor {
-
-	} else {
-
+		plainResults = sn.EvalBatchPlain(XBatchClear, make([]int, len(XBatchClear)), maxDim, 10)
 	}
+
+	var wg sync.WaitGroup
+	weights := make([][][]complex128, len(weightMatrices))
+	for i := 0; i < len(weightMatrices); i++ {
+		wg.Add(1)
+		go func(weights [][][]complex128, i int) {
+			defer wg.Done()
+			weights[i] = cipherUtils.FormatWeights(plainUtils.MatToArray(weightMatrices[i]), len(XBatchClear))
+		}(weights, i)
+		//weights[i] = cipherUtils.FormatWeights(plainUtils.MatToArray(weightMatrices[i]), maxDim)
+	}
+	wg.Wait()
+	//encode weights and bias as Plaintext:
+	//each plainW contains an array of Plaintext, each containing one diagonal of the kernel matrix
+	//plainB contains the flattened bias matrices
+	plainW := make([][]*ckks.Plaintext, len(weights))
+	plainB := make([]*ckks.Plaintext, len(biasMatrices))
+	for i := range weights {
+		wg.Add(1)
+		go func(plainW [][]*ckks.Plaintext, plainB []*ckks.Plaintext, i int) {
+			defer wg.Done()
+			pt := ckks.NewPlaintext(Box.Params, Box.Params.MaxLevel(), Box.Params.QiFloat64(Box.Params.MaxLevel()))
+			for j := range weights[0] {
+				//EncodeSlots puts the values in the plaintext in a way
+				//such that homomorphic elem-wise mult is preserved
+				Box.Encoder.EncodeSlots(weights[i][j], pt, Box.Params.LogSlots())
+				plainW[i][j] = pt
+			}
+			Box.Encoder.EncodeSlots(plainUtils.Vectorize(plainUtils.MatToArray(biasMatrices[i]), true), pt, Box.Params.LogSlots())
+			plainB[i] = pt
+		}(plainW, plainB, i)
+	}
+	wg.Wait()
+	for i := range plainW {
+		resCt := cipherUtils.Cipher2PMul(XbatchEnc, len(XBatchClear), maxDim, plainW[i], true, true, Box)
+		resCt = Box.Evaluator.AddNew(resCt, plainB[i])
+		if glassDoor {
+			//trick to loop
+			v := reflect.ValueOf(plainResults)
+			resPlain := v.Field(i).Interface().(*mat.Dense)
+			resPlainRf := plainUtils.RowFlatten(resPlain)
+			resPlainRfC := plainUtils.RealToComplex(resPlainRf)
+			cipherUtils.PrintDebug(resCt, resPlainRfC, Box)
+		}
+	}
+	return nil
 }
-*/

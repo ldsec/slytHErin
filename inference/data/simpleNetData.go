@@ -31,7 +31,7 @@ func LoadSimpleNetData(path string) *DataSimpleNet {
 	return &res
 }
 func (data *DataSimpleNet) Init(batchSize int, inputLayerDim int) error {
-	if batchSize*inputLayerDim > 1<<16 {
+	if 2*batchSize*inputLayerDim > 1<<14 { //fixed number of slots per formatted input
 		return errors.New("Batch too big for encryption")
 	}
 	data.BatchSize = batchSize
@@ -47,7 +47,7 @@ func (data *DataSimpleNet) Batch() ([][]float64, []int, error) {
 		i := data.CurrentBatch * data.BatchSize
 		j := (data.CurrentBatch + 1) * data.BatchSize
 		Xbatch := data.X[i:j]
-		//add pad
+		//add padding
 		Xpad := make([][]float64, data.BatchSize)
 		for k := 0; k < data.BatchSize; k++ {
 			Xpad[k] = make([]float64, data.InputLayerDim)
