@@ -49,6 +49,8 @@ github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5Cc
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/tuneinsight/lattigo/v3 v3.0.2 h1:ZvtcqXQ0y4j+fFg1onjMoMmVXvTpKGtikiSfvVmP8uI=
 github.com/tuneinsight/lattigo/v3 v3.0.2/go.mod h1:yIF5Hj0dCAsAkIbXs95V4vYKdWqtfV3muHbQPtFzq3c=
+github.com/tuneinsight/lattigo/v3 v3.0.3-0.20220321140652-4ad05a08db96 h1:i5ib4YgmV2NdnsYATyoacqUCIHSPzILMtawUyJ8eD50=
+github.com/tuneinsight/lattigo/v3 v3.0.3-0.20220321140652-4ad05a08db96/go.mod h1:yIF5Hj0dCAsAkIbXs95V4vYKdWqtfV3muHbQPtFzq3c=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

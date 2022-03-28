@@ -2,7 +2,18 @@ package plainUtils
 
 import (
 	"gonum.org/v1/gonum/mat"
+	"math"
+	"math/rand"
 )
+
+func RandMatrix(r, c int) *mat.Dense {
+	rand.Seed(42)
+	m := make([]float64, r*c)
+	for i := range m {
+		m[i] = rand.Float64()
+	}
+	return mat.NewDense(r, c, m)
+}
 
 func ComplexToReal(v []complex128) []float64 {
 	c := make([]float64, len(v))
@@ -53,7 +64,7 @@ func Replicate(v float64, n int) []float64 {
 }
 
 // eye returns a new identity matrix of size n×n.
-func eye(n int) *mat.Dense {
+func Eye(n int) *mat.Dense {
 	d := make([]float64, n*n)
 	for i := 0; i < n*n; i += n + 1 {
 		d[i] = 1
@@ -124,4 +135,13 @@ func Vectorize(X [][]float64, transpose bool) []float64 {
 		}
 	*/
 	return X_flat
+}
+
+func Distance(a, b []float64) float64 {
+	//computes euclidead distance
+	d := 0.0
+	for i := range a {
+		d += math.Pow(a[i]-b[i], 2.0)
+	}
+	return math.Sqrt(d)
 }

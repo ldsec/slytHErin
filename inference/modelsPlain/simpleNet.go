@@ -102,24 +102,12 @@ func (sn *SimpleNet) InitActivation() {
 	sn.ReLUApprox.Coeffs[2] = 4.4003
 }
 
-func buildKernelMatrix(k Kernel, dimension int) *mat.Dense {
+func buildKernelMatrix(k Kernel) *mat.Dense {
 	/*
 		Returns a matrix M s.t X.M = conv(x,layer)
-		kernel matrix is in a square form with even dimensions to apply the complex trick
-		Reference: pg.3 of https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
 	*/
-	if dimension == -1 {
-		//means this if the layer we should extrapolate the max dimension of the network
-		if k.Rows > k.Cols {
-			dimension = k.Rows
-		} else {
-			dimension = k.Cols
-		}
-		for (dimension % 2) != 0 {
-			dimension++
-		}
-	}
-	res := mat.NewDense(dimension, dimension, nil)
+
+	res := mat.NewDense(k.Rows, k.Cols, nil)
 	for i := 0; i < k.Rows; i++ {
 		for j := 0; j < k.Cols; j++ {
 			res.Set(i, j, k.W[i*k.Cols+j])
@@ -160,19 +148,19 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels 
 	Xmat := mat.NewDense(len(Xbatch), len(Xbatch[0]), Xflat)
 
 	var OutConv1 mat.Dense
-	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight, -1))
+	OutConv1.Mul(Xmat, buildKernelMatrix(sn.Conv1.Weight))
 	_, cols := OutConv1.Dims()
 	OutConv1.Add(&OutConv1, buildBiasMatrix(sn.Conv1.Bias, cols, batchSize))
 
 	var OutPool1 mat.Dense
-	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight, maxDim))
+	OutPool1.Mul(&OutConv1, buildKernelMatrix(sn.Pool1.Weight))
 	_, cols = OutPool1.Dims()
 	OutPool1.Add(&OutPool1, buildBiasMatrix(sn.Pool1.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool1)
 
 	var OutPool2 mat.Dense
-	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight, maxDim))
-	cols, cols = OutPool2.Dims()
+	OutPool2.Mul(&OutPool1, buildKernelMatrix(sn.Pool2.Weight))
+	_, cols = OutPool2.Dims()
 	OutPool2.Add(&OutPool2, buildBiasMatrix(sn.Pool2.Bias, cols, batchSize))
 	sn.ActivatePlain(&OutPool2)
 
@@ -202,6 +190,113 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels 
 	}
 }
 
+func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, labels int) *SimpleNetPipeLine {
+	//evaluate batch using Block Matrix arithmetics for efficient computations with small ciphers
+	batchSize := len(Xbatch)
+	Xflat := plainUtils.Vectorize(Xbatch, true) //tranpose true needed for now
+	Xmat := mat.NewDense(len(Xbatch), len(Xbatch[0]), Xflat)
+	normalRes := sn.EvalBatchPlain(Xbatch, Y, 0, labels)
+	XBlocks, err := plainUtils.PartitionMatrix(Xmat, batchSize, 29)
+	if err != nil {
+		panic(err)
+	}
+	k1 := buildKernelMatrix(sn.Conv1.Weight)
+	k1Blocks, err := plainUtils.PartitionMatrix(k1, 29, 5)
+	if err != nil {
+		panic(err)
+	}
+	C1, err := plainUtils.MultiPlyBlocks(XBlocks, k1Blocks)
+	if err != nil {
+		panic(err)
+	}
+
+	bias1 := buildBiasMatrix(sn.Conv1.Bias, C1.ColP*C1.InnerCols, C1.RowP*C1.InnerRows)
+	bias1B, err := plainUtils.PartitionMatrix(bias1, C1.RowP, C1.ColP)
+	if err != nil {
+		panic(err)
+	}
+	C1, err = plainUtils.AddBlocks(C1, bias1B)
+	if err != nil {
+		panic(err)
+	}
+	C1m := plainUtils.ExpandBlocks(C1)
+	fmt.Println("____________Conv1__________________")
+	//for i := 0; i < plainUtils.NumRows(C1m); i++ {
+	//	fmt.Println("Test:", C1m.RawRowView(i))
+	//	fmt.Println("Expected:", normalRes.OutConv1.RawRowView(i))
+	//}
+	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(C1m), plainUtils.RowFlatten(normalRes.OutConv1)))
+
+	pool1Blocks, err := plainUtils.PartitionMatrix(buildKernelMatrix(sn.Pool1.Weight), C1.ColP, 1)
+	C2, err := plainUtils.MultiPlyBlocks(C1, pool1Blocks)
+	if err != nil {
+		panic(err)
+	}
+	bias2B, err := plainUtils.PartitionMatrix(buildBiasMatrix(sn.Pool1.Bias, C2.ColP*C2.InnerCols, C2.RowP*C2.InnerRows), C2.RowP, C2.ColP)
+	C2, err = plainUtils.AddBlocks(C2, bias2B)
+	for i := range C2.Blocks {
+		for j := range C2.Blocks[i] {
+			sn.ActivatePlain(C2.Blocks[i][j])
+		}
+	}
+
+	C2m := plainUtils.ExpandBlocks(C2)
+	fmt.Println("____________Pool1__________________")
+	//for i := 0; i < plainUtils.NumRows(C2m); i++ {
+	//	fmt.Println("Test:", C2m.RawRowView(i))
+	//	fmt.Println("Expected:", normalRes.OutPool1.RawRowView(i))
+	//}
+	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(C2m), plainUtils.RowFlatten(normalRes.OutPool1)))
+
+	pool2Blocks, err := plainUtils.PartitionMatrix(buildKernelMatrix(sn.Pool2.Weight), C2.ColP, 1)
+	C3, err := plainUtils.MultiPlyBlocks(C2, pool2Blocks)
+	if err != nil {
+		panic(err)
+	}
+	bias3B, err := plainUtils.PartitionMatrix(buildBiasMatrix(sn.Pool2.Bias, C3.ColP*C3.InnerCols, C3.RowP*C3.InnerRows), C3.RowP, C3.ColP)
+	C3, err = plainUtils.AddBlocks(C3, bias3B)
+	for i := range C3.Blocks {
+		for j := range C3.Blocks[i] {
+			sn.ActivatePlain(C3.Blocks[i][j])
+		}
+	}
+	//fmt.Println("Rows:", C3.RowP)
+	//fmt.Println("Cols:", C3.ColP)
+	//fmt.Println("Sub-Rows:", C3.InnerRows)
+	//fmt.Println("Sub-Cols:", C3.InnerCols)
+	res := plainUtils.ExpandBlocks(C3)
+	fmt.Println("____________Conv2__________________")
+	//for i := 0; i < plainUtils.NumRows(res); i++ {
+	//	fmt.Println("Test:", res.RawRowView(i))
+	//	fmt.Println("Expected:", normalRes.OutPool1.RawRowView(i))
+	//}
+	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(res), plainUtils.RowFlatten(normalRes.OutPool2)))
+
+	predictions := make([]int, batchSize)
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res.At(i, j)
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	return &SimpleNetPipeLine{
+		OutConv1:    nil,
+		OutPool1:    nil,
+		OutPool2:    nil,
+		Predictions: predictions,
+		Corrects:    corrects,
+	}
+}
 func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
 	var plainResults *SimpleNetPipeLine
 	if glassDoor {

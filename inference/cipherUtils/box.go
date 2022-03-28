@@ -10,6 +10,7 @@ type CkksBox struct {
 	Params       ckks.Parameters
 	Encoder      ckks.Encoder
 	Evaluator    ckks.Evaluator
+	Encryptor    ckks.Encryptor
 	Decryptor    ckks.Decryptor
 	BootStrapper bootstrapping.Bootstrapper
 }

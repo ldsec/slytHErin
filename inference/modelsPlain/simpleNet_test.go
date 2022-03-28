@@ -9,9 +9,9 @@ import (
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"testing"
+	"time"
 )
 
-/*
 func TestEncMult(t *testing.T) {
 
 	LDim := []int{3, 3}
@@ -48,6 +48,9 @@ func TestEncMult(t *testing.T) {
 		}
 	}
 	fmt.Println("W1", W1)
+	Lmat := mat.NewDense(LDim[0], LDim[1], plainUtils.Vectorize(L, true))
+	W0mat := mat.NewDense(W0Dim[0], W0Dim[1], plainUtils.Vectorize(W0, true))
+	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
 
 	// Schemes parameters are created from scratch
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -67,12 +70,12 @@ func TestEncMult(t *testing.T) {
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
 	rotations := []int{}
-	for i := 1; i < len(W0); i++ {
-		rotations = append(rotations, 2*i*len(W0))
+	for i := 1; i < (len(W0)+1)>>1; i++ {
+		rotations = append(rotations, 2*i*LDim[0])
 	}
 
-	for i := 1; i < len(W1); i++ {
-		rotations = append(rotations, 2*i*len(W1))
+	for i := 1; i < (len(W1)+1)>>1; i++ {
+		rotations = append(rotations, 2*i*LDim[0])
 	}
 
 	rotations = append(rotations, len(L))
@@ -86,36 +89,51 @@ func TestEncMult(t *testing.T) {
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 	enc := ckks.NewEncryptor(params, sk)
-	//dec := ckks.NewDecryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
 	ecd := ckks.NewEncoder(params)
 	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
-
-	ctW0 := cipherUtils.EncryptWeights(params.MaxLevel(), W0, len(L), params, ecd, enc)
-	ctW1 := cipherUtils.EncryptWeights(params.MaxLevel(), W1, len(L), params, ecd, enc)
-	ctA := cipherUtils.EncryptInput(params.MaxLevel(), L, params, ecd, enc)
+	Box := cipherUtils.CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+	ctW0 := cipherUtils.EncryptWeights(params.MaxLevel(), W0, len(L), Box)
+	ctW1 := cipherUtils.EncryptWeights(params.MaxLevel(), W1, len(L), Box)
+	ctA := cipherUtils.EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := cipe(ctA, len(L), len(W0), len(W0[0]), ctW0, true, true, params, eval, ecd)
+	B := cipherUtils.Cipher2CMul(ctA, len(L), len(W0), ctW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	_ = Dense(B, len(L), len(W1), len(W1[0]), ctW1, true, true, params, eval, ecd)
+	C := cipherUtils.Cipher2CMul(B, len(L), len(W1), ctW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
-	//resPt := dec.DecryptNew(C)
-	//resArray := ecd.DecodeSlots(resPt, 14)
+	resPt := dec.DecryptNew(C)
+	resArray := ecd.DecodeSlots(resPt, 14)
+	resReal := plainUtils.ComplexToReal(resArray)[:(len(L) * len(W1[0]))]
+	var tmp mat.Dense
+	tmp.Mul(Lmat, W0mat)
+	var res mat.Dense
+	res.Mul(&tmp, W1mat)
+	fmt.Println("________________-")
+	fmt.Println(plainUtils.RowFlatten(&res))
+	fmt.Println("________________-")
+	fmt.Println(resReal)
+
 }
-*/
 
 func TestEvalPlain(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
 	sn.InitDim()
 	sn.InitActivation()
 	batchSize := 8
-	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight, -1).Dims()
+	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight).Dims()
 	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
-	dataSn.Init(batchSize, inputLayerDim)
+	dataSn.Init(batchSize)
 	corrects := 0
 	tot := 0
 	for true {
@@ -130,21 +148,45 @@ func TestEvalPlain(t *testing.T) {
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }
 
+func TestEvalPlainBlocks(t *testing.T) {
+	//leverages matrix block arithmetics and concurrent execution
+	sn := LoadSimpleNet("../../training/models/simpleNet.json")
+	sn.InitDim()
+	sn.InitActivation()
+	batchSize := 128
+	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight).Dims()
+	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
+	dataSn.Init(batchSize)
+	corrects := 0
+	tot := 0
+	for true {
+		Xbatch, Y, err := dataSn.Batch()
+		if err != nil {
+			break
+		}
+		res := sn.EvalBatchPlainBlocks(Xbatch, Y, inputLayerDim, 10)
+		break
+		corrects += res.Corrects
+		tot += batchSize
+	}
+	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+}
+
 func TestEvalDataEnc(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
 	sn.InitDim()
 	sn.InitActivation()
 	batchSize := 8
-	conv1M := buildKernelMatrix(sn.Conv1.Weight, -1)
+	conv1M := buildKernelMatrix(sn.Conv1.Weight)
 	inputLayerDim := plainUtils.NumRows(conv1M)
 	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
-	pool1M := buildKernelMatrix(sn.Pool1.Weight, inputLayerDim)
+	pool1M := buildKernelMatrix(sn.Pool1.Weight)
 	bias2M := buildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
-	pool2M := buildKernelMatrix(sn.Pool2.Weight, inputLayerDim)
+	pool2M := buildKernelMatrix(sn.Pool2.Weight)
 	bias3M := buildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
 	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
-	err := dataSn.Init(batchSize, inputLayerDim)
+	err := dataSn.Init(batchSize)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -198,12 +240,13 @@ func TestEvalDataEnc(t *testing.T) {
 		Encoder:   ckks.NewEncoder(params),
 		Evaluator: ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil}),
 		Decryptor: dec,
+		Encryptor: enc,
 	}
 	corrects := 0
 	tot := 0
 	for true {
 		Xbatch, _, err := dataSn.Batch()
-		Xenc := cipherUtils.EncryptInput(params.MaxLevel(), Xbatch, params, Box.Encoder, enc)
+		Xenc := cipherUtils.EncryptInput(params.MaxLevel(), Xbatch, Box)
 		if err != nil {
 			//dataset completed
 			break

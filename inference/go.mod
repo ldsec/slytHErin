@@ -3,7 +3,7 @@ module github.com/ldsec/dnn-inference/inference
 go 1.17
 
 require (
-	github.com/tuneinsight/lattigo/v3 v3.0.2
+	github.com/tuneinsight/lattigo/v3 v3.0.3-0.20220321140652-4ad05a08db96
 	gonum.org/v1/gonum v0.11.0
 )
 

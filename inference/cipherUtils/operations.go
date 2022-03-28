@@ -63,7 +63,7 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Ciph
 	// (a - bi) * (c + di) = (ac + bd) + i*garbage
 	// This repack can be done during the refresh to save noise and reduce the number of slots used.
 	if prepack {
-		tmp = eval.RotateNew(input, -dimMid*dimIn) // e.g if we are multiplying a 2*2 x 2*2 this is rot -4
+		tmp = eval.RotateNew(input, -dimMid*dimIn)
 		eval.Add(tmp, input, tmp)
 
 		img := eval.MultByiNew(tmp)
@@ -77,10 +77,11 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Ciph
 
 	// Lazy inner-product with hoisted rotations
 	res = eval.MulNew(tmp, weights[0])
+
 	tmpRot := ckks.NewCiphertext(params, 1, tmp.Level(), tmp.Scale)
 	eval.GetKeySwitcher().DecomposeNTT(tmp.Level(), params.PCount()-1, params.PCount(), tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP)
 	for i := 1; i < len(weights); i++ {
-		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimMid*i, tmpRot.Value[0], tmpRot.Value[1])
+		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimIn*i, tmpRot.Value[0], tmpRot.Value[1])
 		eval.MulAndAdd(tmpRot, weights[i], res)
 	}
 
