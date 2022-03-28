@@ -148,8 +148,66 @@ def extract_param(param_name, param):
             weights.append(k.item())
     return weights
 
+def pack_conv_kernel_parallel(conv, kernel_size, stride, input_dim):
+    """
+        this returns num kernel matrixes to do the convolution with smaller ciphers
+        i.e kernel_matrices = [k1,k2...] where ki is:
+        |      |   |      |
+        |ki_ch1|...|ki_chn|
+        |000000|000|000000| -> pad to square
+    """
+    kernel_matrices = []
+    for kernel in conv:
+        channel_matrices = [] 
+        for channel in kernel:
+            m = gen_kernel_matrix(channel,kernel_size=kernel_size,stride=stride,dim=input_dim)
+            channel_matrices.append(np.array(m))
+        channelM = np.hstack(channel_matrices) ##remember that matrices should be under 2**13
+        rows = len(channelM)
+        cols = len(channelM[0])
+        ##pad to make square
+        while (rows%2)!=0 :
+            channelM = np.vstack([channelM, np.zeros(cols)])
+            rows = len(channelM)
+        kernel_matrices.append(channelM.T)
+    return kernel_matrices
+
+def pack_pool_channels_parallel(pool):
+    """
+        returns n matrices, according to the output channel of previous layer.
+        Example if this is pool1 of SimpleNet, previous layer has 5 output channels,
+        then this func returns 5 matrices. Each matrix is:
+        |       |...|       |
+        |chi_k1 |...|chi_kn | for i in range(5)
+        |0000000|...|       | -> pad
+    """
+    num_kernels, num_channels = pool.shape[0],pool.shape[1]
+    kernel_matrices = []
+    for i in range(num_channels):
+        kernel_matrix = []
+        for j in range(num_kernels):
+            kernel_matrix.append(pool[j][i].flatten())
+        kernel_matrix = np.vstack(kernel_matrix).T
+        rows = len(kernel_matrix)
+        cols = len(kernel_matrix[0])
+        ##pad to make square
+        while (rows%2)!=0:
+            kernel_matrix = np.vstack([kernel_matrix, np.zeros(cols)])
+            rows = len(kernel_matrix)
+        kernel_matrices.append(kernel_matrix)
+    return kernel_matrices
+    
 def pack_conv(conv, kernel_size, stride, input_dim):
-    ## pack kernel matrixes
+    """
+        Pack kernel matrixes, each kernel filter in Toepltiz representation
+        Output is:
+        |k1_ch1|...|k1_chn|
+        |.................|
+        |.................| --> tranposed
+        |.................|
+        |km_ch1|...|km_chn|
+        for a conv layer with n input channels and m output channels
+    """
     kernel_matrices = []
     for kernel in conv:
         channel_matrices = [] 
@@ -163,6 +221,9 @@ def pack_conv(conv, kernel_size, stride, input_dim):
     return {'w': [x.item() for x in convM.T.flatten()], 'rows': rows, 'cols': cols}, convM.T
 
 def pack_pool(pool):
+    """
+        Similar to pack_conv, we take advantage that kernel filter has same size of input:
+    """
     kernel_matrices = []
     for kernel in pool:
         channels = []
@@ -175,6 +236,18 @@ def pack_pool(pool):
     return {'w': [x.item() for x in poolM.T.flatten()], 'rows': rows, 'cols': cols}, poolM.T
 
 def pack_bias(b, channels, replication):
+    """
+        Pack bias as an array to be summed to the convolution of one data sample
+        Since in our packing the output channels are all on the same row, bias values
+        are replicated size of conv output size for each of the channels
+        E.g:
+            given
+                bias = [b1,...,bn]
+                
+                x = |x1 * k1|...|x1 * kn|
+            packed is:
+                b = |b1...b1|...|bn...bn| --> this to be replicated for every row of a matrix of rows batch size
+    """
     bias = [0 for i in range(channels*replication)]
     for i in range(channels*replication):
         idx = i // replication
@@ -229,7 +302,7 @@ def pack_simpleNet(model):
         gen_kernel_matrix(k) returns for each channel of a kernel, a matrix m s.t
         m @ x.T = conv(k,x)
 
-        if we have n kernels with f channels (meaning that input image has f dimentions),
+        if we have n kernels with f channels (meaning that input image has f dimensions),
         we can generate a matrix M
 
         M = | m(k1_ch1) |...| m(k1_chf)|
@@ -253,6 +326,9 @@ def pack_simpleNet(model):
          |xb * k1|...|xb * kn| 
 
         Following this, is easy to pack the subsequent layers as the output format is consistent with the input
+
+        Also, there are parallelized version of the methods to provide smaller matrixes to carry out
+        the pipeline with smaller ciphers --> not used in Go implementation
 """
 if __name__ == "__main__":
     ### TEST 1 --> simpleNet simple convolution 
@@ -380,6 +456,7 @@ if __name__ == "__main__":
     correct_linear = 0
     correct_pytorch = 0
     tot = 0
+    
     for X,Y in dh.test_dl:
         X = X.double()
         X_torch = X
@@ -387,15 +464,25 @@ if __name__ == "__main__":
         X_t = X
         X = X_t.numpy()
         X_flat = np.zeros((64,841))
+        
+        ## conv 1
         for i in range(64):
             X_flat[i] = X[i][0].flatten()
         c1 = torch.nn.functional.conv2d(X_t,torch.from_numpy(conv1),bias=torch.from_numpy(b1),stride=2)
         _, conv1M = pack_conv(conv1, 5,2,29)
         d1 = X_flat @ conv1M
-        
+        ##parallelized
+        conv1_matrixes = pack_conv_kernel_parallel(conv1, 5, 2, 29)
+        d1_parallel = []
+        for k in conv1_matrixes:
+            d1_parallel.append(X_flat @ k)
         bias1 = pack_bias(b1, 5, 13*13)
         for i in range(d1.shape[0]):
             d1[i] = d1[i] + bias1['b']
+        for i,d1_p in enumerate(d1_parallel):
+            bias = np.ones(len(d1_p[0]))*b1[i]
+            bias[-1] = 0
+            d1_p = d1_p + bias
         
         c1_flat = np.zeros(d1.shape)
         for i,c in enumerate(c1):
@@ -405,32 +492,57 @@ if __name__ == "__main__":
             c1_flat[i] = np.hstack(r)
         dist = np.linalg.norm(c1_flat-d1)
         print("conv1", dist)
+
+        ##pool1
+
         c2 = torch.nn.functional.conv2d(c1, torch.from_numpy(pool1),bias=torch.from_numpy(b2),stride=1000)
         c2 = relu_approx(c2)
         c2_f = c2.reshape(c2.shape[0],-1)
         _, pool1M = pack_pool(pool1)
         d2 = d1 @ pool1M
+
+        ##parallelized
+        pool1_matrixes = pack_pool_channels_parallel(pool1)
+        l = []
+        for i in range(len(d1_parallel)):
+            l.append(d1_parallel[i] @ pool1_matrixes[i])
+        d2_p = np.zeros(l[0].shape)
+        for i in range(len(l)):
+            d2_p = d2_p + l[i]
+
         bias = pack_bias(b2,100,1)
         for i in range(d2.shape[0]):
             d2[i] = d2[i] + bias['b']
+            d2_p[i] = d2_p[i] + bias['b']
         d2 = relu_approx(torch.from_numpy(d2)).numpy()
-        dist = np.linalg.norm(c2_f.numpy()-d2)
+        d2_p = relu_approx(torch.from_numpy(d2_p)).numpy()
+        dist = np.linalg.norm(c2_f.numpy()-d2_p)
         print("pool1", dist)
+
+        ##pool2
+
         c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2),bias=torch.from_numpy(b3), stride=1000)
         c3 = relu_approx(c3)
         c3 = c3.reshape(c3.shape[0],-1)
         _, pool2M = pack_pool(pool2)
         d3 = d2 @ pool2M
+
+        ##parallelized
+        pool2_matrixes = pack_pool_channels_parallel(pool2)
+        d3_p = d2_p @ pool2_matrixes[0]
+
         bias = pack_bias(b3,10,1)
         for i in range(d2.shape[0]):
             d3[i] = d3[i] + bias['b']
+            d3_p[i] = d3_p[i] + bias['b']
         d3 = relu_approx(torch.from_numpy(d3)).numpy()
-        dist = np.linalg.norm(c3.numpy()-d3)
+        d3_p = relu_approx(torch.from_numpy(d3_p)).numpy()
+        dist = np.linalg.norm(c3.numpy()-d3_p)
         print("pool2", dist)
         #print(d3.shape)
         _,pred = torch_model(X_torch.double()).max(1)
         _,pred_c = c3.max(1)
-        pred_l = np.argmax(d3,axis=1)
+        pred_l = np.argmax(d3_p,axis=1)
         correct_pytorch = correct_pytorch + (pred == Y).sum().item()
         correct_conv = correct_conv + (pred_c == Y).sum().item()
         correct_linear = correct_linear + np.sum(pred_l == Y.numpy())
