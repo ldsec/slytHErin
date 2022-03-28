@@ -165,7 +165,6 @@ func TestEvalPlainBlocks(t *testing.T) {
 			break
 		}
 		res := sn.EvalBatchPlainBlocks(Xbatch, Y, inputLayerDim, 10)
-		break
 		corrects += res.Corrects
 		tot += batchSize
 	}
