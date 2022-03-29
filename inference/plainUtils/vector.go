@@ -6,6 +6,9 @@ import (
 	"math/rand"
 )
 
+func NewDense(X [][]float64) *mat.Dense {
+	return mat.NewDense(len(X), len(X[0]), Vectorize(X, true))
+}
 func TransposeDense(m *mat.Dense) (mt *mat.Dense) {
 	mt = mat.NewDense(NumCols(m), NumRows(m), nil)
 	for i := 0; i < NumRows(m); i++ {
@@ -40,6 +43,7 @@ func RealToComplex(v []float64) []complex128 {
 	}
 	return c
 }
+
 func MatToArray(m *mat.Dense) [][]float64 {
 	v := make([][]float64, NumRows(m))
 	for i := 0; i < NumRows(m); i++ {
@@ -47,6 +51,7 @@ func MatToArray(m *mat.Dense) [][]float64 {
 	}
 	return v
 }
+
 func RowFlatten(m *mat.Dense) []float64 {
 	v := make([][]float64, NumRows(m))
 	for i := 0; i < NumRows(m); i++ {

@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+/********************************************
+REGULAR MATRICES OPS
+|
+|
+v
+*********************************************/
 func TestEncMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	LDim := []int{92, 64}
