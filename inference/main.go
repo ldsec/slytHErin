@@ -2,17 +2,19 @@ package main
 
 import (
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"gonum.org/v1/gonum/mat"
 	"math/rand"
 	"time"
 )
 
 func main() {
 
-	LDim := []int{64, 128}
-	W0Dim := []int{128, 169}
-	W1Dim := []int{169, 10}
+	LDim := []int{64, 64}
+	W0Dim := []int{64, 64}
+	W1Dim := []int{64, 64}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -123,7 +125,7 @@ func main() {
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
-	for i, v := range ecd.DecodeSlots(dec.DecryptNew(B), params.LogSlots())[:LDim[0]*W0Dim[1]] {
+	for i, v := range ecd.DecodeSlots(dec.DecryptNew(B), params.LogSlots())[:LDim[0]*W1Dim[1]] {
 		fmt.Printf("%2d: %7.4f\n", i, v)
 	}
 	fmt.Println()
@@ -133,11 +135,27 @@ func main() {
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
-	for i, v := range ecd.DecodeSlots(dec.DecryptNew(C), params.LogSlots())[:LDim[0]*W1Dim[1]] {
-		fmt.Printf("%2d: %7.4f\n", i, v)
-	}
-	fmt.Println()
-
+	fmt.Println("--------------------------------------------")
+	//for i, v := range ecd.DecodeSlots(dec.DecryptNew(C), params.LogSlots())[:LDim[0]*W1Dim[1]] {
+	//	fmt.Printf("%2d: %7.4f\n", i, v)
+	//}
+	fmt.Println("________________-")
+	Lmat := mat.NewDense(LDim[0], LDim[1], plainUtils.Vectorize(L, true))
+	W0mat := mat.NewDense(W0Dim[0], W0Dim[1], plainUtils.Vectorize(W0, true))
+	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
+	resPt := dec.DecryptNew(C)
+	resArray := ecd.DecodeSlots(resPt, 14)
+	resReal := plainUtils.ComplexToReal(resArray)[:(len(L) * len(W1[0]))]
+	var tmp mat.Dense
+	tmp.Mul(Lmat, W0mat)
+	var res mat.Dense
+	res.Mul(&tmp, W1mat)
+	resT := plainUtils.TransposeDense(&res)
+	//for i := 0; i < plainUtils.NumRows(resT); i++ {
+	//	fmt.Println(resT.RawRowView(i))
+	//}
+	fmt.Println("________________-")
+	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(resT), resReal))
 }
 
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {

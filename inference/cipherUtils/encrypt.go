@@ -23,15 +23,32 @@ func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*
 	enc := Box.Encryptor
 
 	wF := FormatWeights(w, leftdim)
+
 	pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
 
 	ctW = make([]*ckks.Ciphertext, len(wF))
 
 	for i := range ctW {
-		//EncodeSlots puts the values in the plaintext in a way
-		//such that homomorphic elem-wise mult is preserved
 		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
 		ctW[i] = enc.EncryptNew(pt)
+	}
+
+	return
+}
+
+func EncodeWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ptW []*ckks.Plaintext) {
+	params := Box.Params
+	ecd := Box.Encoder
+
+	wF := FormatWeights(w, leftdim)
+
+	ptW = make([]*ckks.Plaintext, len(wF))
+
+	for i := range ptW {
+		//pt is a pointer -> we need a new one each time
+		pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
+		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+		ptW[i] = pt
 	}
 
 	return

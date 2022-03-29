@@ -6,6 +6,16 @@ import (
 	"math/rand"
 )
 
+func TransposeDense(m *mat.Dense) (mt *mat.Dense) {
+	mt = mat.NewDense(NumCols(m), NumRows(m), nil)
+	for i := 0; i < NumRows(m); i++ {
+		for j := 0; j < NumCols(m); j++ {
+			mt.Set(j, i, m.At(i, j))
+		}
+	}
+	return
+}
+
 func RandMatrix(r, c int) *mat.Dense {
 	rand.Seed(42)
 	m := make([]float64, r*c)
