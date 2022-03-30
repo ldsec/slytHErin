@@ -17,7 +17,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeight, Box CkksBox) (C *EncInput, err er
 	s := W.RowP
 	C = new(EncInput)
 	C.RowP = X.RowP
-	C.ColP = C.ColP
+	C.ColP = W.ColP
 	C.InnerRows = X.InnerRows
 	C.InnerCols = W.InnerCols
 
@@ -62,7 +62,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeight, Box CkksBox) (C *EncInput, err erro
 	s := W.RowP
 	C = new(EncInput)
 	C.RowP = X.RowP
-	C.ColP = C.ColP
+	C.ColP = W.ColP
 	C.InnerRows = X.InnerRows
 	C.InnerCols = W.InnerCols
 

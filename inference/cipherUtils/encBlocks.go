@@ -60,6 +60,10 @@ func NewEncInput(X [][]float64, rowP, colP int, Box CkksBox) (*EncInput, error) 
 }
 
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
+	/*
+		Given a block input matrix, decrypts and returns the underlying original matrix
+		The sub-matrices are also transposed (remember that they are in form flatten(A.T))
+	*/
 	Xb := new(plainUtils.BMatrix)
 	Xb.RowP = XEnc.RowP
 	Xb.ColP = XEnc.ColP
@@ -97,6 +101,7 @@ func NewEncWeight(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*En
 		WEnc.Blocks[i] = make([]*EncDiagMat, colP)
 		for j := 0; j < colP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
+			WEnc.Blocks[i][j] = new(EncDiagMat)
 			WEnc.Blocks[i][j].Diags = EncryptWeights(Box.Params.MaxLevel(), plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
 			WEnc.NumDiags = len(WEnc.Blocks[i][j].Diags)
 		}
@@ -121,6 +126,7 @@ func NewPlainWeight(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*
 		Wp.Blocks[i] = make([]*PlainDiagMat, colP)
 		for j := 0; j < colP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
+			Wp.Blocks[i][j] = new(PlainDiagMat)
 			Wp.Blocks[i][j].Diags = EncodeWeights(Box.Params.MaxLevel(), plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
 			Wp.NumDiags = len(Wp.Blocks[i][j].Diags)
 		}

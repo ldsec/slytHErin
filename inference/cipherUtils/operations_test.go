@@ -18,7 +18,8 @@ REGULAR MATRICES OPS
 v
 *********************************************/
 func TestEncMult(t *testing.T) {
-	//make sure that input dim*4 < 2^logSlots
+	//make sure that input dim*2 < 2^logSlots
+	//ct x ct
 	LDim := []int{92, 64}
 	W0Dim := []int{64, 64}
 	W1Dim := []int{64, 64}
@@ -159,7 +160,8 @@ func TestEncMult(t *testing.T) {
 }
 
 func TestEncPlainMult(t *testing.T) {
-	//make sure that input dim*4 < 2^logSlots
+	//make sure that input dim*2 < 2^logSlots
+	//ct x pt
 	LDim := []int{64, 64}
 	W0Dim := []int{64, 64}
 	W1Dim := []int{64, 64}
