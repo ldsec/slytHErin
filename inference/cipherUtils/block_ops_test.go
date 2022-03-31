@@ -66,12 +66,15 @@ func TestDecInput(t *testing.T) {
 	CompareBlocks(ctA, Lb, Box)
 }
 
-func TestBlocksC2pMul__Debug(t *testing.T) {
+func TestBlocksC2PMul__Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	ADim := []int{4, 4}
-	BDim := []int{4, 4}
-
+	ADim := []int{4, 2}
+	BDim := []int{2, 4}
+	rowPA := 1
+	colPA := 2
+	rowPB := 2
+	colPB := 1
 	rd := rand.New(rand.NewSource(0))
 
 	A := make([][]float64, ADim[0])
@@ -81,7 +84,7 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 			A[i][j] = rd.NormFloat64()
 		}
 	}
-	Ab, err := plainUtils.PartitionMatrix(plainUtils.NewDense(A), 2, 2)
+	Ab, err := plainUtils.PartitionMatrix(plainUtils.NewDense(A), rowPA, colPA)
 
 	B := make([][]float64, BDim[0])
 	for i := range B {
@@ -90,7 +93,7 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 			B[i][j] = rd.NormFloat64()
 		}
 	}
-	Bb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(B), 2, 2)
+	Bb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(B), rowPB, colPB)
 
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
@@ -130,15 +133,13 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-
-	X, err := NewEncInput(A, 2, 2, Box)
+	X, err := NewEncInput(A, rowPA, colPA, Box)
 	utils.ThrowErr(err)
-	W, err := NewPlainWeight(B, 2, 2, X.InnerRows, Box)
+	W, err := NewPlainWeightDiag(B, rowPB, colPB, X.InnerRows, Box)
 	utils.ThrowErr(err)
 
 	//BlOCK MULT ROUTINE
 
-	err = nil
 	if X.ColP != W.RowP {
 		err = errors.New("Block partitions not compatible for multiplication")
 	}
@@ -168,12 +169,18 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				//ckks.stuff are not thread safe -> recreate on the flight
+				box := CkksBox{
+					Params:    Box.Params,
+					Encoder:   Box.Encoder.ShallowCopy(),
+					Evaluator: Box.Evaluator.ShallowCopy(),
+					Decryptor: nil,
+					Encryptor: nil,
+				}
 				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					//problem here apparently
-					cij := Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
-					res[k] = cij
-				}(x, w, dimIn, dimMid, k, partials, Box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
+				}(x, w, dimIn, dimMid, k, partials, box)
 				//plain
 				wg.Add(1)
 				innerRows := Ab.InnerRows
@@ -188,14 +195,9 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 			wg.Wait()
 			Cij := partials[0]
 			bij := partialsPlain[0]
-			for k := 0; k < s; k++ {
-				fmt.Printf("i: %d, j: %d, k: %d \n", i, j, k)
-				CompareMatrices(partials[k], C.InnerRows, C.InnerCols, partialsPlain[k], Box)
-			}
+
 			for k := 1; k < s; k++ {
 				Cij = Box.Evaluator.AddNew(Cij, partials[k])
-			}
-			for k := 1; k < s; k++ {
 				bij.Add(bij, partialsPlain[k])
 			}
 			C.Blocks[i][j] = Cij
@@ -206,10 +208,10 @@ func TestBlocksC2pMul__Debug(t *testing.T) {
 	CompareBlocks(C, Cpb, Box)
 }
 
-func TestBlockCipher2C(t *testing.T) {
-	LDim := []int{4, 4}
-	W0Dim := []int{4, 4}
-	W1Dim := []int{4, 4}
+func TestBlockCipher2P(t *testing.T) {
+	LDim := []int{2, 4}
+	W0Dim := []int{4, 2}
+	W1Dim := []int{2, 4}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -248,7 +250,6 @@ func TestBlockCipher2C(t *testing.T) {
 	utils.ThrowErr(err)
 	C, err := plainUtils.MultiPlyBlocks(B, W1b)
 	utils.ThrowErr(err)
-	expRes := plainUtils.MatToArray(plainUtils.ExpandBlocks(C))
 
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
@@ -299,20 +300,126 @@ func TestBlockCipher2C(t *testing.T) {
 
 	ctA, err := NewEncInput(L, 2, 2, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeight(W0, 2, 2, ctA.InnerRows, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 2, 2, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainWeight(W0, 2, 2, ctA.InnerRows, Box)
+	W1bp, err := NewPlainWeightDiag(W1, 2, 2, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
+	fmt.Println("Mul 1")
 	CompareBlocks(ctB, B, Box)
 	ctC, err := BlocksC2PMul(ctB, W1bp, Box)
 	utils.ThrowErr(err)
+	fmt.Println("Mul 2")
 	CompareBlocks(ctC, C, Box)
-	res := DecInput(ctC, Box)
+}
 
-	fmt.Println("Distance:", plainUtils.Distance(plainUtils.Vectorize(res, true), plainUtils.Vectorize(expRes, true)))
+func TestBlockCipher2C(t *testing.T) {
+	LDim := []int{64, 841}
+	W0Dim := []int{841, 845}
+	W1Dim := []int{845, 100}
+
+	r := rand.New(rand.NewSource(0))
+
+	L := make([][]float64, LDim[0])
+	for i := range L {
+		L[i] = make([]float64, LDim[1])
+
+		for j := range L[i] {
+			L[i][j] = r.NormFloat64()
+		}
+	}
+
+	W0 := make([][]float64, W0Dim[0])
+	for i := range W0 {
+		W0[i] = make([]float64, W0Dim[1])
+
+		for j := range W0[i] {
+			W0[i][j] = r.NormFloat64()
+		}
+	}
+
+	W1 := make([][]float64, W1Dim[0])
+	for i := range W1 {
+		W1[i] = make([]float64, W1Dim[1])
+
+		for j := range W1[i] {
+			W1[i][j] = r.NormFloat64()
+		}
+	}
+
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 64, 29)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 169)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 169, 10)
+
+	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
+	utils.ThrowErr(err)
+	C, err := plainUtils.MultiPlyBlocks(B, W1b)
+	utils.ThrowErr(err)
+
+	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         15,
+		LogQ:         []int{60, 60, 60, 40, 40},
+		LogP:         []int{61, 61},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     14,
+		DefaultScale: float64(1 << 40),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+
+	rotations := []int{}
+	for i := 1; i < W0b.InnerRows; i++ {
+		rotations = append(rotations, 2*i*Lb.InnerRows)
+	}
+
+	for i := 1; i < W1b.InnerRows; i++ {
+		rotations = append(rotations, 2*i*Lb.InnerRows)
+	}
+
+	rotations = append(rotations, Lb.InnerRows)
+	rotations = append(rotations, W0b.InnerRows)
+	rotations = append(rotations, W1b.InnerRows)
+	rotations = append(rotations, -W0b.InnerRows*Lb.InnerRows)
+	rotations = append(rotations, -2*W0b.InnerRows*Lb.InnerRows)
+	rotations = append(rotations, -W1b.InnerRows*Lb.InnerRows)
+	rotations = append(rotations, -2*W1b.InnerRows*Lb.InnerRows)
+
+	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	Box := CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+
+	ctA, err := NewEncInput(L, 2, 29, Box)
+	utils.ThrowErr(err)
+	W0bp, err := NewEncWeightDiag(W0, 29, 169, ctA.InnerRows, Box)
+	utils.ThrowErr(err)
+	W1bp, err := NewEncWeightDiag(W1, 169, 10, ctA.InnerRows, Box)
+	utils.ThrowErr(err)
+
+	ctB, err := BlocksC2CMul(ctA, W0bp, Box)
+	utils.ThrowErr(err)
+	fmt.Println("Mul 1")
+	CompareBlocks(ctB, B, Box)
+	ctC, err := BlocksC2CMul(ctB, W1bp, Box)
+	utils.ThrowErr(err)
+	fmt.Println("Mul 2")
+	CompareBlocks(ctC, C, Box)
 }
 
 func CompareBlocks(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
@@ -322,7 +429,6 @@ func CompareBlocks(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 	fmt.Println(ct)
 	fmt.Println("Expected:")
 	fmt.Println(pt)
-	fmt.Println("Dist:")
 	fmt.Println("Distance:", plainUtils.Distance(plainUtils.Vectorize(ct, true), plainUtils.Vectorize(pt, true)))
 }
 
@@ -335,5 +441,4 @@ func CompareMatrices(Ct *ckks.Ciphertext, rows, cols int, Pt *mat.Dense, Box Ckk
 	fmt.Println("Distance:",
 		plainUtils.Distance(plainUtils.Vectorize(plainUtils.MatToArray(res), true),
 			plainUtils.Vectorize(plainUtils.MatToArray(Pt), true)))
-
 }

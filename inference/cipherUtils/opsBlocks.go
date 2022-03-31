@@ -6,7 +6,12 @@ import (
 	"sync"
 )
 
-func BlocksC2PMul(X *EncInput, W *PlainWeight, Box CkksBox) (C *EncInput, err error) {
+/*
+OPERATIONS ON BLOCK MATRIXES (ENCRYPTED OR PLAIN WEIGHTS) DEFINED IN cipherUtils.encBlocks.go
+For reference about the algorithms, check the plaintext equivalent in plainUtils.blocks.go
+*/
+
+func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, err error) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	err = nil
 	if X.ColP != W.RowP {
@@ -34,11 +39,18 @@ func BlocksC2PMul(X *EncInput, W *PlainWeight, Box CkksBox) (C *EncInput, err er
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				//ckks.stuff not thread-safe -> recreate on flight
+				box := CkksBox{
+					Params:    Box.Params,
+					Encoder:   Box.Encoder.ShallowCopy(),
+					Evaluator: Box.Evaluator.ShallowCopy(),
+					Decryptor: nil,
+					Encryptor: nil,
+				}
 				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					cij := Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
-					res[k] = cij
-				}(x, w, dimIn, dimMid, k, partials, Box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
+				}(x, w, dimIn, dimMid, k, partials, box)
 			}
 			wg.Wait()
 			Cij := partials[0]
@@ -51,7 +63,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeight, Box CkksBox) (C *EncInput, err er
 	return
 }
 
-func BlocksC2CMul(X *EncInput, W *EncWeight, Box CkksBox) (C *EncInput, err error) {
+func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err error) {
 	//multiplies 2 block matrices, both encrypted
 	err = nil
 	if X.ColP != W.RowP {
@@ -79,11 +91,19 @@ func BlocksC2CMul(X *EncInput, W *EncWeight, Box CkksBox) (C *EncInput, err erro
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				//ckks.stuff not thread-safe -> recreate on flight
+				box := CkksBox{
+					Params:    Box.Params,
+					Encoder:   Box.Encoder.ShallowCopy(),
+					Evaluator: Box.Evaluator.ShallowCopy(),
+					Decryptor: nil,
+					Encryptor: nil,
+				}
 				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
 					cij := Cipher2CMul(x, dimIn, dimMid, w, true, true, Box)
 					res[k] = cij
-				}(x, w, dimIn, dimMid, k, partials, Box)
+				}(x, w, dimIn, dimMid, k, partials, box)
 			}
 			wg.Wait()
 			Cij := partials[0]
@@ -95,3 +115,6 @@ func BlocksC2CMul(X *EncInput, W *EncWeight, Box CkksBox) (C *EncInput, err erro
 	}
 	return
 }
+
+//TO DO: for this define a plaintext input thingy
+//func AddBlocksC2C(X *EncInput, W *EncInput, Box)

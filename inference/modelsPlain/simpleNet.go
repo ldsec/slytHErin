@@ -4,16 +4,11 @@ import (
 	//"github.com/tuneinsight/lattigo/v3/ckks"
 	"encoding/json"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"math"
 	"os"
-	"reflect"
-	"sync"
-
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"gonum.org/v1/gonum/mat"
 )
 
 type Bias struct {
@@ -297,6 +292,8 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, l
 		Corrects:    corrects,
 	}
 }
+
+/*
 func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
 	var plainResults *SimpleNetPipeLine
 	if glassDoor {
@@ -349,3 +346,4 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks
 	}
 	return nil
 }
+*/

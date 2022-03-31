@@ -7,8 +7,8 @@ import (
 )
 
 func TestBlock(t *testing.T) {
-	m := RandMatrix(128, 128)
-	bm, err := PartitionMatrix(m, 2, 1)
+	m := RandMatrix(4, 4)
+	bm, err := PartitionMatrix(m, 2, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -47,10 +47,10 @@ func TestSumBlock(t *testing.T) {
 
 func TestMultiPlyBlocks(t *testing.T) {
 	a := RandMatrix(64, 64)
-	b := RandMatrix(64, 32)
+	b := RandMatrix(64, 64)
 
-	ba, err := PartitionMatrix(a, 1, 32)
-	bb, err := PartitionMatrix(b, 32, 4)
+	ba, err := PartitionMatrix(a, 1, 2)
+	bb, err := PartitionMatrix(b, 2, 1)
 	var c mat.Dense
 	c.Mul(a, b)
 	bc, err := MultiPlyBlocks(ba, bb)

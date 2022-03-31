@@ -12,9 +12,9 @@ import (
 
 func main() {
 
-	LDim := []int{64, 64}
-	W0Dim := []int{64, 64}
-	W1Dim := []int{64, 64}
+	LDim := []int{4, 2}
+	W0Dim := []int{2, 4}
+	W1Dim := []int{4, 4}
 
 	r := rand.New(rand.NewSource(0))
 

@@ -14,10 +14,13 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Plai
 	// (a - bi) * (c + di) = (ac + bd) + i*garbage
 	// This repack can be done during the refresh to save noise and reduce the number of slots used.
 	if prepack {
-		img := eval.MultByiNew(input)
+		tmp = eval.RotateNew(input, -dimMid*dimIn)
+		eval.Add(tmp, input, tmp)
+
+		img := eval.MultByiNew(tmp)
 		eval.Rotate(img, dimIn, img)
-		tmp = eval.AddNew(input, img)
-		eval.Add(tmp, eval.RotateNew(tmp, -1*dimMid*dimIn), tmp)
+		eval.Add(tmp, img, tmp)
+		eval.Add(tmp, eval.RotateNew(tmp, -2*dimMid*dimIn), tmp)
 	} else {
 		tmp = input
 	}
@@ -54,11 +57,13 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Ciph
 	// (a - bi) * (c + di) = (ac + bd) + i*garbage
 	// This repack can be done during the refresh to save noise and reduce the number of slots used.
 	if prepack {
-		img := eval.MultByiNew(input)
-		eval.Rotate(img, dimIn, img)
-		tmp = eval.AddNew(input, img)
-		eval.Add(tmp, eval.RotateNew(tmp, -1*dimMid*dimIn), tmp)
+		tmp = eval.RotateNew(input, -dimMid*dimIn)
+		eval.Add(tmp, input, tmp)
 
+		img := eval.MultByiNew(tmp)
+		eval.Rotate(img, dimIn, img)
+		eval.Add(tmp, img, tmp)
+		eval.Add(tmp, eval.RotateNew(tmp, -2*dimMid*dimIn), tmp)
 	} else {
 		tmp = input
 	}

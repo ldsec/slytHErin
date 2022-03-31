@@ -6,6 +6,14 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type PlainInput struct {
+	//stores a plaintext input block matrix --> this is used for addition ops
+	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
+	RowP, ColP int                 //num of partitions
+	InnerRows  int                 //rows of sub-matrix
+	InnerCols  int
+}
+
 type EncInput struct {
 	//stores an encrypted input block matrix
 	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
@@ -17,7 +25,7 @@ type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
 	Diags []*ckks.Ciphertext //enc diagonals
 }
-type EncWeight struct {
+type EncWeightDiag struct {
 	Blocks     [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP int
 	LeftDim    int //rows of left matrix
@@ -29,7 +37,7 @@ type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
 	Diags []*ckks.Plaintext //diagonals
 }
-type PlainWeight struct {
+type PlainWeightDiag struct {
 	Blocks     [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP int
 	LeftDim    int //rows of left matrix
@@ -84,13 +92,13 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-func NewEncWeight(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*EncWeight, error) {
+func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*EncWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
 		return nil, err
 	}
-	WEnc := new(EncWeight)
+	WEnc := new(EncWeightDiag)
 	WEnc.RowP = rowP
 	WEnc.ColP = colP
 	WEnc.LeftDim = leftInnerDim
@@ -109,13 +117,13 @@ func NewEncWeight(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*En
 	return WEnc, nil
 }
 
-func NewPlainWeight(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*PlainWeight, error) {
+func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
 		return nil, err
 	}
-	Wp := new(PlainWeight)
+	Wp := new(PlainWeightDiag)
 	Wp.RowP = rowP
 	Wp.ColP = colP
 	Wp.LeftDim = leftInnerDim

@@ -9,6 +9,7 @@ import (
 func NewDense(X [][]float64) *mat.Dense {
 	return mat.NewDense(len(X), len(X[0]), Vectorize(X, true))
 }
+
 func TransposeDense(m *mat.Dense) (mt *mat.Dense) {
 	mt = mat.NewDense(NumCols(m), NumRows(m), nil)
 	for i := 0; i < NumRows(m); i++ {
@@ -28,20 +29,24 @@ func RandMatrix(r, c int) *mat.Dense {
 	return mat.NewDense(r, c, m)
 }
 
-func ComplexToReal(v []complex128) []float64 {
-	c := make([]float64, len(v))
+func MulByConst(m *mat.Dense, c float64) *mat.Dense {
+	v := MatToArray(m)
 	for i := range v {
-		c[i] = real(v[i])
+		for j := range v[0] {
+			v[i][j] *= c
+		}
 	}
-	return c
+	return mat.NewDense(NumRows(m), NumCols(m), Vectorize(v, true))
 }
 
-func RealToComplex(v []float64) []complex128 {
-	c := make([]complex128, len(v))
+func AddConst(m *mat.Dense, c float64) *mat.Dense {
+	v := MatToArray(m)
 	for i := range v {
-		c[i] = complex(v[i], 0.0)
+		for j := range v[0] {
+			v[i][j] += c
+		}
 	}
-	return c
+	return mat.NewDense(NumRows(m), NumCols(m), Vectorize(v, true))
 }
 
 func MatToArray(m *mat.Dense) [][]float64 {
@@ -59,6 +64,7 @@ func RowFlatten(m *mat.Dense) []float64 {
 	}
 	return Vectorize(v, true)
 }
+
 func NumRows(m *mat.Dense) int {
 	rows, _ := m.Dims()
 	return rows
@@ -153,10 +159,26 @@ func Vectorize(X [][]float64, transpose bool) []float64 {
 }
 
 func Distance(a, b []float64) float64 {
-	//computes euclidead distance
+	//computes euclidean distance between arrays
 	d := 0.0
 	for i := range a {
 		d += math.Pow(a[i]-b[i], 2.0)
 	}
 	return math.Sqrt(d)
+}
+
+func ComplexToReal(v []complex128) []float64 {
+	c := make([]float64, len(v))
+	for i := range v {
+		c[i] = real(v[i])
+	}
+	return c
+}
+
+func RealToComplex(v []float64) []complex128 {
+	c := make([]complex128, len(v))
+	for i := range v {
+		c[i] = complex(v[i], 0.0)
+	}
+	return c
 }

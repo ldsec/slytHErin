@@ -2,12 +2,7 @@ package modelsPlain
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/data"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/rlwe"
-	"gonum.org/v1/gonum/mat"
 	"testing"
 )
 
@@ -56,6 +51,7 @@ func TestEvalPlainBlocks(t *testing.T) {
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }
 
+/*
 func TestEvalDataEnc(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
 	sn.InitDim()
@@ -140,3 +136,4 @@ func TestEvalDataEnc(t *testing.T) {
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 
 }
+*/
