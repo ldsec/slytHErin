@@ -4,11 +4,15 @@ import (
 	//"github.com/tuneinsight/lattigo/v3/ckks"
 	"encoding/json"
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"math"
 	"os"
+	"reflect"
+	"sync"
 )
 
 type Bias struct {
@@ -293,13 +297,24 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, l
 	}
 }
 
-/*
 //TO DO: implement this with encrypted block matrix logic --> encBlocks.go and opsBlocks.go of package cipherUtils
-func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
+func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *cipherUtils.EncInput, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
 	var plainResults *SimpleNetPipeLine
 	if glassDoor {
 		plainResults = sn.EvalBatchPlain(XBatchClear, make([]int, len(XBatchClear)), maxDim, 10)
 	}
+	//build weights and bias in block forms
+	weightsBlock := make([]*cipherUtils.PlainWeightDiag, len(weightMatrices))
+	biasBlock := make([]*cipherUtils.PlainInput, len(biasMatrices))
+
+	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[0]),
+		XbatchEnc.ColP, 13*5, XbatchEnc.InnerRows, Box)
+	weightsBlock[1], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[1]),
+		13*5, 10, XbatchEnc.InnerRows, Box)
+	weightsBlock[2], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[2]),
+		10, 10, XbatchEnc.InnerRows, Box)
+	biasBlock[0], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(biasMatrices[0]),
+		XbatchEnc.RowP, 13*5, Box)
 
 	var wg sync.WaitGroup
 	weights := make([][][]complex128, len(weightMatrices))
@@ -347,4 +362,3 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks
 	}
 	return nil
 }
-*/

@@ -17,6 +17,16 @@ func EncryptInput(level int, w [][]float64, Box CkksBox) (ctW *ckks.Ciphertext) 
 	return enc.EncryptNew(pt)
 }
 
+func EncodeInput(level int, w [][]float64, Box CkksBox) *ckks.Plaintext {
+	params := Box.Params
+	ecd := Box.Encoder
+
+	wF := FormatInput(w)
+	pt := ckks.NewPlaintext(params, level, params.DefaultScale())
+	ecd.EncodeSlots(wF, pt, params.LogSlots())
+	return pt
+}
+
 func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*ckks.Ciphertext) {
 	params := Box.Params
 	ecd := Box.Encoder

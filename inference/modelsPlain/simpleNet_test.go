@@ -2,7 +2,14 @@ package modelsPlain
 
 import (
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/data"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"gonum.org/v1/gonum/mat"
 	"testing"
 )
 
@@ -51,12 +58,11 @@ func TestEvalPlainBlocks(t *testing.T) {
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }
 
-/*
 func TestEvalDataEnc(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
 	sn.InitDim()
 	sn.InitActivation()
-	batchSize := 8
+	batchSize := 1024
 	conv1M := buildKernelMatrix(sn.Conv1.Weight)
 	inputLayerDim := plainUtils.NumRows(conv1M)
 	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
@@ -71,69 +77,48 @@ func TestEvalDataEnc(t *testing.T) {
 		fmt.Println(err)
 		return
 	}
-	// Schemes parameters are created from scratch
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40},
-		LogP:         []int{61, 61},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
-	})
+	ckksParams := bootstrapping.DefaultCKKSParameters[0]
+	btpParams := bootstrapping.DefaultParameters[0]
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
 	weights := []*mat.Dense{conv1M, pool1M, pool2M}
+	rowsW := make([]int, len(weights))
+	colsW := make([]int, len(weights))
+	for w := range weights {
+		rowsW[w], colsW[w] = weights[w].Dims()
+	}
 	bias := []*mat.Dense{bias1M, bias2M, bias3M}
 	//init rotations
-	rotations := []int{}
-	rotations = append(rotations, batchSize)
-	for w := range weights {
-		weight := weights[w]
-		rows := plainUtils.NumRows(weight)
-		for i := 1; i < rows; i++ {
-			rotations = append(rotations, 2*i*rows)
-		}
-	}
-	rotations = append(rotations, batchSize)
-	for w := range weights {
-		weight := weights[w]
-		rows := plainUtils.NumRows(weight)
-		rotations = append(rotations, rows)
-	}
-	for w := range weights {
-		weight := weights[w]
-		rows := plainUtils.NumRows(weight)
-		rotations = append(rotations, rows)
-		rotations = append(rotations, -rows*batchSize)
-		rotations = append(rotations, -2*rows*batchSize)
-	}
-	//rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+	rotations := cipherUtils.GenRotations(batchSize, len(weights), rowsW, colsW, params, &btpParams)
+	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
+	btp, err := bootstrapping.NewBootstrapper(params, btpParams, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	utils.ThrowErr(err)
 	Box := cipherUtils.CkksBox{
-		Params:    params,
-		Encoder:   ckks.NewEncoder(params),
-		Evaluator: ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil}),
-		Decryptor: dec,
-		Encryptor: enc,
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}),
+		Decryptor:    dec,
+		Encryptor:    enc,
+		BootStrapper: btp,
 	}
 	corrects := 0
 	tot := 0
 	for true {
 		Xbatch, _, err := dataSn.Batch()
-		Xenc := cipherUtils.EncryptInput(params.MaxLevel(), Xbatch, Box)
+		Xenc, _ := cipherUtils.NewEncInput(Xbatch, 32, 29, Box)
 		if err != nil {
 			//dataset completed
 			break
 		}
-		_ = sn.EvalBatchEncrypted(Xbatch, Xenc, weights, bias, Box, inputLayerDim, true)
+		 = sn.EvalBatchEncrypted(Xbatch, Xenc, weights, bias, Box, inputLayerDim, true)
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-
 }
-*/

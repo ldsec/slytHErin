@@ -6,6 +6,13 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type EncInput struct {
+	//stores an encrypted input block matrix
+	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
+	RowP, ColP int                  //num of partitions
+	InnerRows  int                  //rows of sub-matrix
+	InnerCols  int
+}
 type PlainInput struct {
 	//stores a plaintext input block matrix --> this is used for addition ops
 	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
@@ -14,13 +21,6 @@ type PlainInput struct {
 	InnerCols  int
 }
 
-type EncInput struct {
-	//stores an encrypted input block matrix
-	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
-	RowP, ColP int                  //num of partitions
-	InnerRows  int                  //rows of sub-matrix
-	InnerCols  int
-}
 type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
 	Diags []*ckks.Ciphertext //enc diagonals
@@ -44,6 +44,27 @@ type PlainWeightDiag struct {
 	NumDiags   int
 	InnerRows  int //rows of matrix
 	InnerCols  int
+}
+
+func NewPlainInput(X [][]float64, rowP, colP int, Box CkksBox) (*PlainInput, error) {
+	Xm := plainUtils.NewDense(X)
+	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
+	if err != nil {
+		return nil, err
+	}
+	XPlain := new(PlainInput)
+	XPlain.RowP = rowP
+	XPlain.ColP = colP
+	XPlain.InnerRows = Xb.InnerRows
+	XPlain.InnerCols = Xb.InnerCols
+	XPlain.Blocks = make([][]*ckks.Plaintext, rowP)
+	for i := 0; i < rowP; i++ {
+		XPlain.Blocks[i] = make([]*ckks.Plaintext, colP)
+		for j := 0; j < colP; j++ {
+			XPlain.Blocks[i][j] = EncodeInput(Box.Params.MaxLevel(), plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
+		}
+	}
+	return XPlain, nil
 }
 
 func NewEncInput(X [][]float64, rowP, colP int, Box CkksBox) (*EncInput, error) {
