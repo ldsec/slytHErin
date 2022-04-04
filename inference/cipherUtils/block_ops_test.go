@@ -169,6 +169,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				dimOut := W.InnerCols
 				//ckks.stuff are not thread safe -> recreate on the flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -179,7 +180,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 				}
 				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
 				}(x, w, dimIn, dimMid, k, partials, box)
 				//plain
 				wg.Add(1)
@@ -209,9 +210,9 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 }
 
 func TestBlockCipher2P(t *testing.T) {
-	LDim := []int{2, 4}
-	W0Dim := []int{4, 2}
-	W1Dim := []int{2, 4}
+	LDim := []int{64, 128}
+	W0Dim := []int{128, 256}
+	W1Dim := []int{256, 128}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -242,9 +243,9 @@ func TestBlockCipher2P(t *testing.T) {
 		}
 	}
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 2, 2)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 2, 2)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 2, 2)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 16)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 16, 32)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 32, 16)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
@@ -298,11 +299,11 @@ func TestBlockCipher2P(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 2, 2, Box)
+	ctA, err := NewEncInput(L, 1, 16, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeightDiag(W0, 2, 2, ctA.InnerRows, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 16, 32, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainWeightDiag(W1, 2, 2, ctA.InnerRows, Box)
+	W1bp, err := NewPlainWeightDiag(W1, 32, 16, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
@@ -316,9 +317,9 @@ func TestBlockCipher2P(t *testing.T) {
 }
 
 func TestBlockCipher2C(t *testing.T) {
-	LDim := []int{64, 841}
-	W0Dim := []int{841, 845}
-	W1Dim := []int{845, 100}
+	LDim := []int{64, 128}
+	W0Dim := []int{128, 256}
+	W1Dim := []int{256, 128}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -349,9 +350,9 @@ func TestBlockCipher2C(t *testing.T) {
 		}
 	}
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 64, 29)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 169)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 169, 10)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 16)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 16, 32)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 32, 16)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
@@ -405,11 +406,11 @@ func TestBlockCipher2C(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 2, 29, Box)
+	ctA, err := NewEncInput(L, 1, 16, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewEncWeightDiag(W0, 29, 169, ctA.InnerRows, Box)
+	W0bp, err := NewEncWeightDiag(W0, 16, 32, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewEncWeightDiag(W1, 169, 10, ctA.InnerRows, Box)
+	W1bp, err := NewEncWeightDiag(W1, 32, 16, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2CMul(ctA, W0bp, Box)

@@ -294,6 +294,7 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, l
 }
 
 /*
+//TO DO: implement this with encrypted block matrix logic --> encBlocks.go and opsBlocks.go of package cipherUtils
 func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *ckks.Ciphertext, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
 	var plainResults *SimpleNetPipeLine
 	if glassDoor {

@@ -7,7 +7,7 @@ import (
 )
 
 /*
-OPERATIONS ON BLOCK MATRIXES (ENCRYPTED OR PLAIN WEIGHTS) DEFINED IN cipherUtils.encBlocks.go
+OPERATIONS ON BLOCK MATRIXES (ENCRYPTED OR PLAIN) DEFINED IN cipherUtils.encBlocks.go
 For reference about the algorithms, check the plaintext equivalent in plainUtils.blocks.go
 */
 
@@ -39,6 +39,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, er
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -49,7 +50,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, er
 				}
 				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
 				}(x, w, dimIn, dimMid, k, partials, box)
 			}
 			wg.Wait()
@@ -91,6 +92,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err 
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
+				dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -101,7 +103,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err 
 				}
 				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					cij := Cipher2CMul(x, dimIn, dimMid, w, true, true, Box)
+					cij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
 					res[k] = cij
 				}(x, w, dimIn, dimMid, k, partials, box)
 			}

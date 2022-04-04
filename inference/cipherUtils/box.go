@@ -12,5 +12,5 @@ type CkksBox struct {
 	Evaluator    ckks.Evaluator
 	Encryptor    ckks.Encryptor
 	Decryptor    ckks.Decryptor
-	BootStrapper bootstrapping.Bootstrapper
+	BootStrapper *bootstrapping.Bootstrapper
 }

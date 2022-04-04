@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/modelsPlain"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"math/rand"
@@ -21,9 +22,9 @@ v
 func TestEncMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
-	LDim := []int{4, 2}
-	W0Dim := []int{2, 4}
-	W1Dim := []int{4, 4}
+	LDim := []int{5, 3}
+	W0Dim := []int{3, 7}
+	W1Dim := []int{7, 5}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -140,12 +141,12 @@ func TestEncMult(t *testing.T) {
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2CMul(ctA, len(L), len(W0), ctW0, true, true, Box)
+	B := Cipher2CMul(ctA, len(L), len(W0), W0Dim[1], ctW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2CMul(B, len(L), len(W1), ctW1, true, true, Box)
+	C := Cipher2CMul(B, len(L), len(W1), W1Dim[1], ctW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 	resPt := dec.DecryptNew(C)
@@ -163,9 +164,9 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	//ct x pt
-	LDim := []int{4, 2}
-	W0Dim := []int{2, 4}
-	W1Dim := []int{4, 2}
+	LDim := []int{2, 4}
+	W0Dim := []int{4, 2}
+	W1Dim := []int{2, 4}
 
 	//r := rand.New(rand.NewSource(0))
 
@@ -284,12 +285,12 @@ func TestEncPlainMult(t *testing.T) {
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2PMul(ctA, len(L), len(W0), ptW0, true, true, Box)
+	B := Cipher2PMul(ctA, len(L), len(W0), W0Dim[1], ptW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2PMul(B, len(L), len(W1), ptW1, true, true, Box)
+	C := Cipher2PMul(B, len(L), len(W1), W1Dim[1], ptW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 	resPt := dec.DecryptNew(C)
@@ -356,4 +357,60 @@ func TestEvalPoly(t *testing.T) {
 
 	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
+}
+
+func TestBootstrap(t *testing.T) {
+	//Test Bootstrap operation following lattigo examples
+	LDim := []int{64, 64}
+	L := plainUtils.RandMatrix(LDim[0], LDim[1])
+	//crucial that parameters are conjuncted
+	ckksParams := bootstrapping.DefaultCKKSParameters[0]
+	btpParams := bootstrapping.DefaultParameters[0]
+
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	if err != nil {
+		panic(err)
+	}
+	rotations := btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
+	if err != nil {
+		panic(err)
+	}
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+	btp, err := bootstrapping.NewBootstrapper(params, btpParams, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	if err != nil {
+		panic(err)
+	}
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil})
+	Box := CkksBox{
+		Params:       params,
+		Encoder:      ecd,
+		Evaluator:    eval,
+		Decryptor:    dec,
+		Encryptor:    enc,
+		BootStrapper: btp,
+	}
+	//relu approx
+
+	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(L), Box)
+
+	// Bootstrap the ciphertext (homomorphic re-encryption)
+	// It takes a ciphertext at level 0 (if not at level 0, then it will reduce it to level 0)
+	// and returns a ciphertext at level MaxLevel - k, where k is the depth of the bootstrapping circuit.
+	// CAUTION: the scale of the ciphertext MUST be equal (or very close) to params.Scale
+	// To equalize the scale, the function evaluator.SetScale(ciphertext, parameters.Scale) can be used at the expense of one level.
+	fmt.Println()
+	fmt.Println("Bootstrapping...")
+	ct2 := btp.Bootstrapp(ctL)
+	fmt.Println("Done")
+
+	fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
+	CompareMatrices(ct2, LDim[0], LDim[1], L, Box)
+	PrintDebug(ct2, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
 }
