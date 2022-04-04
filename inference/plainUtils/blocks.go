@@ -141,3 +141,15 @@ func AddBlocksConst(A *BMatrix, c float64) *BMatrix {
 	A.Blocks = newBlocks
 	return A
 }
+
+func MulBlocksConst(A *BMatrix, c float64) *BMatrix {
+	newBlocks := make([][]*mat.Dense, A.RowP)
+	for i := range newBlocks {
+		newBlocks[i] = make([]*mat.Dense, A.ColP)
+		for j := range newBlocks[0] {
+			newBlocks[i][j] = MulByConst(A.Blocks[i][j], c)
+		}
+	}
+	A.Blocks = newBlocks
+	return A
+}

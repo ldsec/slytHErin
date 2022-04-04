@@ -2,10 +2,8 @@ package cipherUtils
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/modelsPlain"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"math/rand"
@@ -166,9 +164,9 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	//ct x pt
-	LDim := []int{2, 4}
-	W0Dim := []int{4, 2}
-	W1Dim := []int{2, 4}
+	LDim := []int{50, 2}
+	W0Dim := []int{2, 50}
+	W1Dim := []int{50, 2}
 
 	//r := rand.New(rand.NewSource(0))
 
@@ -237,11 +235,11 @@ func TestEncPlainMult(t *testing.T) {
 
 	// Schemes parameters are created from scratch
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
+		LogN:         16,
 		LogQ:         []int{60, 60, 60, 40, 40},
 		LogP:         []int{61, 61},
 		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
+		LogSlots:     15,
 		DefaultScale: float64(1 << 40),
 	})
 	if err != nil {
@@ -311,6 +309,7 @@ func TestEncPlainMult(t *testing.T) {
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
 }
 
+/*
 func TestEvalPoly(t *testing.T) {
 	//Evaluates a polynomial on ciphertext
 	LDim := []int{64, 64}
@@ -419,3 +418,4 @@ func TestBootstrap(t *testing.T) {
 	CompareMatrices(ct2, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct2, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
 }
+*/

@@ -41,7 +41,6 @@ func TestEvalPlainBlocks(t *testing.T) {
 	sn.InitDim()
 	sn.InitActivation()
 	batchSize := 128
-	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight).Dims()
 	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
 	dataSn.Init(batchSize)
 	corrects := 0
@@ -51,24 +50,26 @@ func TestEvalPlainBlocks(t *testing.T) {
 		if err != nil {
 			break
 		}
-		res := sn.EvalBatchPlainBlocks(Xbatch, Y, inputLayerDim, 10)
+		res := sn.EvalBatchPlainBlocks(Xbatch, Y, 10)
 		corrects += res.Corrects
 		tot += batchSize
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }
 
-func TestEvalDataEnc(t *testing.T) {
+func TestEvalDataEncModelClear(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
 	sn.InitDim()
 	sn.InitActivation()
 	batchSize := 1024
 	conv1M := buildKernelMatrix(sn.Conv1.Weight)
-	inputLayerDim := plainUtils.NumRows(conv1M)
+	inputLayerDim := plainUtils.NumCols(conv1M)
 	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
 	pool1M := buildKernelMatrix(sn.Pool1.Weight)
+	inputLayerDim = plainUtils.NumCols(pool1M)
 	bias2M := buildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
 	pool2M := buildKernelMatrix(sn.Pool2.Weight)
+	inputLayerDim = plainUtils.NumCols(pool2M)
 	bias3M := buildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
 	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
@@ -77,8 +78,8 @@ func TestEvalDataEnc(t *testing.T) {
 		fmt.Println(err)
 		return
 	}
-	ckksParams := bootstrapping.DefaultCKKSParameters[0]
-	btpParams := bootstrapping.DefaultParameters[0]
+	ckksParams := bootstrapping.DefaultCKKSParameters[4]
+	btpParams := bootstrapping.DefaultParameters[4]
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
@@ -95,7 +96,7 @@ func TestEvalDataEnc(t *testing.T) {
 	}
 	bias := []*mat.Dense{bias1M, bias2M, bias3M}
 	//init rotations
-	rotations := cipherUtils.GenRotations(batchSize, len(weights), rowsW, colsW, params, &btpParams)
+	rotations := cipherUtils.GenRotations(batchSize/32, len(weights), rowsW, colsW, params, &btpParams)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
@@ -112,13 +113,15 @@ func TestEvalDataEnc(t *testing.T) {
 	corrects := 0
 	tot := 0
 	for true {
-		Xbatch, _, err := dataSn.Batch()
+		Xbatch, Y, err := dataSn.Batch()
 		Xenc, _ := cipherUtils.NewEncInput(Xbatch, 32, 29, Box)
 		if err != nil {
 			//dataset completed
 			break
 		}
-		 = sn.EvalBatchEncrypted(Xbatch, Xenc, weights, bias, Box, inputLayerDim, true)
+		res := sn.EvalBatchEncrypted(Xbatch, Y, Xenc, weights, bias, Box, 10)
+		corrects += res.Corrects
+		tot += batchSize
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }

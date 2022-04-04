@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"errors"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"sync"
 )
@@ -162,4 +163,21 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 		}
 	}
 	return C, err
+}
+
+func EvalPolyBlocks(X *EncInput, coeffs []float64, Box CkksBox) {
+	poly := ckks.NewPoly(plainUtils.RealToComplex(coeffs))
+	for i := 0; i < X.RowP; i++ {
+		for j := 0; j < X.ColP; j++ {
+			X.Blocks[i][j], _ = Box.Evaluator.EvaluatePoly(X.Blocks[i][j], poly, X.Blocks[i][j].Scale)
+		}
+	}
+}
+
+func BootStrapBlocks(X *EncInput, Box CkksBox) {
+	for i := 0; i < X.RowP; i++ {
+		for j := 0; j < X.ColP; j++ {
+			X.Blocks[i][j] = Box.BootStrapper.Bootstrapp(X.Blocks[i][j])
+		}
+	}
 }

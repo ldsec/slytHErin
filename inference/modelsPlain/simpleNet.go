@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"math"
 	"os"
-	"reflect"
-	"sync"
 )
 
 type Bias struct {
@@ -189,7 +187,7 @@ func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels 
 	}
 }
 
-func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, labels int) *SimpleNetPipeLine {
+func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, labels int) *SimpleNetPipeLine {
 	//evaluate batch using Block Matrix arithmetics for efficient computations with small ciphers
 	batchSize := len(Xbatch)
 	Xflat := plainUtils.Vectorize(Xbatch, true) //tranpose true needed for now
@@ -289,76 +287,85 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, maxDim, l
 		}
 	}
 	return &SimpleNetPipeLine{
-		OutConv1:    nil,
-		OutPool1:    nil,
-		OutPool2:    nil,
+		OutConv1:    C1m,
+		OutPool1:    C2m,
+		OutPool2:    res,
 		Predictions: predictions,
 		Corrects:    corrects,
 	}
 }
 
 //TO DO: implement this with encrypted block matrix logic --> encBlocks.go and opsBlocks.go of package cipherUtils
-func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, XbatchEnc *cipherUtils.EncInput, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, maxDim int, glassDoor bool) *ckks.Ciphertext {
-	var plainResults *SimpleNetPipeLine
-	if glassDoor {
-		plainResults = sn.EvalBatchPlain(XBatchClear, make([]int, len(XBatchClear)), maxDim, 10)
-	}
-	//build weights and bias in block forms
+func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, XbatchEnc *cipherUtils.EncInput, weightMatrices, biasMatrices []*mat.Dense, Box cipherUtils.CkksBox, labels int) *SimpleNetPipeLine {
+
+	plainResults := sn.EvalBatchPlainBlocks(XBatchClear, Y, 10)
+	//build weights and bias in block forms. Also multiply by interval to spare a level during activation
 	weightsBlock := make([]*cipherUtils.PlainWeightDiag, len(weightMatrices))
 	biasBlock := make([]*cipherUtils.PlainInput, len(biasMatrices))
 
 	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[0]),
 		XbatchEnc.ColP, 13*5, XbatchEnc.InnerRows, Box)
-	weightsBlock[1], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[1]),
+	weightsBlock[1], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[1], 1.0/10.0)),
 		13*5, 10, XbatchEnc.InnerRows, Box)
-	weightsBlock[2], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[2]),
+	weightsBlock[2], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[2], 1.0/10.0)),
 		10, 10, XbatchEnc.InnerRows, Box)
 	biasBlock[0], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(biasMatrices[0]),
 		XbatchEnc.RowP, 13*5, Box)
+	biasBlock[1], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[1], 1.0/10.0)),
+		XbatchEnc.RowP, 10, Box)
+	biasBlock[2], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[2], 1.0/10.0)),
+		XbatchEnc.RowP, 10, Box)
 
-	var wg sync.WaitGroup
-	weights := make([][][]complex128, len(weightMatrices))
-	for i := 0; i < len(weightMatrices); i++ {
-		wg.Add(1)
-		go func(weights [][][]complex128, i int) {
-			defer wg.Done()
-			weights[i] = cipherUtils.FormatWeights(plainUtils.MatToArray(weightMatrices[i]), len(XBatchClear))
-		}(weights, i)
-		//weights[i] = cipherUtils.FormatWeights(plainUtils.MatToArray(weightMatrices[i]), maxDim)
-	}
-	wg.Wait()
-	//encode weights and bias as Plaintext:
-	//each plainW contains an array of Plaintext, each containing one diagonal of the kernel matrix
-	//plainB contains the flattened bias matrices
-	plainW := make([][]*ckks.Plaintext, len(weights))
-	plainB := make([]*ckks.Plaintext, len(biasMatrices))
-	for i := range weights {
-		wg.Add(1)
-		go func(plainW [][]*ckks.Plaintext, plainB []*ckks.Plaintext, i int) {
-			defer wg.Done()
-			pt := ckks.NewPlaintext(Box.Params, Box.Params.MaxLevel(), Box.Params.QiFloat64(Box.Params.MaxLevel()))
-			for j := range weights[0] {
-				//EncodeSlots puts the values in the plaintext in a way
-				//such that homomorphic elem-wise mult is preserved
-				Box.Encoder.EncodeSlots(weights[i][j], pt, Box.Params.LogSlots())
-				plainW[i][j] = pt
+	//pipeline
+	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
+	utils.ThrowErr(err)
+	Ab, err := cipherUtils.AddBlocksC2P(A, biasBlock[0], Box)
+
+	exp, _ := plainUtils.PartitionMatrix(plainResults.OutConv1, Ab.RowP, Ab.ColP)
+	cipherUtils.CompareBlocks(Ab, exp, Box)
+
+	B, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[1], Box)
+	utils.ThrowErr(err)
+	Bb, err := cipherUtils.AddBlocksC2P(B, biasBlock[1], Box)
+
+	cipherUtils.EvalPolyBlocks(Bb, sn.ReLUApprox.Coeffs, Box)
+	cipherUtils.BootStrapBlocks(Bb, Box)
+
+	exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool1, Bb.RowP, Bb.ColP)
+	cipherUtils.CompareBlocks(Bb, exp, Box)
+
+	C, err := cipherUtils.BlocksC2PMul(Bb, weightsBlock[1], Box)
+	utils.ThrowErr(err)
+	Cb, err := cipherUtils.AddBlocksC2P(C, biasBlock[1], Box)
+
+	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
+	exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
+	cipherUtils.CompareBlocks(Cb, exp, Box)
+	//cipherUtils.BootStrapBlocks(Cb, Box)
+	batchSize := len(XBatchClear)
+	res := cipherUtils.DecInput(Cb, Box)
+	predictions := make([]int, batchSize)
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res[i][j]
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
 			}
-			Box.Encoder.EncodeSlots(plainUtils.Vectorize(plainUtils.MatToArray(biasMatrices[i]), true), pt, Box.Params.LogSlots())
-			plainB[i] = pt
-		}(plainW, plainB, i)
-	}
-	wg.Wait()
-	for i := range plainW {
-		resCt := cipherUtils.Cipher2PMul(XbatchEnc, len(XBatchClear), maxDim, plainW[i], true, true, Box)
-		resCt = Box.Evaluator.AddNew(resCt, plainB[i])
-		if glassDoor {
-			//trick to loop
-			v := reflect.ValueOf(plainResults)
-			resPlain := v.Field(i).Interface().(*mat.Dense)
-			resPlainRf := plainUtils.RowFlatten(resPlain)
-			resPlainRfC := plainUtils.RealToComplex(resPlainRf)
-			cipherUtils.PrintDebug(resCt, resPlainRfC, Box)
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
 		}
 	}
-	return nil
+	return &SimpleNetPipeLine{
+		OutConv1:    nil,
+		OutPool1:    nil,
+		OutPool2:    nil,
+		Predictions: predictions,
+		Corrects:    corrects,
+	}
 }
