@@ -58,26 +58,33 @@ func TestEvalPlainBlocks(t *testing.T) {
 }
 
 func TestEvalDataEncModelClear(t *testing.T) {
-	sn := LoadSimpleNet("../../training/models/simpleNet.json")
+	//local run
+	//sn := LoadSimpleNet("../../training/models/simpleNet.json")
+	//cluster run
+	sn := LoadSimpleNet("/root/simpleNet.json")
 	sn.InitDim()
 	sn.InitActivation()
-	batchSize := 1024
+	batchSize := 128
+	//for input block
+	rowP := 1
+	colP := 29
+
 	conv1M := buildKernelMatrix(sn.Conv1.Weight)
+	conv1MB, _ := plainUtils.PartitionMatrix(conv1M, colP, 13*5)
 	inputLayerDim := plainUtils.NumCols(conv1M)
 	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
+
 	pool1M := buildKernelMatrix(sn.Pool1.Weight)
+	pool1MB, _ := plainUtils.PartitionMatrix(pool1M, 13*5, 10)
 	inputLayerDim = plainUtils.NumCols(pool1M)
 	bias2M := buildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
+
 	pool2M := buildKernelMatrix(sn.Pool2.Weight)
+	pool2MB, _ := plainUtils.PartitionMatrix(pool2M, 10, 1)
 	inputLayerDim = plainUtils.NumCols(pool2M)
 	bias3M := buildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
-	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
-	err := dataSn.Init(batchSize)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	//crypto
 	ckksParams := bootstrapping.DefaultCKKSParameters[4]
 	btpParams := bootstrapping.DefaultParameters[4]
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
@@ -88,15 +95,16 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	weights := []*mat.Dense{conv1M, pool1M, pool2M}
-	rowsW := make([]int, len(weights))
-	colsW := make([]int, len(weights))
-	for w := range weights {
-		rowsW[w], colsW[w] = weights[w].Dims()
-	}
-	bias := []*mat.Dense{bias1M, bias2M, bias3M}
 	//init rotations
-	rotations := cipherUtils.GenRotations(batchSize/32, len(weights), rowsW, colsW, params, &btpParams)
+	weightMatricesBlock := []*plainUtils.BMatrix{conv1MB, pool1MB, pool2MB}
+	rowsW := make([]int, len(weightMatricesBlock))
+	colsW := make([]int, len(weightMatricesBlock))
+	for w := range weightMatricesBlock {
+		rowsW[w], colsW[w] = weightMatricesBlock[w].InnerRows, weightMatricesBlock[w].InnerCols
+	}
+	//rotations are performed between submatrixes
+	inputInnerRows := batchSize / rowP
+	rotations := cipherUtils.GenRotations(inputInnerRows, len(weightMatricesBlock), rowsW, colsW, params, &btpParams)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
@@ -110,16 +118,46 @@ func TestEvalDataEncModelClear(t *testing.T) {
 		Encryptor:    enc,
 		BootStrapper: btp,
 	}
+
+	//build weight and bias
+	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
+	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
+
+	weightsBlock := make([]*cipherUtils.PlainWeightDiag, 3)
+	biasBlock := make([]*cipherUtils.PlainInput, 3)
+
+	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(weightMatrices[0]),
+		colP, 13*5, batchSize, Box)
+	weightsBlock[1], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[1], 1.0/10.0)),
+		13*5, 10, batchSize, Box)
+	weightsBlock[2], _ = cipherUtils.NewPlainWeightDiag(plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[2], 1.0/10.0)),
+		10, 1, batchSize, Box)
+	biasBlock[0], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(biasMatrices[0]),
+		rowP, 13*5, Box)
+	biasBlock[1], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[1], 1.0/10.0)),
+		rowP, 10, Box)
+	biasBlock[2], _ = cipherUtils.NewPlainInput(plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[2], 1.0/10.0)),
+		rowP, 1, Box)
+	fmt.Println("Created block matrixes...")
+
+	//dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
+	dataSn := data.LoadSimpleNetData("/root/simpleNet_data.json")
+	err = dataSn.Init(batchSize)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	corrects := 0
 	tot := 0
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
-		Xenc, _ := cipherUtils.NewEncInput(Xbatch, 32, 29, Box)
+		Xenc, _ := cipherUtils.NewEncInput(Xbatch, rowP, colP, Box)
 		if err != nil {
 			//dataset completed
 			break
 		}
-		res := sn.EvalBatchEncrypted(Xbatch, Y, Xenc, weights, bias, Box, 10)
+		res := sn.EvalBatchEncrypted(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10)
 		corrects += res.Corrects
 		tot += batchSize
 	}

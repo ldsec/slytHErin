@@ -130,7 +130,7 @@ func AddBlocksC2C(A *EncInput, B *EncInput, Box CkksBox) (*EncInput, error) {
 	C := new(EncInput)
 	C.RowP = A.RowP
 	C.ColP = A.ColP
-	C.InnerRows = C.InnerRows
+	C.InnerRows = A.InnerRows
 	C.InnerCols = A.InnerCols
 	C.Blocks = make([][]*ckks.Ciphertext, C.RowP)
 	for i := range C.Blocks {
@@ -153,7 +153,7 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 	C := new(EncInput)
 	C.RowP = A.RowP
 	C.ColP = A.ColP
-	C.InnerRows = C.InnerRows
+	C.InnerRows = A.InnerRows
 	C.InnerCols = A.InnerCols
 	C.Blocks = make([][]*ckks.Ciphertext, C.RowP)
 	for i := range C.Blocks {
