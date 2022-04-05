@@ -32,10 +32,10 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 func CompareBlocks(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 	ct := DecInput(Ct, Box)
 	pt := plainUtils.MatToArray(plainUtils.ExpandBlocks(Pt))
-	fmt.Println("Dec:")
-	fmt.Println(ct)
-	fmt.Println("Expected:")
-	fmt.Println(pt)
+	//fmt.Println("Dec:")
+	//fmt.Println(ct)
+	//fmt.Println("Expected:")
+	//fmt.Println(pt)
 	fmt.Println("Distance:", plainUtils.Distance(plainUtils.Vectorize(ct, true), plainUtils.Vectorize(pt, true)))
 }
 

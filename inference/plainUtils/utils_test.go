@@ -46,11 +46,11 @@ func TestSumBlock(t *testing.T) {
 }
 
 func TestMultiPlyBlocks(t *testing.T) {
-	a := RandMatrix(64, 64)
-	b := RandMatrix(64, 64)
+	a := RandMatrix(128, 841)
+	b := RandMatrix(841, 845)
 
-	ba, err := PartitionMatrix(a, 1, 2)
-	bb, err := PartitionMatrix(b, 2, 1)
+	ba, err := PartitionMatrix(a, 1, 29)
+	bb, err := PartitionMatrix(b, 29, 65)
 	var c mat.Dense
 	c.Mul(a, b)
 	bc, err := MultiPlyBlocks(ba, bb)

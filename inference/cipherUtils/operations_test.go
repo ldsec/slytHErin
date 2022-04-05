@@ -20,9 +20,9 @@ v
 func TestEncMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
-	LDim := []int{5, 3}
-	W0Dim := []int{3, 7}
-	W1Dim := []int{7, 5}
+	LDim := []int{8, 4}
+	W0Dim := []int{4, 2}
+	W1Dim := []int{2, 4}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -164,9 +164,9 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	//ct x pt
-	LDim := []int{50, 2}
-	W0Dim := []int{2, 50}
-	W1Dim := []int{50, 2}
+	LDim := []int{8, 4}
+	W0Dim := []int{4, 2}
+	W1Dim := []int{2, 4}
 
 	//r := rand.New(rand.NewSource(0))
 
@@ -235,11 +235,11 @@ func TestEncPlainMult(t *testing.T) {
 
 	// Schemes parameters are created from scratch
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         16,
+		LogN:         15,
 		LogQ:         []int{60, 60, 60, 40, 40},
 		LogP:         []int{61, 61},
 		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     15,
+		LogSlots:     14,
 		DefaultScale: float64(1 << 40),
 	})
 	if err != nil {
@@ -250,7 +250,6 @@ func TestEncPlainMult(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := []int{}
 	/*
 		for i := 1; i < len(W0); i++ {
 			rotations = append(rotations, 2*i*LDim[0])
@@ -268,7 +267,7 @@ func TestEncPlainMult(t *testing.T) {
 		rotations = append(rotations, -len(W1)*len(L))
 		rotations = append(rotations, -2*len(W1)*len(L))
 	*/
-	rotations = GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
+	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -303,9 +302,9 @@ func TestEncPlainMult(t *testing.T) {
 	tmp.Mul(Lmat, W0mat)
 	var res mat.Dense
 	res.Mul(&tmp, W1mat)
-	fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
-	fmt.Println("test:", resReal)
-	fmt.Println("________________-")
+	//fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
+	//fmt.Println("test:", resReal)
+	//fmt.Println("________________-")
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
 }
 

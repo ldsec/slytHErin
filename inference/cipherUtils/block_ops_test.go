@@ -69,12 +69,12 @@ func TestDecInput(t *testing.T) {
 func TestBlocksC2PMul__Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	ADim := []int{4, 2}
-	BDim := []int{2, 4}
-	rowPA := 1
+	ADim := []int{4, 4}
+	BDim := []int{4, 4}
+	rowPA := 2
 	colPA := 2
 	rowPB := 2
-	colPB := 1
+	colPB := 2
 	rd := rand.New(rand.NewSource(0))
 
 	A := make([][]float64, ADim[0])
@@ -203,6 +203,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 			}
 			C.Blocks[i][j] = Cij
 			Blocks[i][j] = bij
+			CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
 		}
 	}
 	Cpb := &plainUtils.BMatrix{Blocks: Blocks, RowP: q, ColP: r, InnerRows: Ab.InnerRows, InnerCols: Bb.InnerCols}
@@ -210,9 +211,9 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 }
 
 func TestBlockCipher2P(t *testing.T) {
-	LDim := []int{64, 128}
-	W0Dim := []int{128, 256}
-	W1Dim := []int{256, 128}
+	LDim := []int{128, 29}
+	W0Dim := []int{29, 65}
+	W1Dim := []int{65, 100}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -243,9 +244,9 @@ func TestBlockCipher2P(t *testing.T) {
 		}
 	}
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 16)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 16, 32)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 32, 16)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 29)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 65)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 65, 10)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
@@ -268,22 +269,7 @@ func TestBlockCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := []int{}
-	for i := 1; i < W0b.InnerRows; i++ {
-		rotations = append(rotations, 2*i*Lb.InnerRows)
-	}
-
-	for i := 1; i < W1b.InnerRows; i++ {
-		rotations = append(rotations, 2*i*Lb.InnerRows)
-	}
-
-	rotations = append(rotations, Lb.InnerRows)
-	rotations = append(rotations, W0b.InnerRows)
-	rotations = append(rotations, W1b.InnerRows)
-	rotations = append(rotations, -W0b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -2*W0b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -W1b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -2*W1b.InnerRows*Lb.InnerRows)
+	rotations := GenRotations(len(L), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -299,11 +285,11 @@ func TestBlockCipher2P(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 1, 16, Box)
+	ctA, err := NewEncInput(L, 1, 29, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeightDiag(W0, 16, 32, ctA.InnerRows, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 29, 65, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainWeightDiag(W1, 32, 16, ctA.InnerRows, Box)
+	W1bp, err := NewPlainWeightDiag(W1, 65, 10, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
@@ -317,9 +303,9 @@ func TestBlockCipher2P(t *testing.T) {
 }
 
 func TestBlockCipher2C(t *testing.T) {
-	LDim := []int{64, 128}
-	W0Dim := []int{128, 256}
-	W1Dim := []int{256, 128}
+	LDim := []int{64, 64}
+	W0Dim := []int{64, 64}
+	W1Dim := []int{64, 64}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -350,7 +336,7 @@ func TestBlockCipher2C(t *testing.T) {
 		}
 	}
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 16)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 8, 16)
 	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 16, 32)
 	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 32, 16)
 
@@ -375,22 +361,7 @@ func TestBlockCipher2C(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := []int{}
-	for i := 1; i < W0b.InnerRows; i++ {
-		rotations = append(rotations, 2*i*Lb.InnerRows)
-	}
-
-	for i := 1; i < W1b.InnerRows; i++ {
-		rotations = append(rotations, 2*i*Lb.InnerRows)
-	}
-
-	rotations = append(rotations, Lb.InnerRows)
-	rotations = append(rotations, W0b.InnerRows)
-	rotations = append(rotations, W1b.InnerRows)
-	rotations = append(rotations, -W0b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -2*W0b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -W1b.InnerRows*Lb.InnerRows)
-	rotations = append(rotations, -2*W1b.InnerRows*Lb.InnerRows)
+	rotations := GenRotations(len(L), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -406,7 +377,7 @@ func TestBlockCipher2C(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 1, 16, Box)
+	ctA, err := NewEncInput(L, 8, 16, Box)
 	utils.ThrowErr(err)
 	W0bp, err := NewEncWeightDiag(W0, 16, 32, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
