@@ -21,11 +21,11 @@ func TestBlock(t *testing.T) {
 }
 
 func TestSumBlock(t *testing.T) {
-	m := RandMatrix(128, 128)
+	m := RandMatrix(64, 845)
 	for i := 0; i < NumRows(m); i++ {
 		fmt.Println(m.RawRowView(i))
 	}
-	bm, err := PartitionMatrix(m, 8, 8)
+	bm, err := PartitionMatrix(m, 1, 65)
 	if err != nil {
 		panic(err)
 	}

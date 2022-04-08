@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"sync"
 )
 
 func EncryptInput(level int, w [][]float64, Box CkksBox) (ctW *ckks.Ciphertext) {
@@ -32,14 +33,23 @@ func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*
 
 	wF := FormatWeights(w, leftdim)
 
-	pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
-
 	ctW = make([]*ckks.Ciphertext, len(wF))
 
+	//for i := range ctW {
+	//	ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+	//	ctW[i] = enc.EncryptNew(pt)
+	//}
+	var wg sync.WaitGroup
 	for i := range ctW {
-		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
-		ctW[i] = enc.EncryptNew(pt)
+		wg.Add(1)
+		go func(i int, ecd ckks.Encoder, enc ckks.Encryptor) {
+			defer wg.Done()
+			pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
+			ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+			ctW[i] = enc.EncryptNew(pt)
+		}(i, ecd.ShallowCopy(), enc.ShallowCopy())
 	}
+	wg.Wait()
 
 	return
 }
@@ -51,13 +61,16 @@ func EncodeWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ptW []*c
 	wF := FormatWeights(w, leftdim)
 
 	ptW = make([]*ckks.Plaintext, len(wF))
-
+	var wg sync.WaitGroup
 	for i := range ptW {
-		//pt is a pointer -> we need a new one each time
-		pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
-		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
-		ptW[i] = pt
+		wg.Add(1)
+		go func(i int, ecd ckks.Encoder) {
+			defer wg.Done()
+			pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
+			ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+			ptW[i] = pt
+		}(i, ecd.ShallowCopy())
 	}
-
+	wg.Wait()
 	return
 }

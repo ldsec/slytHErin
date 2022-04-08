@@ -3,6 +3,7 @@ package cipherUtils
 import (
 	"errors"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"sync"
 )
@@ -40,7 +41,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, er
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
-				dimOut := W.InnerCols
+				//dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -51,7 +52,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, er
 				}
 				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
 				}(x, w, dimIn, dimMid, k, partials, box)
 			}
 			wg.Wait()
@@ -62,6 +63,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (C *EncInput, er
 			C.Blocks[i][j] = Cij
 		}
 	}
+	utils.ThrowErr(err)
 	return
 }
 
@@ -93,7 +95,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err 
 				w := W.Blocks[k][j].Diags
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
-				dimOut := W.InnerCols
+				//dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -104,7 +106,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err 
 				}
 				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					cij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+					cij := Cipher2CMul(x, dimIn, dimMid, w, true, true, Box)
 					res[k] = cij
 				}(x, w, dimIn, dimMid, k, partials, box)
 			}
@@ -116,6 +118,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (C *EncInput, err 
 			C.Blocks[i][j] = Cij
 		}
 	}
+	utils.ThrowErr(err)
 	return
 }
 
@@ -139,6 +142,7 @@ func AddBlocksC2C(A *EncInput, B *EncInput, Box CkksBox) (*EncInput, error) {
 			C.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
 		}
 	}
+	utils.ThrowErr(err)
 	return C, err
 }
 
@@ -162,6 +166,7 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 			C.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
 		}
 	}
+	utils.ThrowErr(err)
 	return C, err
 }
 

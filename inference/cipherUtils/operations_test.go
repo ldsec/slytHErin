@@ -3,6 +3,7 @@ package cipherUtils
 import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
@@ -141,12 +142,12 @@ func TestEncMult(t *testing.T) {
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2CMul(ctA, len(L), len(W0), W0Dim[1], ctW0, true, true, Box)
+	B := Cipher2CMul(ctA, len(L), len(W0), ctW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2CMul(B, len(L), len(W1), W1Dim[1], ctW1, true, true, Box)
+	C := Cipher2CMul(B, len(L), len(W1), ctW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 	resPt := dec.DecryptNew(C)
@@ -164,9 +165,10 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	//ct x pt
-	LDim := []int{8, 4}
-	W0Dim := []int{4, 2}
-	W1Dim := []int{2, 4}
+	LDim := []int{64, 29}
+	W0Dim := []int{29, 65}
+	W1Dim := []int{65, 10}
+	W2Dim := []int{10, 10}
 
 	//r := rand.New(rand.NewSource(0))
 
@@ -219,6 +221,15 @@ func TestEncPlainMult(t *testing.T) {
 		}
 	}
 
+	W2 := make([][]float64, W2Dim[0])
+	for i := range W2 {
+		W2[i] = make([]float64, W2Dim[1])
+
+		for j := range W2[i] {
+			W2[i][j] = r.NormFloat64()
+		}
+	}
+
 	fmt.Printf("[\n")
 	for i := 0; i < W1Dim[0]; i++ {
 		fmt.Printf("[")
@@ -232,20 +243,22 @@ func TestEncPlainMult(t *testing.T) {
 	Lmat := mat.NewDense(LDim[0], LDim[1], plainUtils.Vectorize(L, true))
 	W0mat := mat.NewDense(W0Dim[0], W0Dim[1], plainUtils.Vectorize(W0, true))
 	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
+	W2mat := mat.NewDense(W2Dim[0], W2Dim[1], plainUtils.Vectorize(W2, true))
 
-	// Schemes parameters are created from scratch
+	// Schemes parameters are created from scratc
+	//ckksParams := bootstrapping.DefaultCKKSParameters[0]
+	//ckksParams := ckks.PN15QP880
+	//params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral(ckksParams))
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40},
-		LogP:         []int{61, 61},
+		LogQ:         []int{60, 60, 60, 40, 40, 40, 40, 40, 40},
+		LogP:         []int{61, 61, 61},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     14,
 		DefaultScale: float64(1 << 40),
 	})
-	if err != nil {
-		panic(err)
-	}
 
+	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
@@ -267,7 +280,7 @@ func TestEncPlainMult(t *testing.T) {
 		rotations = append(rotations, -len(W1)*len(L))
 		rotations = append(rotations, -2*len(W1)*len(L))
 	*/
-	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
+	rotations := GenRotations(len(L), 3, []int{len(W0), len(W1), len(W2)}, []int{len(W0[0]), len(W1[0]), len(W2[0])}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -284,24 +297,28 @@ func TestEncPlainMult(t *testing.T) {
 	}
 	ptW0 := EncodeWeights(params.MaxLevel(), W0, len(L), Box)
 	ptW1 := EncodeWeights(params.MaxLevel(), W1, len(L), Box)
+	ptW2 := EncodeWeights(params.MaxLevel(), W2, len(L), Box)
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2PMul(ctA, len(L), len(W0), W0Dim[1], ptW0, true, true, Box)
+	B := Cipher2PMul(ctA, len(L), len(W0), ptW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2PMul(B, len(L), len(W1), W1Dim[1], ptW1, true, true, Box)
+	C := Cipher2PMul(B, len(L), len(W1), ptW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
-	resPt := dec.DecryptNew(C)
+	D := Cipher2PMul(C, len(L), len(W2), ptW2, true, true, Box)
+	resPt := dec.DecryptNew(D)
 	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
-	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W1Dim[1]]
+	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W2Dim[1]]
 	var tmp mat.Dense
 	tmp.Mul(Lmat, W0mat)
+	var tmp2 mat.Dense
+	tmp2.Mul(&tmp, W1mat)
 	var res mat.Dense
-	res.Mul(&tmp, W1mat)
+	res.Mul(&tmp2, W2mat)
 	//fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
 	//fmt.Println("test:", resReal)
 	//fmt.Println("________________-")

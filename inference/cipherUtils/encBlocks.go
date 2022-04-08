@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 )
@@ -50,6 +51,7 @@ func NewPlainInput(X [][]float64, rowP, colP int, Box CkksBox) (*PlainInput, err
 	Xm := plainUtils.NewDense(X)
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
+		utils.ThrowErr(err)
 		return nil, err
 	}
 	XPlain := new(PlainInput)
@@ -71,6 +73,7 @@ func NewEncInput(X [][]float64, rowP, colP int, Box CkksBox) (*EncInput, error) 
 	Xm := plainUtils.NewDense(X)
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
+		utils.ThrowErr(err)
 		return nil, err
 	}
 	XEnc := new(EncInput)
@@ -117,6 +120,7 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) 
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
+		utils.ThrowErr(err)
 		return nil, err
 	}
 	WEnc := new(EncWeightDiag)
@@ -135,6 +139,7 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) 
 			WEnc.NumDiags = len(WEnc.Blocks[i][j].Diags)
 		}
 	}
+	utils.ThrowErr(err)
 	return WEnc, nil
 }
 
@@ -142,6 +147,7 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
+		utils.ThrowErr(err)
 		return nil, err
 	}
 	Wp := new(PlainWeightDiag)
@@ -160,5 +166,6 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox
 			Wp.NumDiags = len(Wp.Blocks[i][j].Diags)
 		}
 	}
+	utils.ThrowErr(err)
 	return Wp, nil
 }

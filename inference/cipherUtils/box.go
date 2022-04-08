@@ -26,8 +26,9 @@ func GenRotations(dimIn, numWeights int, rowsW, colsW []int, params ckks.Paramet
 		}
 		rotations = append(rotations, rowsW[w])
 		rotations = append(rotations, -rowsW[w]*dimIn)
-		rotations = append(rotations, params.RotationsForReplicateLog(dimIn*rowsW[w], 3)...)
-		rotations = append(rotations, params.RotationsForReplicateLog(dimIn*colsW[w], 3)...)
+		rotations = append(rotations, -2*rowsW[w]*dimIn)
+		//rotations = append(rotations, params.RotationsForReplicateLog(dimIn*rowsW[w], 3)...)
+		//rotations = append(rotations, params.RotationsForReplicateLog(dimIn*colsW[w], 3)...)
 	}
 	rotations = append(rotations, dimIn)
 	return rotations
