@@ -22,6 +22,7 @@ func EncodeInput(level int, w [][]float64, Box CkksBox) *ckks.Plaintext {
 
 	wF := FormatInput(w)
 	pt := ckks.NewPlaintext(params, level, params.DefaultScale())
+
 	ecd.EncodeSlots(wF, pt, params.LogSlots())
 	return pt
 }

@@ -1,5 +1,6 @@
 package modelsPlain
 
+import "C"
 import (
 	//"github.com/tuneinsight/lattigo/v3/ckks"
 	"encoding/json"
@@ -31,8 +32,9 @@ type ConvLayer struct {
 	kernelSize, inChans, outChans, stride, inDim, outDim int
 }
 type PolyApprox struct {
-	Interval, Degree int
-	Coeffs           []float64
+	Interval float64
+	Degree   int
+	Coeffs   []float64
 }
 type SimpleNet struct {
 	Conv1 ConvLayer `json:"conv1"`
@@ -199,7 +201,7 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, labels in
 		panic(err)
 	}
 	k1 := buildKernelMatrix(sn.Conv1.Weight)
-	k1Blocks, err := plainUtils.PartitionMatrix(k1, 29, 5)
+	k1Blocks, err := plainUtils.PartitionMatrix(k1, 29, 65)
 	if err != nil {
 		panic(err)
 	}
@@ -217,7 +219,7 @@ func (sn *SimpleNet) EvalBatchPlainBlocks(Xbatch [][]float64, Y []int, labels in
 	if err != nil {
 		panic(err)
 	}
-	C1m := plainUtils.ExpandBlocks(C1)
+	C1m := plainUtils.ExpandBlocks(C1b)
 	//fmt.Println("____________Conv1__________________")
 	//for i := 0; i < plainUtils.NumRows(C1m); i++ {
 	//	fmt.Println("Test:", C1m.RawRowView(i))
@@ -303,59 +305,83 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 
 	//pipeline
 	now := time.Now()
-	fmt.Println("Conv1")
+
+	fmt.Println("Conv1", weightsBlock[0].Blocks[0][0].Diags[0].Level())
 	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
 	utils.ThrowErr(err)
-	fmt.Println("Done:", time.Since(now))
-	exp, err := plainUtils.PartitionMatrix(plainResults.OutConv1, A.RowP, A.ColP)
-	utils.ThrowErr(err)
-	now = time.Now()
 	fmt.Println("Adding bias")
 	Ab, err := cipherUtils.AddBlocksC2P(A, biasBlock[0], Box)
 	utils.ThrowErr(err)
-	fmt.Println("Done:", time.Since(now))
-	//exp, err := plainUtils.PartitionMatrix(plainResults.OutConv1, Ab.RowP, Ab.ColP)
-	//utils.ThrowErr(err)
-	cipherUtils.CompareBlocks(A, exp, Box)
+	exp, err := plainUtils.PartitionMatrix(plainResults.OutConv1, Ab.RowP, Ab.ColP)
+	utils.ThrowErr(err)
+	cipherUtils.CompareBlocks(Ab, exp, Box)
+	cipherUtils.PrintDebugBlocks(Ab, exp, Box)
 
-	now = time.Now()
-	fmt.Println("Pool1")
+	fmt.Println("Pool1", weightsBlock[1].Blocks[0][0].Diags[0].Level())
 	B, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[1], Box)
-	fmt.Println("Done:", time.Since(now))
-	now = time.Now()
 	fmt.Println("Adding bias")
 	utils.ThrowErr(err)
 	Bb, err := cipherUtils.AddBlocksC2P(B, biasBlock[1], Box)
-	fmt.Println("Done:", time.Since(now))
-
-	now = time.Now()
 	fmt.Println("Activation")
 	cipherUtils.EvalPolyBlocks(Bb, sn.ReLUApprox.Coeffs, Box)
-	fmt.Println("Done:", time.Since(now))
-	//now = time.Now()
-	//fmt.Println("Bootstrapping")
-	//cipherUtils.BootStrapBlocks(Bb, Box)
-	//fmt.Println("Done:", time.Since(now))
 	exp, err = plainUtils.PartitionMatrix(plainResults.OutPool1, Bb.RowP, Bb.ColP)
 	utils.ThrowErr(err)
 	cipherUtils.CompareBlocks(Bb, exp, Box)
+	cipherUtils.PrintDebugBlocks(Bb, exp, Box)
 
-	now = time.Now()
 	fmt.Println("Pool2")
-	C, err := cipherUtils.BlocksC2PMul(Bb, weightsBlock[2], Box)
-	fmt.Println("Done:", time.Since(now))
-	now = time.Now()
+	BbF, err := cipherUtils.NewEncInput(cipherUtils.DecInput(Bb, Box), Bb.RowP, Bb.ColP, 7, Box)
+	pluto := Box.Decryptor.DecryptNew(BbF.Blocks[0][0])
+	resArray := Box.Encoder.DecodeSlots(pluto, 14)[:BbF.InnerRows*BbF.InnerCols]
+	cipherUtils.PrintDebug(Bb.Blocks[0][0], resArray, Box)
+	fmt.Println("__________________________---")
+	CC, err := cipherUtils.BlocksC2PMul(Bb, weightsBlock[2], Box)
+	CF, err := cipherUtils.BlocksC2PMul(BbF, weightsBlock[2], Box)
+	pool2Blocks, err := plainUtils.PartitionMatrix(buildKernelMatrix(sn.Pool2.Weight), weightsBlock[2].RowP, weightsBlock[2].ColP)
+	C2, _ := plainUtils.PartitionMatrix(plainResults.OutPool1, Bb.RowP, Bb.ColP)
+	C3, err := plainUtils.MultiPlyBlocks(C2, plainUtils.MultiplyBlocksByConst(pool2Blocks, 0.1))
+	fmt.Println("Enc vs plain")
+	//all values are scaled by a factor -0.59, the same factor for every value...
+	cipherUtils.CompareBlocks(CC, C3, Box)
+	cipherUtils.PrintDebugBlocks(CC, C3, Box)
+	fmt.Println("Enc fresh vs plain")
+	cipherUtils.CompareBlocks(CF, C3, Box)
+	cipherUtils.PrintDebugBlocks(CF, C3, Box)
+	if err != nil {
+		panic(err)
+	}
+
 	fmt.Println("Adding bias")
 	utils.ThrowErr(err)
-	Cb, err := cipherUtils.AddBlocksC2P(C, biasBlock[2], Box)
+	Cb, err := cipherUtils.AddBlocksC2P(CC, biasBlock[2], Box)
+	CbF, err := cipherUtils.AddBlocksC2P(CF, biasBlock[2], Box)
 	utils.ThrowErr(err)
-	fmt.Println("Done:", time.Since(now))
+	bias3B, err := plainUtils.PartitionMatrix(buildBiasMatrix(sn.Pool2.Bias, C3.ColP*C3.InnerCols, C3.RowP*C3.InnerRows), C3.RowP, C3.ColP)
+	C3b, err := plainUtils.AddBlocks(C3, plainUtils.MultiplyBlocksByConst(bias3B, 0.1))
+	fmt.Println("Enc vs plain")
+	cipherUtils.CompareBlocks(Cb, C3b, Box)
+	fmt.Println("Enc fresh vs plain")
+	cipherUtils.CompareBlocks(CbF, C3b, Box)
 
 	fmt.Println("Activation")
 	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
+	cipherUtils.EvalPolyBlocks(CbF, sn.ReLUApprox.Coeffs, Box)
+	plainUtils.MultiplyBlocksByConst(C3b, 10.0) //it gets divided in activation
+	for i := range C3b.Blocks {
+		for j := range C3b.Blocks[i] {
+			sn.ActivatePlain(C3b.Blocks[i][j])
+		}
+	}
+	fmt.Println("Enc vs plain")
+	cipherUtils.CompareBlocks(Cb, C3b, Box)
+	fmt.Println("Enc fresh vs plain")
+	cipherUtils.CompareBlocks(CbF, C3b, Box)
+	fmt.Println("______________________")
+	fmt.Println("Done", time.Since(now))
+
 	exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
 	cipherUtils.CompareBlocks(Cb, exp, Box)
-	fmt.Println("Done:", time.Since(now))
+	cipherUtils.PrintDebugBlocks(Cb, exp, Box)
 	batchSize := len(XBatchClear)
 	res := cipherUtils.DecInput(Cb, Box)
 	predictions := make([]int, batchSize)
@@ -377,10 +403,106 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 	}
 	fmt.Println("Corrects enc:", corrects)
 	fmt.Println("Corrects clear:", plainResults.Corrects)
+
+	outConv1 := cipherUtils.DecInput(Ab, Box)
+	outPool1 := cipherUtils.DecInput(Bb, Box)
+	outPool2 := cipherUtils.DecInput(Cb, Box)
+
 	return &SimpleNetPipeLine{
-		OutConv1:    nil,
+		OutConv1:    plainUtils.NewDense(outConv1),
+		OutPool1:    plainUtils.NewDense(outPool1),
+		OutPool2:    plainUtils.NewDense(outPool2),
+		Predictions: predictions,
+		Corrects:    corrects,
+	}
+}
+
+func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []int, XbatchEnc *cipherUtils.EncInput, weightsBlock []*cipherUtils.PlainWeightDiag, biasBlock []*cipherUtils.PlainInput, Box cipherUtils.CkksBox, labels int) *SimpleNetPipeLine {
+
+	plainResults := sn.EvalBatchPlainBlocks(XBatchClear, Y, 10)
+	fmt.Println("Loaded plaintext results")
+
+	//pipeline
+	now := time.Now()
+
+	fmt.Println("Compressed conv + pool", weightsBlock[0].Blocks[0][0].Diags[0].Level())
+	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
+	utils.ThrowErr(err)
+	fmt.Println("Adding bias")
+	Ab, err := cipherUtils.AddBlocksC2P(A, biasBlock[0], Box)
+	utils.ThrowErr(err)
+	exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+	utils.ThrowErr(err)
+	cipherUtils.CompareBlocks(Ab, exp, Box)
+	cipherUtils.PrintDebugBlocks(Ab, exp, Box)
+
+	fmt.Println("Activation")
+	cipherUtils.EvalPolyBlocks(Ab, sn.ReLUApprox.Coeffs, Box)
+	exp, err = plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+	utils.ThrowErr(err)
+	cipherUtils.CompareBlocks(Ab, exp, Box)
+	cipherUtils.PrintDebugBlocks(Ab, exp, Box)
+
+	fmt.Println("Pool2")
+	CC, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[2], Box)
+	pool2Blocks, err := plainUtils.PartitionMatrix(buildKernelMatrix(sn.Pool2.Weight), weightsBlock[2].RowP, weightsBlock[2].ColP)
+	C2, _ := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+	C3, err := plainUtils.MultiPlyBlocks(C2, plainUtils.MultiplyBlocksByConst(pool2Blocks, 0.1))
+	cipherUtils.CompareBlocks(CC, C3, Box)
+	cipherUtils.PrintDebugBlocks(CC, C3, Box)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Adding bias")
+	utils.ThrowErr(err)
+	Cb, err := cipherUtils.AddBlocksC2P(CC, biasBlock[2], Box)
+	utils.ThrowErr(err)
+	bias3B, err := plainUtils.PartitionMatrix(buildBiasMatrix(sn.Pool2.Bias, C3.ColP*C3.InnerCols, C3.RowP*C3.InnerRows), C3.RowP, C3.ColP)
+	C3b, err := plainUtils.AddBlocks(C3, plainUtils.MultiplyBlocksByConst(bias3B, 0.1))
+	cipherUtils.CompareBlocks(Cb, C3b, Box)
+	fmt.Println("Activation")
+	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
+	plainUtils.MultiplyBlocksByConst(C3b, 10.0) //it gets divided in activation
+	for i := range C3b.Blocks {
+		for j := range C3b.Blocks[i] {
+			sn.ActivatePlain(C3b.Blocks[i][j])
+		}
+	}
+	fmt.Println("______________________")
+	fmt.Println("Done", time.Since(now))
+
+	exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
+	cipherUtils.CompareBlocks(Cb, exp, Box)
+	cipherUtils.PrintDebugBlocks(Cb, exp, Box)
+	batchSize := len(XBatchClear)
+	res := cipherUtils.DecInput(Cb, Box)
+	predictions := make([]int, batchSize)
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res[i][j]
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	fmt.Println("Corrects enc:", corrects)
+	fmt.Println("Corrects clear:", plainResults.Corrects)
+
+	outConv1 := cipherUtils.DecInput(Ab, Box)
+	outPool2 := cipherUtils.DecInput(Cb, Box)
+
+	return &SimpleNetPipeLine{
+		OutConv1:    plainUtils.NewDense(outConv1),
 		OutPool1:    nil,
-		OutPool2:    nil,
+		OutPool2:    plainUtils.NewDense(outPool2),
 		Predictions: predictions,
 		Corrects:    corrects,
 	}

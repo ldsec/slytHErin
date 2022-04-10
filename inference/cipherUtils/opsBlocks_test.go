@@ -1,25 +1,12 @@
 package cipherUtils
 
-import (
-	"errors"
-	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
-	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/rlwe"
-	"gonum.org/v1/gonum/mat"
-	"math/rand"
-	"sync"
-	"testing"
-	"time"
-)
-
 /********************************************
 BLOCK MATRICES OPS
 |
 |
 v
 *********************************************/
+/*
 func TestDecInput(t *testing.T) {
 	LDim := []int{64, 10}
 
@@ -205,6 +192,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 }
 
 func TestBlockCipher2P(t *testing.T) {
+	//dist = 0.01
 	LDim := []int{128, 841}
 	W0Dim := []int{841, 845}
 	W1Dim := []int{845, 100}
@@ -450,11 +438,11 @@ func TestAddBlockCipher2P(t *testing.T) {
 		}
 	}
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 65)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 10)
 	utils.ThrowErr(err)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 1, 65)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 10, 1)
 	utils.ThrowErr(err)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 1, 65)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 1, 1)
 
 	B, err := plainUtils.AddBlocks(Lb, W0b)
 	utils.ThrowErr(err)
@@ -522,10 +510,10 @@ func TestAddBlockCipher2P(t *testing.T) {
 }
 
 func TestMixCipher2P(t *testing.T) {
-	// x then +
-	LDim := []int{1, 841}
-	W0Dim := []int{841, 845}
-	W1Dim := []int{1, 845}
+	// x then + and activation
+	LDim := []int{64, 100}
+	W0Dim := []int{100, 10}
+	W1Dim := []int{64, 10}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -555,18 +543,37 @@ func TestMixCipher2P(t *testing.T) {
 			W1[i][j] = r.NormFloat64()
 		}
 	}
+	coeffs := []float64{1.1155, 5.0, 4.4003} //degree 2
+	interval := 10.0                         //--> incorporate this in weight matrix to spare a level
 
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 29)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 10)
 	utils.ThrowErr(err)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 65)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 10, 1)
 	utils.ThrowErr(err)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 1, 65)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 1, 1)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
 	C, err := plainUtils.AddBlocks(B, W1b)
 	utils.ThrowErr(err)
 
+	for i := 0; i < C.RowP; i++ {
+		for j := 0; j < C.ColP; j++ {
+			func(X *mat.Dense, interval float64, degree int, coeffs []float64) {
+				rows, cols := X.Dims()
+				for r := 0; r < rows; r++ {
+					for c := 0; c < cols; c++ {
+						v := X.At(r, c) / float64(interval)
+						res := 0.0
+						for deg := 0; deg < degree; deg++ {
+							res += (math.Pow(v, float64(deg)) * coeffs[deg])
+						}
+						X.Set(r, c, res)
+					}
+				}
+			}(C.Blocks[i][j], interval, 3, coeffs)
+		}
+	}
 	//ckksParams := bootstrapping.DefaultCKKSParameters[0]
 	//ckksParams := ckks.PN14QP438
 	//params, err := ckks.NewParametersFromLiteral(ckksParams)
@@ -593,7 +600,7 @@ func TestMixCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(len(L), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(len(L), 1, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -609,19 +616,80 @@ func TestMixCipher2P(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 1, 29, Box)
+	ctA, err := NewEncInput(L, 1, 10, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeightDiag(W0, 29, 65, ctA.InnerRows, Box)
+	for i := range W0 {
+		for j := range W0[i] {
+			W0[i][j] *= 1 / interval
+		}
+	}
+
+	for i := range W1 {
+		for j := range W1[i] {
+			W1[i][j] *= 1 / interval
+		}
+	}
+	W0bp, err := NewPlainWeightDiag(W0, 10, 1, ctA.InnerRows, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainInput(W1, 1, 65, Box)
+	W1bp, err := NewPlainInput(W1, 1, 1, Box)
 	utils.ThrowErr(err)
 	now := time.Now()
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
-	fmt.Println("Mul 1", time.Since(now))
-	CompareBlocks(ctB, B, Box)
+	fmt.Println("Mul", time.Since(now))
+	fmt.Println("Add")
 	ctC, err := AddBlocksC2P(ctB, W1bp, Box)
+	fmt.Println("Activation")
+	EvalPolyBlocks(ctC, coeffs, Box)
 	utils.ThrowErr(err)
-	fmt.Println("Add 2")
 	CompareBlocks(ctC, C, Box)
 }
+
+func TestRemoveImagFromBlocks(t *testing.T) {
+	LDim := []int{4, 4}
+	r := rand.New(rand.NewSource(0))
+
+	L := make([][]float64, LDim[0])
+	for i := range L {
+		L[i] = make([]float64, LDim[1])
+
+		for j := range L[i] {
+			L[i][j] = r.NormFloat64()
+		}
+	}
+	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         15,
+		LogQ:         []int{60, 60, 60, 40, 40, 40, 40, 40, 40},
+		LogP:         []int{61, 61, 61},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     14,
+		DefaultScale: float64(1 << 40),
+	})
+	utils.ThrowErr(err)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 2, 2)
+	utils.ThrowErr(err)
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+	rotations := GenRotations(len(L), 1, []int{Lb.InnerRows, Lb.InnerRows}, []int{Lb.InnerCols, Lb.InnerCols}, params, nil)
+	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	Box := CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+	ct, err := NewEncInput(L, 2, 2, Box)
+	utils.ThrowErr(err)
+	RemoveImagFromBlocks(ct, Box)
+
+	CompareBlocks(ct, Lb, Box)
+	PrintDebugBlocks(ct, Lb, Box)
+}
+
+*/

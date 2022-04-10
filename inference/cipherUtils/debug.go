@@ -17,6 +17,7 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 
 	fmt.Println()
 	fmt.Printf("Level: %d (logQ = %d)\n", ciphertext.Level(), params.LogQLvl(ciphertext.Level()))
+	fmt.Println("Consumed levels:", params.MaxLevel()-ciphertext.Level())
 	fmt.Printf("Scale: 2^%f\n", math.Log2(ciphertext.Scale))
 	fmt.Printf("ValuesTest: %6.10f %6.10f %6.10f %6.10f...\n", valuesTest[0], valuesTest[1], valuesTest[2], valuesTest[3])
 	fmt.Printf("ValuesWant: %6.10f %6.10f %6.10f %6.10f...\n", valuesWant[0], valuesWant[1], valuesWant[2], valuesWant[3])
@@ -24,7 +25,21 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 
 	fmt.Println(precStats.String())
+	fmt.Println("Distance:")
+	fmt.Println(plainUtils.Distance(plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant)))
 	fmt.Println()
+
+	return
+}
+
+func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
+	for i := 0; i < X.RowP; i++ {
+		for j := 0; j < X.ColP; j++ {
+			//because the plaintext in X.Blocks is the matrix transposed and flattened, so transpose the plaintext
+			pt := plainUtils.MatToArray(plainUtils.TransposeDense(Pt.Blocks[i][j]))
+			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), Box)
+		}
+	}
 
 	return
 }

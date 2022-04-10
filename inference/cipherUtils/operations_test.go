@@ -5,8 +5,10 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -21,8 +23,8 @@ v
 func TestEncMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
-	LDim := []int{8, 4}
-	W0Dim := []int{4, 2}
+	LDim := []int{64, 10}
+	W0Dim := []int{10, 10}
 	W1Dim := []int{2, 4}
 
 	r := rand.New(rand.NewSource(0))
@@ -156,6 +158,7 @@ func TestEncMult(t *testing.T) {
 
 	var tmp mat.Dense
 	tmp.Mul(Lmat, W0mat)
+	CompareMatrices(B, len(L), len(W0[1]), &tmp, Box)
 	var res mat.Dense
 	res.Mul(&tmp, W1mat)
 	fmt.Println("________________-")
@@ -166,8 +169,8 @@ func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*4 < 2^logSlots
 	//ct x pt
 	LDim := []int{64, 29}
-	W0Dim := []int{29, 65}
-	W1Dim := []int{65, 10}
+	W0Dim := []int{29, 13}
+	W1Dim := []int{13, 10}
 	W2Dim := []int{10, 10}
 
 	//r := rand.New(rand.NewSource(0))
@@ -325,18 +328,17 @@ func TestEncPlainMult(t *testing.T) {
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
 }
 
-/*
 func TestEvalPoly(t *testing.T) {
 	//Evaluates a polynomial on ciphertext
 	LDim := []int{64, 64}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
 
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40},
-		LogP:         []int{61, 61},
+		LogN:         14,
+		LogQ:         []int{60, 40, 40, 40, 40, 40, 40, 40, 40, 40}, //6 x 43 + 3 x 60 --> Log(Q) <= 438 for LogN 14
+		LogP:         []int{41, 41, 41},
 		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
+		LogSlots:     13,
 		DefaultScale: float64(1 << 40),
 	})
 	if err != nil {
@@ -363,17 +365,26 @@ func TestEvalPoly(t *testing.T) {
 	interval := 10.0                         //--> incorporate this in weight matrix to spare a level
 	poly := ckks.NewPoly(plainUtils.RealToComplex(coeffs))
 
-	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(L), Box)
-	eval.MultByConst(ctL, float64(1/interval), ctL)
-	if err := eval.Rescale(ctL, params.DefaultScale(), ctL); err != nil {
-		panic(err)
-	}
+	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(plainUtils.MulByConst(L, 1.0/interval)), Box)
+	fmt.Println("Before", ctL.Level())
 	ct, err := eval.EvaluatePoly(ctL, poly, ctL.Scale)
+	fmt.Println("After", ct.Level())
+	fmt.Println("Deg", poly.Degree())
 	fmt.Println("Done... Consumed levels:", params.MaxLevel()-ct.Level())
 
-	sn := new(modelsPlain.SimpleNet)
-	sn.InitActivation()
-	sn.ActivatePlain(L)
+	func(X *mat.Dense, interval float64, degree int, coeffs []float64) {
+		rows, cols := X.Dims()
+		for r := 0; r < rows; r++ {
+			for c := 0; c < cols; c++ {
+				v := X.At(r, c) / float64(interval)
+				res := 0.0
+				for deg := 0; deg < degree; deg++ {
+					res += (math.Pow(v, float64(deg)) * coeffs[deg])
+				}
+				X.Set(r, c, res)
+			}
+		}
+	}(L, interval, 3, coeffs)
 
 	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
@@ -434,4 +445,3 @@ func TestBootstrap(t *testing.T) {
 	CompareMatrices(ct2, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct2, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
 }
-*/

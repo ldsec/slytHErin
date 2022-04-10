@@ -47,7 +47,7 @@ type PlainWeightDiag struct {
 	InnerCols  int
 }
 
-func NewPlainInput(X [][]float64, rowP, colP int, Box CkksBox) (*PlainInput, error) {
+func NewPlainInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*PlainInput, error) {
 	Xm := plainUtils.NewDense(X)
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
@@ -63,13 +63,13 @@ func NewPlainInput(X [][]float64, rowP, colP int, Box CkksBox) (*PlainInput, err
 	for i := 0; i < rowP; i++ {
 		XPlain.Blocks[i] = make([]*ckks.Plaintext, colP)
 		for j := 0; j < colP; j++ {
-			XPlain.Blocks[i][j] = EncodeInput(Box.Params.MaxLevel(), plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
+			XPlain.Blocks[i][j] = EncodeInput(level, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
 		}
 	}
 	return XPlain, nil
 }
 
-func NewEncInput(X [][]float64, rowP, colP int, Box CkksBox) (*EncInput, error) {
+func NewEncInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*EncInput, error) {
 	Xm := plainUtils.NewDense(X)
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
@@ -85,7 +85,7 @@ func NewEncInput(X [][]float64, rowP, colP int, Box CkksBox) (*EncInput, error) 
 	for i := 0; i < rowP; i++ {
 		XEnc.Blocks[i] = make([]*ckks.Ciphertext, colP)
 		for j := 0; j < colP; j++ {
-			XEnc.Blocks[i][j] = EncryptInput(Box.Params.MaxLevel(), plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
+			XEnc.Blocks[i][j] = EncryptInput(level, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
 		}
 	}
 	return XEnc, nil
@@ -110,13 +110,14 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 			//this is flatten(x.T)
 			resReal := plainUtils.ComplexToReal(ptArray)[:XEnc.InnerRows*XEnc.InnerCols]
 			res := plainUtils.TransposeDense(mat.NewDense(XEnc.InnerCols, XEnc.InnerRows, resReal))
+			// now this is x
 			Xb.Blocks[i][j] = res
 		}
 	}
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*EncWeightDiag, error) {
+func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
@@ -135,7 +136,7 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) 
 		for j := 0; j < colP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
 			WEnc.Blocks[i][j] = new(EncDiagMat)
-			WEnc.Blocks[i][j].Diags = EncryptWeights(Box.Params.MaxLevel(), plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
+			WEnc.Blocks[i][j].Diags = EncryptWeights(level, plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
 			WEnc.NumDiags = len(WEnc.Blocks[i][j].Diags)
 		}
 	}
@@ -143,7 +144,7 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) 
 	return WEnc, nil
 }
 
-func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox) (*PlainWeightDiag, error) {
+func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	if err != nil {
@@ -162,7 +163,7 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, Box CkksBox
 		for j := 0; j < colP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
 			Wp.Blocks[i][j] = new(PlainDiagMat)
-			Wp.Blocks[i][j].Diags = EncodeWeights(Box.Params.MaxLevel(), plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
+			Wp.Blocks[i][j].Diags = EncodeWeights(level, plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
 			Wp.NumDiags = len(Wp.Blocks[i][j].Diags)
 		}
 	}
