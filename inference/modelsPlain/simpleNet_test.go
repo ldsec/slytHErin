@@ -220,12 +220,12 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 
 	//crypto
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 57, 57, 57, 57, 57, 57, 57}, //9 x 60 --> Log(Q) <= 881 for LogN 15
-		LogP:         []int{61, 61, 61},
+		LogN:         14,
+		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(Q) <= 438 for LogN 14
+		LogP:         []int{43, 43, 43},
 		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 57),
+		LogSlots:     13,
+		DefaultScale: float64(1 << 40),
 	})
 	//ckksParams := bootstrapping.DefaultCKKSParameters[4]
 	//btpParams := bootstrapping.DefaultParameters[4]
