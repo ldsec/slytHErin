@@ -88,21 +88,14 @@ if __name__ == '__main__':
     models = [(x,torch.load(x)) for x in glob.iglob("*.pt")]
     for name,m in models:
         if "SimpleNet" in name:
-            j_name = "simpleNet"
-            packed = pack_simpleNet(m)
-            with open(f'{j_name}.json', 'w') as f:
-                json.dump(packed, f)
-        #elif "AlexNet" in name:
-        #    j_name = "alexNet"
-        #    format = format_AlexNet
-        #    if "simplified" in name:
-        #        j_name += "_simplified"
-        #print(f"Serializing {j_name}...")
-        #serialized = {}
-        #for p_name, param in m.named_parameters():
-        #    serialized[p_name] = extract_param(j_name, p_name, param)
-        #serialized = format(serialized)
-        #with open(f'{j_name}.json', 'w') as f:
-        #    json.dump(serialized, f)
-        #print()
-        #print("Done!")
+        #    j_name = "simpleNet"
+        #    packed = pack_simpleNet(m)
+        #    with open(f'{j_name}.json', 'w') as f:
+        #        json.dump(packed, f)
+            continue
+        elif "AlexNet" in name and "simplified" in name:
+            j_name = "alexNet_simplified"
+            format = format_AlexNet
+            #if "simplified" in name:
+            #    j_name += "_simplified"
+            pack_alexNet(m)

@@ -79,21 +79,69 @@ class AlexNet(nn.Module):
     
 
   def forward(self,x):
+    '''
+    Sizes for batch 128:
+      torch.Size([128, 3, 227, 227])
+      Conv1
+      torch.Size([128, 64, 56, 56])
+      Pool1
+      torch.Size([128, 64, 27, 27]) <<
+      Conv2
+      torch.Size([128, 192, 27, 27])
+      Pool1
+      torch.Size([128, 192, 13, 13])
+      Conv3
+      torch.Size([128, 384, 13, 13])
+      Conv4
+      torch.Size([128, 256, 13, 13])
+      Conv5
+      torch.Size([128, 256, 13, 13])
+      Pool1
+      torch.Size([128, 256, 6, 6])
+      Pool2
+      torch.Size([128, 256, 6, 6])
+      Reshape
+      torch.Size([128, 9216])
+      Final
+      torch.Size([128, 10])
+    '''
+    print("Start")
+    print(x.shape)
     x = self.relu(self.conv1(x))
+    print("Conv1")
+    print(x.shape)
     x = self.pool1(x)
-    #print("Conv1-Pool",x.max())
+    print("Pool1")
+    print(x.shape)
     x = self.relu(self.conv2(x))
+    print("Conv2")
+    print(x.shape)
     x = self.pool1(x)
-    #print("Conv2-Pool",x.max())
+    print("Pool1")
+    print(x.shape)
     x = self.relu(self.conv3(x))
+    print("Conv3")
+    print(x.shape)
     x = self.relu(self.conv4(x))
+    print("Conv4")
+    print(x.shape)
     x = self.relu(self.conv5(x))
+    print("Conv5")
+    print(x.shape)
     #print("Conv5",x.max())
     x = self.pool1(x)
+    print("Pool1")
+    print(x.shape)
     x = self.pool2(x)
+    print("Pool2")
+    print(x.shape)
     #print("Pools",x.max())
     x = x.reshape(x.shape[0], -1)
+    print("Reshape")
+    print(x.shape)
     x = self.classifier(x)
+    print("Final")
+    print(x.shape)
     return x
 
 #########################
@@ -127,4 +175,4 @@ if __name__ == "__main__":
   model = AlexNet(simplified=simplified, verbose=verbose).to(device=device)
   train(logger, model, dataHandler, 50, lr=lr, TPU=False) ##if simplified set lr=0.001
   eval(logger, model, dataHandler)
-  torch.save(model, f"{name}.pt")
+  #torch.save(model, f"{name}.pt")
