@@ -1,13 +1,12 @@
-from re import A
 import numpy as np
 import torch
 import math
 from collections import deque
-from activation import relu_approx
+from activation import relu_approx, sigmoid_approx
 from dataHandler import DataHandler, DataHandlerAlex
 from cryptonet import SimpleNet
 import time
-
+import sys
 """
     This script contains test evaluated with the original model in pytorch
     of different linear approximations of the convolutional layers
@@ -213,55 +212,12 @@ def format_SimpleNet(serialized):
         formatted[l] = l_dict
     return formatted
 
-def pack_conv_kernel_parallel(conv, kernel_size, stride, input_dim):
-    """
-        this returns num kernel matrixes to do the convolution with smaller ciphers
-        i.e kernel_matrices = [k1,k2...] where ki is:
-        |      |   |      |
-        |ki_ch1|...|ki_chn|
-        |000000|000|000000| -> pad to square
-    """
-    kernel_matrices = []
-    for kernel in conv:
-        channel_matrices = [] 
-        for channel in kernel:
-            m = gen_kernel_matrix(channel,kernel_size=kernel_size,stride=stride,dim=input_dim)
-            channel_matrices.append(np.array(m))
-        channelM = np.hstack(channel_matrices)
-        rows = len(channelM)
-        cols = len(channelM[0])
-        ##pad to make square
-        while (rows%2)!=0 :
-            channelM = np.vstack([channelM, np.zeros(cols)])
-            rows = len(channelM)
-        kernel_matrices.append(channelM.T)
-    return kernel_matrices
+#####################################
+#                                   #
+#               PACKING             #
+#                                   #
+#####################################
 
-def pack_pool_channels_parallel(pool):
-    """
-        returns n matrices, according to the output channel of previous layer.
-        Example if this is pool1 of SimpleNet, previous layer has 5 output channels,
-        then this func returns 5 matrices. Each matrix is:
-        |       |...|       |
-        |chi_k1 |...|chi_kn | for i in range(5)
-        |0000000|...|       | -> pad
-    """
-    num_kernels, num_channels = pool.shape[0],pool.shape[1]
-    kernel_matrices = []
-    for i in range(num_channels):
-        kernel_matrix = []
-        for j in range(num_kernels):
-            kernel_matrix.append(pool[j][i].flatten())
-        kernel_matrix = np.vstack(kernel_matrix).T
-        rows = len(kernel_matrix)
-        cols = len(kernel_matrix[0])
-        ##pad to make square
-        while (rows%2)!=0:
-            kernel_matrix = np.vstack([kernel_matrix, np.zeros(cols)])
-            rows = len(kernel_matrix)
-        kernel_matrices.append(kernel_matrix)
-    return kernel_matrices
-    
 def pack_conv(conv, kernel_size, stride, input_dim):
     """
         Pack kernel matrixes, each kernel filter in Toepltiz representation
@@ -284,6 +240,24 @@ def pack_conv(conv, kernel_size, stride, input_dim):
     convM = np.vstack(kernel_matrices)
     rows, cols = convM.T.shape
     return {'w': [x.item() for x in convM.T.flatten()], 'rows': rows, 'cols': cols}, convM.T
+
+
+def pack_conv_parallel(conv, kernel_size, stride, input_dim):
+    """
+        returns f lists of n matrices, according to input channels and output channels of this layer.
+        Example if this is pool1 of SimpleNet, it has 5 input and 100 output channels.
+        Each list will be:
+        [m(ch_1),...,m(ch_5)] for i = 1,...,100 (# kernels)
+        where m(ch_1) @ X.T is X * ch_1
+    """
+    kernels = []
+    for kernel in conv: #output_chan
+        filters = []
+        for filter in kernel: #input chan
+            m = gen_kernel_matrix(filter,kernel_size=kernel_size,stride=stride,dim=input_dim)
+            filters.append(np.array(m))
+        kernels.append(filters)
+    return kernels
 
 def pack_pool(pool):
     """
@@ -322,6 +296,19 @@ def pack_bias(b, channels, replication):
         idx = i // replication
         bias[i] = b[idx].item()
     return {'b': bias, 'len': channels*replication}
+
+def pack_bias_parallel(b, size):
+    """
+        Given b = [b1,...,bn]
+        returns:
+        <--size-->
+        [[b1,...,b1],
+        ...
+        [bn,...,bn]]
+        where each bi vector of <size>-len is tranposed to be compatible with the gen_kernel_matrix format
+    """
+    return [np.array([b[i] for _ in range(size)]).T for i in range(len(b))]
+    
 
 '''
 Pack methods: return model in json form ready to be shipped to Go implementation
@@ -365,9 +352,42 @@ def compress_layers(A, biasA, B, biasB):
     inputs are packed bias and layer matrix tranposed as per pack methods
     """
     C = A @ B
-    biasC = np.array(biasA['b']) @ B + np.array(biasB['b'])
+    biasC = np.array(biasA['b']) @ B
+    if biasB != None:
+        biasC = biasC + np.array(biasB['b'])
     l = [x.item() for x in biasC]
     return C, {'b':l, 'len':len(l)}
+
+def compress_layers_parallel(A,biasA,B,biasB):
+    """
+        compress layers in parallel form
+        here we have B(A @ X.T + biasA)+biasB
+        Assume that A has d input channels and n output channels
+        Assume that A is followed by B
+        B takes n input channels and m output channels
+        Result will have d input and m output channels and m bias values
+    """
+    output_channels = len(B)
+    mid_channels = len(A)
+    if mid_channels != len(B[0]):
+        sys.exit("Fatal: parallel layer dim mismatch")
+    input_channels = len(A[0])
+
+    output = [[] for _ in range(output_channels)]
+    for i in range(output_channels):
+        for j in range(input_channels):
+            tmp = B[0][0] @ A[0][0]
+            for k in range(1,mid_channels):
+                tmp = tmp + B[i][k] @ A[k][j]
+            output[i].append(tmp)
+    
+    bias = []
+    for i in range(output_channels):
+        tmp = B[0][0] @ biasA[0]
+        for j in range(1,mid_channels):
+            tmp = tmp + B[i][j] @ biasA[j]
+        bias.append(tmp + biasB[i])
+    return output, bias
 
 def gen_padding_matrix(input_dim, chans, pad):
     '''
@@ -424,7 +444,7 @@ def gen_padding_matrix(input_dim, chans, pad):
     #        P = np.vstack((P, colpad))
     #    P = np.vstack((P, rowpad))
 
-    return np.array(P)
+    return np.array(P).T
     
 def test_pad():
     input_dim = 20
@@ -432,8 +452,6 @@ def test_pad():
     pad = 2
     l = []
     l_pad = []
-    print("Creating pad")
-    start = time.time()
     for i in range(chans):
         tmp = np.random.rand(input_dim, input_dim)
         tmp_pad = np.pad(tmp, pad, 'constant', constant_values=0)
@@ -450,11 +468,14 @@ def test_pad():
             A_pad.append(l_pad[i][j])
     A = np.array(A)
     A_pad = np.array(A_pad)
+    print("Creating pad")
+    start = time.time()
     P = gen_padding_matrix(input_dim,chans,pad)
-    print("Computing the mul")
-    Ap = P @ A.T
     print("Done")
     print(time.time()-start)
+    print("Computing the mul")
+    Ap = P @ A.T
+    
     print("Dist")
     print(np.linalg.norm(Ap-A_pad))
 
@@ -490,40 +511,44 @@ def pack_alexNet(model):
     bias_dense3 = np.array(serialized['classifier.6']['bias'])
 
     #linearize layers
-    conv1MD, conv1MT = pack_conv(conv1,11,4,229)
-    bias_conv1M = pack_bias(bias_conv1, 64, 56)
+    #conv1MD, conv1MT = pack_conv(conv1,11,4,229)
+    conv1M = pack_conv_parallel(conv1, 11, 4, 227+2*2)
+    bias_conv1M = pack_bias_parallel(bias_conv1, 56*56)
 
-    pool1AMD, pool1AMT = pack_conv(pool1,3,2,56)
-    bias_pool1AM = pack_bias(bias_pool1, 64, 27)
+    pool1AM = pack_conv_parallel(pool1,3,2,56)
+    bias_pool1AM = pack_bias_parallel(bias_pool1, 27*27)
 
-    conv2MD, conv2MT = pack_conv(conv2,5,1,29)
-    bias_conv2M = pack_bias(bias_conv2, 64, 27)
+    conv2M= pack_conv_parallel(conv2,5,1,29)
+    bias_conv2M = pack_bias_parallel(bias_conv2,  27*27)
 
-    pool1BMD, pool1BMT = pack_conv(pool1,3,2,27)
-    bias_pool1BM = pack_bias(bias_pool1, 192, 13)
+    pool1BMD = pack_conv_parallel(pool1,3,2,27)
+    bias_pool1BM = pack_bias_parallel(bias_pool1,13*13)
 
-    conv3MD, conv3MT = pack_conv(conv3,3,1,14)
-    bias_conv3M = pack_bias(bias_conv3, 384,13)
+    conv3MD = pack_conv_parallel(conv3,3,1,14)
+    bias_conv3M = pack_bias_parallel(bias_conv3, 13*13)
     
-    conv4MD, conv4MT = pack_conv(conv4,3,1,14)
-    bias_conv4M = pack_bias(bias_conv4, 256,13)
+    conv4MD = pack_conv_parallel(conv4,3,1,14)
+    bias_conv4M = pack_bias_parallel(bias_conv4, 13*13)
 
-    conv5MD, conv5MT = pack_conv(conv5,3,1,14)
-    bias_conv5M = pack_bias(bias_conv5, 256,13)
+    conv5MD= pack_conv_parallel(conv5,3,1,14)
+    bias_conv5M = pack_bias_parallel(bias_conv5, 13*13)
 
-    pool1CMD, pool1CMT = pack_conv(pool1,3,2,13)
-    bias_pool1CM = pack_bias(bias_pool1, 256, 6)
+    pool1CMD = pack_conv_parallel(pool1,3,2,13)
+    bias_pool1CM = pack_bias_parallel(bias_pool1,6*6)
 
-    pool2MD, pool2MT = pack_conv(pool1,3,1,7)
-    bias_pool2M = pack_bias(bias_pool2, 256, 6)
+    pool2MD = pack_conv_parallel(pool1,3,1,7)
+    bias_pool2M = pack_bias_parallel(bias_pool2, 6*6)
 
     #compress layers
+    pool1AMT, bias_pool1AM = compress_layers(pool1AMT, bias_pool1AM, gen_padding_matrix(25,64,2), None)
     pool1_conv2MT, bias_pool1_conv2 = compress_layers(pool1AMT, bias_pool1AM, conv2MT, bias_conv2M)
     pool1_conv2MD = assemble_layer_from_matrix(pool1_conv2MT)
 
+    pool1BMT, bias_pool1BM = compress_layers(pool1BMT, bias_pool1BM, gen_padding_matrix(13,192,1), None)
     pool1_conv3MT, bias_pool1_conv3 = compress_layers(pool1BMT, bias_pool1BM, conv3MT, bias_conv3M)
     pool1_conv3MD = assemble_layer_from_matrix(pool1_conv3MT)
 
+    pool1CMT, bias_pool1CM = compress_layers(pool1CMT, bias_pool1CM, gen_padding_matrix(6,256,1), None)
     pool1_pool2, bias_pool1_pool2 = compress_layers(pool1CMT, bias_pool1BM,pool2MT, bias_pool2M)
     pool1_pool2MD = assemble_layer_from_matrix(pool1_pool2)
 
@@ -761,7 +786,7 @@ if __name__ == "__main__":
     #print(f"Accuracy torch {correct_pytorch/tot}")
     #print(f"Accuracy conv {correct_conv/tot}")
     #print(f"Accuracy linear {correct_linear/tot}")
-    """
+
     ## TEST 5 -> AlexNet simplified (what about the padding in between?)
     device = torch.device('cpu')
     #torch_model = SimpleNet(64, 'relu_approx', 'none', 'xavier', False)
@@ -774,7 +799,7 @@ if __name__ == "__main__":
     ##packed model
     serialized = serialize_model(torch_model, format_AlexNet)
 
-    # reshape(chan_out, chan_in, k_size,k_size)
+     # reshape(chan_out, chan_in, k_size,k_size)
     conv1 = np.array(serialized['conv1']['weight']).reshape(64,3,11,11)
     conv2 = np.array(serialized['conv2']['weight']).reshape(192,64,5,5)
     conv3 = np.array(serialized['conv3']['weight']).reshape(384,192,3,3)
@@ -785,6 +810,7 @@ if __name__ == "__main__":
     dense1 = np.array(serialized['classifier.1']['weight']).reshape(1,1,9216,4096)
     dense2 = np.array(serialized['classifier.4']['weight']).reshape(1,1,4096,4096)
     dense3 = np.array(serialized['classifier.6']['weight']).reshape(1,1,4096,10)
+
 
     bias_conv1 = np.array(serialized['conv1']['bias'])
     bias_conv2 = np.array(serialized['conv2']['bias'])
@@ -798,42 +824,62 @@ if __name__ == "__main__":
     bias_dense3 = np.array(serialized['classifier.6']['bias'])
 
     #linearize layers
-    conv1MD, conv1MT = pack_conv(conv1,11,4,227+2*2)
+    conv1MD, conv1MT = pack_conv(conv1,11,4,229)
     bias_conv1M = pack_bias(bias_conv1, 64, 56)
 
     pool1AMD, pool1AMT = pack_conv(pool1,3,2,56)
     bias_pool1AM = pack_bias(bias_pool1, 64, 27)
 
-    conv2MD, conv2MT = pack_conv(conv2,5,1,27+2*2)
+    conv2MD, conv2MT = pack_conv(conv2,5,1,29)
     bias_conv2M = pack_bias(bias_conv2, 64, 27)
 
     pool1BMD, pool1BMT = pack_conv(pool1,3,2,27)
     bias_pool1BM = pack_bias(bias_pool1, 192, 13)
 
-    conv3MD, conv3MT = pack_conv(conv3,3,1,13+1*2)
+    conv3MD, conv3MT = pack_conv(conv3,3,1,14)
     bias_conv3M = pack_bias(bias_conv3, 384,13)
     
-    conv4MD, conv4MT = pack_conv(conv4,3,1,13+1*2)
+    conv4MD, conv4MT = pack_conv(conv4,3,1,14)
     bias_conv4M = pack_bias(bias_conv4, 256,13)
 
-    conv5MD, conv5MT = pack_conv(conv5,3,1,13+1*2)
+    conv5MD, conv5MT = pack_conv(conv5,3,1,14)
     bias_conv5M = pack_bias(bias_conv5, 256,13)
 
     pool1CMD, pool1CMT = pack_conv(pool1,3,2,13)
     bias_pool1CM = pack_bias(bias_pool1, 256, 6)
 
-    pool2MD, pool2MT = pack_conv(pool1,3,1,6+1*2)
+    pool2MD, pool2MT = pack_conv(pool1,3,1,7)
     bias_pool2M = pack_bias(bias_pool2, 256, 6)
 
     #compress layers
+    pool1AMT, bias_pool1AM = compress_layers(pool1AMT, bias_pool1AM, gen_padding_matrix(25,64,2), None)
     pool1_conv2MT, bias_pool1_conv2 = compress_layers(pool1AMT, bias_pool1AM, conv2MT, bias_conv2M)
     pool1_conv2MD = assemble_layer_from_matrix(pool1_conv2MT)
 
+    pool1BMT, bias_pool1BM = compress_layers(pool1BMT, bias_pool1BM, gen_padding_matrix(13,192,1), None)
     pool1_conv3MT, bias_pool1_conv3 = compress_layers(pool1BMT, bias_pool1BM, conv3MT, bias_conv3M)
     pool1_conv3MD = assemble_layer_from_matrix(pool1_conv3MT)
 
-    pool1_pool2, bias_pool1_pool2 = compress_layers(pool1CMT, bias_pool1BM,pool2MT, bias_pool2M)
-    pool1_pool2MD = assemble_layer_from_matrix(pool1_pool2)
+    conv4MT = gen_padding_matrix(13,384,1) @ conv4MT
+    conv5MT = gen_padding_matrix(13,256,1) @ conv5MT
+    conv4MD = assemble_layer_from_matrix(conv4MT)
+    conv5MD = assemble_layer_from_matrix(conv5MT)
+
+    pool1CMT, bias_pool1CM = compress_layers(pool1CMT, bias_pool1CM, gen_padding_matrix(6,256,1), None)
+    pool1_pool2MT, bias_pool1_pool2 = compress_layers(pool1CMT, bias_pool1BM,pool2MT, bias_pool2M)
+    pool1_pool2MD = assemble_layer_from_matrix(pool1_pool2MT)
+
+    packed = {}
+    packed['conv1'] = {'weight':conv1MD, 'bias': bias_conv1M}
+    packed['conv2'] = {'weight':pool1_conv2MD, 'bias': bias_pool1_conv2}
+    packed['conv3'] = {'weight':pool1_conv3MD, 'bias': bias_pool1_conv3}
+    packed['conv4'] = {'weight':conv4MD, 'bias': bias_conv4M}
+    packed['conv5'] = {'weight':conv5MD, 'bias': bias_conv5M}
+    packed['pool'] = {'weight':pool1_pool2MD, 'bias': bias_pool1_pool2}
+    packed['dense1'] = {'weight':pack_linear(dense1), 'bias':{'b': [x.item() for x in bias_dense1], 'len':len(bias_dense1)}}
+    packed['dense2'] = {'weight':pack_linear(dense2), 'bias':{'b': [x.item() for x in bias_dense2], 'len':len(bias_dense2)}}
+    packed['dense3'] = {'weight':pack_linear(dense3), 'bias':{'b': [x.item() for x in bias_dense3], 'len':len(bias_dense3)}}
+
 
     dh = DataHandlerAlex("MNIST", 64, False)
     correct_linear = 0
@@ -855,72 +901,58 @@ if __name__ == "__main__":
         d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
         ##conv2
-        d1T = torch.from_numpy(d1)
-        d1T = torch.nn.functional.pad(d1T,(2,2,2,2))
-        d1 = flat_tensor(d1T)
         d1 = d1 @ pool1_conv2MT
         for i in range(d1.shape[0]):
             d1[i] = d1[i] + bias_pool1_conv2['b']
         d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
         ##conv3
-        d1T = torch.from_numpy(d1)
-        d1T = torch.nn.functional.pad(d1T,(1,1,1,1))
-        d1 = flat_tensor(d1T)
         d1 = d1 @ pool1_conv3MT
         for i in range(d1.shape[0]):
             d1[i] = d1[i] + bias_pool1_conv3['b']
         d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
         ##conv4
-        d1T = torch.from_numpy(d1)
-        d1T = torch.nn.functional.pad(d1T,(1,1,1,1))
-        d1 = flat_tensor(d1T)
         d1 = d1 @ conv4MT
         for i in range(d1.shape[0]):
             d1[i] = d1[i] + bias_conv4['b']
         d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
         ##conv5
-        d1T = torch.from_numpy(d1)
-        d1T = torch.nn.functional.pad(d1T,(1,1,1,1))
-        d1 = flat_tensor(d1T)
         d1 = d1 @ conv5MT
         for i in range(d1.shape[0]):
             d1[i] = d1[i] + bias_conv5['b']
         d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
         ##pool
+        d1 = d1 @ pool1_pool2MT
+        for i in range(d1.shape[0]):
+            d1[i] = d1[i] + bias_pool1_pool2['b']
 
-        c3 = torch.nn.functional.conv2d(c2.reshape(64,1,100,1), torch.from_numpy(pool2),bias=torch.from_numpy(b3), stride=1000)
-        c3 = relu_approx(c3)
-        c3 = c3.reshape(c3.shape[0],-1)
-        _, pool2M = pack_pool(pool2)
-        d3 = d2 @ pool2M
+        ##dense
+        d1 = d1 @ dense1
+        for i in range(d1.shape[0]):
+            d1[i] = d1[i] + bias_dense1['b']
+        d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
-        ##parallelized
-        pool2_matrixes = pack_pool_channels_parallel(pool2)
-        d3_p = d2_p @ pool2_matrixes[0]
+        d1 = d1 @ dense2
+        for i in range(d1.shape[0]):
+            d1[i] = d1[i] + bias_dense2['b']
+        d1 = relu_approx(torch.from_numpy(d1)).numpy()
 
-        bias = pack_bias(b3,10,1)
-        for i in range(d2.shape[0]):
-            d3[i] = d3[i] + bias['b']
-            d3_p[i] = d3_p[i] + bias['b']
-        d3 = relu_approx(torch.from_numpy(d3)).numpy()
-        d3_p = relu_approx(torch.from_numpy(d3_p)).numpy()
-        dist = np.linalg.norm(c3.numpy()-d3_p)
-        print("pool2", dist)
-        #print(d3.shape)
-        _,pred = torch_model(X_torch.double()).max(1)
-        _,pred_c = c3.max(1)
-        pred_l = np.argmax(d3_p,axis=1)
+        d1 = d1 @ dense3
+        for i in range(d1.shape[0]):
+            d1[i] = d1[i] + bias_dense3['b']
+        d1 = sigmoid_approx(torch.from_numpy(d1)).numpy()
+
+        out = torch_model(X_torch.double())
+        _,pred = out.max(1)
+        print("DIst")
+        np.linalg.dist(d1-out.to_numpy().reshape(d1.shape))
+        pred_l = np.argmax(d1,axis=1)
         correct_pytorch = correct_pytorch + (pred == Y).sum().item()
-        correct_conv = correct_conv + (pred_c == Y).sum().item()
         correct_linear = correct_linear + np.sum(pred_l == Y.numpy())
         tot = tot + Y.shape[0]
     print(f"Accuracy torch {correct_pytorch/tot}")
-    print(f"Accuracy conv {correct_conv/tot}")
     print(f"Accuracy linear {correct_linear/tot}")
-    """
-    test_pad()
-    
+

@@ -180,7 +180,6 @@ func TestEvalDataEncModelClear(t *testing.T) {
 		fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 		corrects += res.Corrects
 		tot += batchSize
-		break
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 }
@@ -298,6 +297,8 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 
 	corrects := 0
 	tot := 0
+	iters := 0
+	var elapsed int64
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
 		if err != nil {
@@ -310,7 +311,9 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 		corrects += res.Corrects
 		tot += batchSize
-		break
+		elapsed += res.Time.Milliseconds()
+		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	fmt.Println("Latency:", float64(elapsed)/float64(iters))
 }

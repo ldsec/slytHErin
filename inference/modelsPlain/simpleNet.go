@@ -50,6 +50,7 @@ type SimpleNetPipeLine struct {
 	OutPool2    *mat.Dense
 	Predictions []int
 	Corrects    int
+	Time        time.Duration
 }
 
 /***************************
@@ -331,10 +332,6 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 
 	fmt.Println("Pool2")
 	BbF, err := cipherUtils.NewEncInput(cipherUtils.DecInput(Bb, Box), Bb.RowP, Bb.ColP, 7, Box)
-	pluto := Box.Decryptor.DecryptNew(BbF.Blocks[0][0])
-	resArray := Box.Encoder.DecodeSlots(pluto, 14)[:BbF.InnerRows*BbF.InnerCols]
-	cipherUtils.PrintDebug(Bb.Blocks[0][0], resArray, Box)
-	fmt.Println("__________________________---")
 	CC, err := cipherUtils.BlocksC2PMul(Bb, weightsBlock[2], Box)
 	CF, err := cipherUtils.BlocksC2PMul(BbF, weightsBlock[2], Box)
 	pool2Blocks, err := plainUtils.PartitionMatrix(buildKernelMatrix(sn.Pool2.Weight), weightsBlock[2].RowP, weightsBlock[2].ColP)
@@ -422,7 +419,7 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	fmt.Println("Loaded plaintext results")
 	//pipeline
 	now := time.Now()
-	fmt.Println("Compressed conv + pool", weightsBlock[0].Blocks[0][0].Diags[0].Level())
+	//fmt.Println("Compressed conv + pool", weightsBlock[0].Blocks[0][0].Diags[0].Level())
 	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
 	utils.ThrowErr(err)
 	fmt.Println("Adding bias")
@@ -430,12 +427,12 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	utils.ThrowErr(err)
 	fmt.Println("Activation")
 	cipherUtils.EvalPolyBlocks(Ab, sn.ReLUApprox.Coeffs, Box)
-	exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
-	utils.ThrowErr(err)
-	cipherUtils.CompareBlocks(Ab, exp, Box)
-	cipherUtils.PrintDebugBlocks(Ab, exp, Box)
-	cipherUtils.CompareBlocks(Ab, exp, Box)
-	cipherUtils.PrintDebugBlocks(Ab, exp, Box)
+	//exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+	//utils.ThrowErr(err)
+	//cipherUtils.PrintDebugBlocks(Ab, exp, Box)
+	//cipherUtils.CompareBlocks(Ab, exp, Box)
+	//cipherUtils.CompareBlocks(Ab, exp, Box)
+	//cipherUtils.PrintDebugBlocks(Ab, exp, Box)
 
 	fmt.Println("Pool2")
 	CC, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[1], Box)
@@ -449,11 +446,12 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	fmt.Println("Activation")
 	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
 	fmt.Println("______________________")
-	fmt.Println("Done", time.Since(now))
+	elapsed := time.Since(now)
+	fmt.Println("Done", elapsed)
 
-	exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
-	cipherUtils.CompareBlocks(Cb, exp, Box)
-	cipherUtils.PrintDebugBlocks(Cb, exp, Box)
+	//exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
+	//cipherUtils.CompareBlocks(Cb, exp, Box)
+	//cipherUtils.PrintDebugBlocks(Cb, exp, Box)
 	batchSize := len(XBatchClear)
 	res := cipherUtils.DecInput(Cb, Box)
 	predictions := make([]int, batchSize)
@@ -485,5 +483,6 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 		OutPool2:    plainUtils.NewDense(outPool2),
 		Predictions: predictions,
 		Corrects:    corrects,
+		Time:        elapsed,
 	}
 }
