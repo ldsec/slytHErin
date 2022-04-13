@@ -374,63 +374,88 @@ def gen_padding_matrix(input_dim, chans, pad):
     Generate a sparse matrix that adds padding to the result of a convolutional layer
     (i.e the one where each row is a flattened sample with adjacent channels)
     '''
-    c = chans*(input_dim**2)
-    r = chans*(2*pad*input_dim + input_dim*(pad*2+input_dim))
+    cols = chans*(input_dim**2)
+    rows = chans*(2*pad*(2*pad+input_dim) + input_dim*(input_dim+2*pad))
 
-    eyepool = []
-    block = np.zeros((input_dim,input_dim))
-    eye = np.eye(input_dim, dtype=float)
+    eyepool = [] #list of matrices
+    #block = np.zeros((input_dim,input_dim))
+    #eye = np.eye(input_dim, dtype=float)
     # we are sliding blocks of width input_dim, so divide c per input dim
     for i in range(chans*input_dim):
-        tmp = []
-        for j in range(chans*input_dim):
-            if i == j:
-                tmp.append(eye)
-            else:
-                tmp.append(block)
-        eyepool.append(tmp[0])
-        for j in range(1, len(tmp)):
-            eyepool[-1] = np.hstack((eyepool[-1],tmp[j]))
-    rowpad = np.zeros((pad*(input_dim+pad*2), c))
-    colpad = np.zeros((pad,c))
+        tmp = [[] for _ in range(input_dim)]
+        for r in range(input_dim):
+            tmp[r] = [0 for _ in range(chans*input_dim*input_dim)]
+        for r in range(input_dim):
+            tmp[r][r+i*input_dim] = 1
+        eyepool.append(tmp)
+        #for j in range(1, len(tmp)):
+        #    eyepool[-1] = np.hstack((eyepool[-1],tmp[j]))
 
-    P = rowpad
-    skip = True
+    #rowpad = np.zeros((pad*(input_dim+pad*2), cols))
+    #colpad = np.zeros((pad,cols))
+    rowpad = pad*(input_dim+pad*2)
+    colpad = pad
+
+    P = [[] for _ in range(rows)]
+    for r in range(rows):
+        P[r] = [0 for _ in range(cols)]
+    
     pool_counter = 0
-
-    for ch in range(chans):
-        if skip != True:
-            P = np.vstack((P, rowpad))
-        else:
-            skip = False
+    idx = 0
+    for _ in range(chans):
+        idx = idx + rowpad
         for row in range(input_dim):
-            P = np.vstack((P, colpad))
-            P = np.vstack((P, eyepool[pool_counter]))
+            idx = idx + colpad
+            for row_of_eye in range(len(eyepool[0])):
+                P[idx] = eyepool[pool_counter][row_of_eye]
+                idx = idx + 1
             pool_counter = pool_counter + 1
-            P = np.vstack((P, colpad))
-        P = np.vstack((P, rowpad))
-    return P
+            idx = idx + colpad
+        idx = idx + rowpad
+    #for ch in range(chans):
+    #    if skip != True:
+    #        P = np.vstack((P, rowpad))
+    #    else:
+    #        skip = False
+    #    for row in range(input_dim):
+    #        P = np.vstack((P, colpad))
+    #        P = np.vstack((P, eyepool[pool_counter]))
+    #        pool_counter = pool_counter + 1
+    #        P = np.vstack((P, colpad))
+    #    P = np.vstack((P, rowpad))
+
+    return np.array(P)
+    
 def test_pad():
-    input_dim = 27
+    input_dim = 20
     chans = 64
     pad = 2
     l = []
     l_pad = []
+    print("Creating pad")
     start = time.time()
     for i in range(chans):
         tmp = np.random.rand(input_dim, input_dim)
         tmp_pad = np.pad(tmp, pad, 'constant', constant_values=0)
-        l.append(tmp)
-        l_pad.append(tmp_pad)
-    A = l[0].flatten()
-    A_pad = l_pad[0].flatten()
-    for i in range(1,len(l)):
-        A = np.hstack((A, l[i].flatten()))
-        A_pad = np.hstack((A_pad, l_pad[i].flatten()))
+        l.append(list(tmp.flatten())) #tmp.flatten()
+        l_pad.append(list(tmp_pad.flatten()))
+    
+    A = []
+    A_pad = []
+    for i in range(len(l)):
+        for j in range(len(l[0])):
+            A.append(l[i][j])
+    for i in range(len(l_pad)):
+        for j in range(len(l_pad[0])):
+            A_pad.append(l_pad[i][j])
+    A = np.array(A)
+    A_pad = np.array(A_pad)
     P = gen_padding_matrix(input_dim,chans,pad)
+    print("Computing the mul")
     Ap = P @ A.T
     print("Done")
     print(time.time()-start)
+    print("Dist")
     print(np.linalg.norm(Ap-A_pad))
 
 def assemble_layer_from_matrix(M):
