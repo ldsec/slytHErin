@@ -2,6 +2,7 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 from torch.utils.data.dataloader import DataLoader
 import argparse
+import numpy as np
 from utils import single_to_multi_label
 import torch.nn.functional as F
 import json
@@ -44,14 +45,30 @@ class DataHandlerAlex():
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
       self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
 
-#dataHandler = DataHandler("MNIST", 128)
+class DataHandlerNN():
+  """
+    Specific loader for NN
+    Use Zama validation set of .npz samples
+  """
+  def __init__(self, path : str):
+      self.path = path
+      self.data = []
+      self.num_samples = 1000
+      
+      for idx in range(self.num_samples):
+        self.data.append(np.load(f"{path}/sample_{idx}.npz")["arr_0"].reshape(1,28,28))
+
+      with open(f"{path}/expected_results.txt", "r", encoding="utf-8") as f:
+        labels = f.readlines()
+      self.labels = list(map(int,labels))
+
 
 if __name__=="__main__":
   
   ## return the data for evaluation
 
   parser = argparse.ArgumentParser()
-  parser.add_argument("--model", help="simplenet or alexent")
+  parser.add_argument("--model", help="simplenet or alexnet")
   
   args = parser.parse_args()
   if args.model == "simplenet":

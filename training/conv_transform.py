@@ -643,7 +643,9 @@ def pack_nn(serialized, layers):
         serialized['conv']['weight']['rows'],
         serialized['conv']['weight']['cols'],
         1,
-        28,28)
+        28+2*1,28+2*1)
+    print(conv_matrix['cols'])
+    assert(conv_matrix['cols'] == 840)
     packed['conv'] = {
         'weight': conv_matrix,
         'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, serialized['dense_1']['weight']['rows']//num_chans)}
