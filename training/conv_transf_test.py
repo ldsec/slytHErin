@@ -82,7 +82,7 @@ if __name__ == "__main__":
     kernel = np.random.rand(2,11,10)
     M = []
     for k in kernel:
-        M.append(gen_kernel_matrix(k,11,10,2,28,28,True))
+        M.append(gen_kernel_matrix_rect(k,11,10,2,28,28,True))
 
     data_t = torch.from_numpy(data).reshape(2,1,28,28)
     k_t = torch.from_numpy(kernel).reshape(2,1,11,10)
@@ -100,36 +100,37 @@ if __name__ == "__main__":
     print(abs(np.average(np.array(loss))))
 
     ### TEST 1 --> simpleNet simple convolution 
-    #with open("./models/simpleNet.json") as f:
-    #    model = json.loads(f.read())
-    #    k = np.array(model['conv1']['weight']).reshape(5,5,5)
-    #    M = []
-    #    M_JP = []
-    #    for kernel in k:
-    #        M_JP.append(gen_kernel_matrix_JP(kernel,2,2,29))
-    #        M.append(gen_kernel_matrix(kernel,5,2,29,True))
-#
-    #    data = np.random.rand(2,29,29)
-#
-    #    data_t = torch.from_numpy(data).reshape(2,1,29,29)
-    #    k_t = torch.from_numpy(k).reshape(5,1,5,5)
-    #    c = torch.nn.functional.conv2d(data_t,k_t,stride=2, groups=1).reshape(2,5,13,13)
-    #    c_1 = torch.nn.functional.conv2d(data_t[0].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
-    #    c_2 = torch.nn.functional.conv2d(data_t[1].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
-    #    loss = []
-    #    data = data.reshape(2,841)
-    #    for j in range(2):
-    #        for i,m in enumerate(M):
-    #            a = c[j][i].flatten()
-    #            a = a.flatten()
-    #            b = data @ m
-    #            #print("Diff between conv and transform_conv:")
-    #            dist = np.linalg.norm(a.numpy()-b[j].flatten())
-    #            #print("conv:",a.numpy())
-    #            #print("linear:",b)
-    #            loss.append(dist)
-    #    print("Avg euclidean distance between conv and transform_conv:")
-    #    print(abs(np.average(np.array(loss))))
+    with open("./models/simpleNet.json") as f:
+        model = json.loads(f.read())
+        #k = np.array(model['conv1']['weight']).reshape(5,5,5)
+        k = np.random.rand(5,5,5)
+        M = []
+        M_JP = []
+        for kernel in k:
+            #M_JP.append(gen_kernel_matrix_JP(kernel,2,2,29))
+            M.append(gen_kernel_matrix(kernel,5,2,29,True))
+
+        data = np.random.rand(2,29,29)
+
+        data_t = torch.from_numpy(data).reshape(2,1,29,29)
+        k_t = torch.from_numpy(k).reshape(5,1,5,5)
+        c = torch.nn.functional.conv2d(data_t,k_t,stride=2, groups=1).reshape(2,5,13,13)
+        c_1 = torch.nn.functional.conv2d(data_t[0].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
+        c_2 = torch.nn.functional.conv2d(data_t[1].reshape(1,1,29,29),k_t,stride=2, groups=1).reshape(1,5,13,13)
+        loss = []
+        data = data.reshape(2,841)
+        for j in range(2):
+            for i,m in enumerate(M):
+                a = c[j][i].flatten()
+                a = a.flatten()
+                b = data @ m
+                #print("Diff between conv and transform_conv:")
+                dist = np.linalg.norm(a.numpy()-b[j].flatten())
+                #print("conv:",a.numpy())
+                #print("linear:",b)
+                loss.append(dist)
+        print("2 - Avg euclidean distance between conv and transform_conv:")
+        print(abs(np.average(np.array(loss))))
 #
 
     ## TEST 2 --> alexNet RGB conv kind of

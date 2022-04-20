@@ -50,10 +50,13 @@ class DataHandlerNN():
     Specific loader for NN
     Use Zama validation set of .npz samples
   """
-  def __init__(self, path : str):
+  def __init__(self, path : str, batchsize: int):
       self.path = path
+      self.batchsize = batchsize
       self.data = []
       self.num_samples = 1000
+      self.num_batches = self.num_samples // batchsize
+      self.idx = 0
       
       for idx in range(self.num_samples):
         self.data.append(np.load(f"{path}/sample_{idx}.npz")["arr_0"].reshape(1,28,28))
@@ -61,6 +64,14 @@ class DataHandlerNN():
       with open(f"{path}/expected_results.txt", "r", encoding="utf-8") as f:
         labels = f.readlines()
       self.labels = list(map(int,labels))
+
+  def batch(self):
+    if self.idx >= self.num_batches:
+      yield None, True
+    else:
+      yield (self.data[self.idx*self.batchsize:(self.idx+1)*self.batchsize],
+            self.labels[self.idx*self.batchsize:(self.idx+1)*self.batchsize]), False
+      self.idx += 1
 
 
 if __name__=="__main__":

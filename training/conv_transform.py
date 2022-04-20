@@ -644,7 +644,6 @@ def pack_nn(serialized, layers):
         serialized['conv']['weight']['cols'],
         1,
         28+2*1,28+2*1)
-    print(conv_matrix['cols'])
     assert(conv_matrix['cols'] == 840)
     packed['conv'] = {
         'weight': conv_matrix,
