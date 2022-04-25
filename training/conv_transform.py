@@ -11,8 +11,9 @@ import sys
 import os
 import glob
 import json
+
 """
-    This script contains test evaluated with the original model in pytorch
+    This script, and its _test variant, contain test evaluated with the original model in pytorch
     of different linear approximations of the convolutional layers
     to be evalauted in the inference directory, in Go, under
     homomorphic encryption
@@ -635,8 +636,23 @@ def pack_alexNet(model):
 
     return packed
 """
+def serialize_nn(conv, bias_conv, dense, bias, layers):
+    #layers is expected to be layers + 1, e.g 21 for nn20
+    serialized = {}
+    serialized['conv'] = {}
+    serialized['conv']['weight'] = {'w': conv.tolist(),
+    'kernels': conv.shape[0],
+    'filters': conv.shape[1],
+    'rows': conv.shape[2],
+    'cols': conv.shape[3]}
+    serialized['conv']['bias'] = {'b': bias_conv.tolist(), 'rows': 1, 'cols': bias_conv.shape[0]}
+    for i in range(layers-1):
+        serialized['dense_'+str(i+1)] = {}
+        serialized['dense_'+str(i+1)]['weight'] = {'w': dense[i].tolist(), 'rows': dense[i].shape[0], 'cols': dense[i].shape[1]}
+        serialized['dense_'+str(i+1)]['bias'] = {'b': bias[i].tolist(), 'rows': 1, 'cols': bias[i].shape[0]}
+    return serialized
+
 def pack_nn(serialized, layers):
-    # to do -> funcs should be fed with numpy arrays
     packed = {}
     num_chans = serialized['conv']['weight']['kernels']
     conv_matrix,_ = pack_conv_rect(np.array(serialized['conv']['weight']['w']),
@@ -644,7 +660,9 @@ def pack_nn(serialized, layers):
         serialized['conv']['weight']['cols'],
         1,
         28+2*1,28+2*1)
+
     assert(conv_matrix['cols'] == 840)
+    
     packed['conv'] = {
         'weight': conv_matrix,
         'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, serialized['dense_1']['weight']['rows']//num_chans)}

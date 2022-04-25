@@ -95,8 +95,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
       predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
       loss = criterion(predictions, labels_one_hot)
       epoch_loss += loss.item()
-      
-      #loss = Variable(loss, requires_grad = True)
+      loss = Variable(loss, requires_grad = True)
       loss.backward()
       if not TPU:
         optimizer.step()

@@ -1,3 +1,5 @@
+from pkg_resources import yield_lines
+from pytest import yield_fixture
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +15,6 @@ from utils import *
 from conv_transform import *
 from activation import *
 
-os.chdir("./models")
 """
     Test the NN model
 """
@@ -21,7 +22,7 @@ def ReLU(X):
     relu = np.vectorize(lambda x: x * (x > 0))
     return relu(X)
 
-def standard_eval(X,Y,serialized):
+def standard_eval(X,Y,serialized,layers):
     conv = np.array(serialized['conv']['weight']['w'])
     bias_conv = np.array(serialized['conv']['bias']['b'])
     dense, bias_dense = [],[]
@@ -42,7 +43,7 @@ def standard_eval(X,Y,serialized):
 
     return corrects
 
-def linear_eval(X,Y, serialized):
+def linear_eval(X,Y, serialized,layers):
     X = F.pad(X, [1,1,1,1])
     X = X.reshape(X.shape[0],-1)
     
@@ -54,9 +55,11 @@ def linear_eval(X,Y, serialized):
         bias_dense.append(np.array(serialized[f'dense_{str(i+1)}']['bias']['b']))
     
     conv, conv_bias = convMT, np.array(bias_conv['b'])
+    #v, vb = conv.std(), conv_bias.std()
     X = X @ conv + conv_bias.T
     X = relu_approx(X)
     for d,b in zip(dense, bias_dense):
+        #v, vb = d.std(), b.std()
         X = X @ d.T + b.T
         X = relu_approx(X)
 
@@ -65,12 +68,12 @@ def linear_eval(X,Y, serialized):
 
     return corrects
 
-if __name__ == '__main__':
+def test_pipeline(eval):
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
     args = parser.parse_args()
     
-    with open(f'{args.model}.json', 'r') as f:
+    with open(f'./models/{args.model}.json', 'r') as f:
         serialized = json.load(f)
     if args.model == "nn20":
         layers = 20
@@ -79,7 +82,7 @@ if __name__ == '__main__':
     elif args.model == "nn100":
         layers = 100
     batchsize = 64
-    dh = DataHandlerNN("../data/mnist_validation", batchsize)
+    dh = DataHandlerNN("./data/mnist_validation", batchsize)
     corrects = 0.0
     tot = 0.0
     for batch, fin in dh.batch():
@@ -89,11 +92,89 @@ if __name__ == '__main__':
         X = torch.from_numpy(x)
         y = np.array(batch[1]).reshape(batchsize)
         Y = torch.from_numpy(y)
-        corrects += linear_eval(X.double(),Y.double(),serialized)
+        corrects += eval(X.double(),Y.double(),serialized,layers)
         tot += batchsize
     print("Accuracy:")
     print(corrects/tot)
 
-
+class NN(nn.Module):
+  '''
+    Retraining of ZAMA NN architecture for inputs and weights in [-10,10]
+  '''
+  
+  def __init__(self, layers, verbose = False):
+    super().__init__()
+    self.verbose = verbose
+    self.pad = F.pad
+    self.conv = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=(10,11), stride=1, device=device)
+    dense = []
+    dense.append(nn.Linear(840,92,True, device=device))
+    for _ in range(layers-2):
+        dense.append(nn.Linear(92,92,True,device=device))
+    dense.append(nn.Linear(92,10,True,device=device))
+    self.dense = nn.ModuleList(dense)
+    #safety check
+    assert(len(self.dense)==layers)
     
-    ##TO DO: save the results of the standard pipeline and test the linearized one
+    self.dropout = nn.Dropout(p = 0.5)
+    self.activation = ReLUApprox()
+
+  def forward(self, x):
+    x = self.pad(x, (1,1,1,1))
+    x = self.conv(x)
+    x = self.activation(x)
+    x = x.reshape(x.shape[0],-1) #flatten
+    
+    for i,layer in enumerate(self.dense):
+        x = layer(x)
+        x = self.activation(x)
+
+    return x
+ 
+  def weights_init(self, m):
+    for m in self.children():
+        if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+
+if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
+    args = parser.parse_args()
+    
+    if args.model == "nn20":
+        layers = 20
+    elif args.model == "nn50":
+        layers = 50
+    elif args.model == "nn100":
+        layers = 100
+
+    dataHandler = DataHandler(dataset="MNIST", batch_size=256)
+    model = NN(layers)
+    logger = Logger("./logs/",f"nn{layers}")
+    model.apply(model.weights_init)
+    train(logger, model, dataHandler, num_epochs=1, lr=0.001)
+    loss, accuracy = eval(logger, model, dataHandler)
+
+    torch.save(model, f"./models/nn{layers}.pt")
+    
+    ##store as json for Go
+    dense = []
+    bias = []
+    for name, p in model.named_parameters():
+        if "conv" in name:
+            if "weight" in name:
+                conv = p.data.cpu().numpy()
+            else:
+                bias_conv = p.data.cpu().numpy()
+        else:
+            if "weight" in name:
+                dense.append(p.data.cpu().numpy())
+            else:
+                bias.append(p.data.cpu().numpy())
+    serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
+    packed = pack_nn(serialized,layers)
+    
+    with open(f'./models/{args.model}_packed.json', 'w') as f:
+        json.dump(packed, f)
+    #test_pipeline(linear_eval)    

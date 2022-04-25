@@ -3,6 +3,8 @@ import onnx.numpy_helper as nph
 import argparse
 import json
 
+from training.conv_transform import serialize_nn
+
 """to be used in docker container from ZAMA"""
 
 if __name__ == '__main__':  
@@ -32,18 +34,7 @@ if __name__ == '__main__':
     bias_conv = nph.to_array(B[0])
     bias = [nph.to_array(b) for b in B[1:]]
 
-    serialized = {}
-    serialized['conv'] = {}
-    serialized['conv']['weight'] = {'w': conv.tolist(),
-    'kernels': conv.shape[0],
-    'filters': conv.shape[1],
-    'rows': conv.shape[2],
-    'cols': conv.shape[3]}
-    serialized['conv']['bias'] = {'b': bias_conv.tolist(), 'rows': 1, 'cols': bias_conv.shape[0]}
-    for i in range(layers-1):
-        serialized['dense_'+str(i+1)] = {}
-        serialized['dense_'+str(i+1)]['weight'] = {'w': dense[i].tolist(), 'rows': dense[i].shape[0], 'cols': dense[i].shape[1]}
-        serialized['dense_'+str(i+1)]['bias'] = {'b': bias[i].tolist(), 'rows': 1, 'cols': bias[i].shape[0]}
+    serialized = serialize_nn(conv,bias_conv,dense,bias,layers)
 
     with open(f'{j_name}', 'w') as f:
         json.dump(serialized, f)

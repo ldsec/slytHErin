@@ -10,14 +10,21 @@ import glob
 import json
 from conv_transform import *
 
+"""
+    Script to serialize models in a json format ready to be deserialized in Go implementation 
+"""
+
+
 os.chdir("./models")
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
     args = parser.parse_args()
     
-    if args.model =="simplenet":
+    if args.model == "simplenet":
         #models = [(x,torch.load("")) for x in glob.iglob("*.pt")]
         models = [(x,torch.load("")) for x in glob.iglob("SimpleNet*.pt")]
         for name,m in models:
@@ -34,7 +41,8 @@ if __name__ == '__main__':
             #    #if "simplified" in name:
             #    #    j_name += "_simplified"
             #    pack_alexNet(m)
-    if args.model:
+
+    elif args.model:
         with open(f'{args.model}.json', 'r') as f:
             serialized = json.load(f)
         if args.model == "nn20":
