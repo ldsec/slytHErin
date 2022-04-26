@@ -6,6 +6,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"sync"
 )
 
@@ -199,11 +200,17 @@ func EvalPolyBlocks(X *EncInput, coeffs []float64, Box CkksBox) {
 }
 
 func BootStrapBlocks(X *EncInput, Box CkksBox) {
+	var wg sync.WaitGroup
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
-			X.Blocks[i][j] = Box.BootStrapper.Bootstrapp(X.Blocks[i][j])
+			wg.Add(1)
+			go func(btp *bootstrapping.Bootstrapper, i, j int) {
+				defer wg.Done()
+				X.Blocks[i][j] = btp.Bootstrapp(X.Blocks[i][j])
+			}(Box.BootStrapper.ShallowCopy(), i, j)
 		}
 	}
+	wg.Wait()
 }
 
 func RescaleBlocks(X *EncInput, Box CkksBox) {

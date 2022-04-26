@@ -79,17 +79,20 @@ if __name__=="__main__":
   ## return the data for evaluation
 
   parser = argparse.ArgumentParser()
-  parser.add_argument("--model", help="simplenet or alexnet")
+  parser.add_argument("--model", help="simplenet,alexnet or nn")
   
   args = parser.parse_args()
-  if args.model == "simplenet":
+  if args.model == "simplenet" or args.model == "nn":
     dataHandler = DataHandler("MNIST", None, shuffle = False)
     dataset = {'X':[], 'Y':[]}
     for data,label in dataHandler.test_dl:
-      data = F.pad(data, (1,0,1,0)).numpy().flatten()
+      if args.model == "simplenet":
+        data = F.pad(data, (1,0,1,0)).numpy().flatten()
+      else:
+        data = F.pad(data, (1,1,1,1)).numpy().flatten()
       sample = [x.item() for x in data] 
       dataset['X'].append(sample)
       dataset['Y'].append(label)
-    with open('./data/simpleNet_data.json','w') as f:
+    with open(f'./data/{args.model}_data.json','w') as f:
       json.dump(dataset,f)
 

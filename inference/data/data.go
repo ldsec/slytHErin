@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-type DataSimpleNet struct {
+type Data struct {
 	X            [][]float64 `json:"X"`
 	Y            []int       `json:"Y"`
 	BatchSize    int
@@ -17,7 +17,7 @@ type DataSimpleNet struct {
 	CurrentBatch int
 }
 
-func LoadSimpleNetData(path string) *DataSimpleNet {
+func LoadData(path string) *Data {
 	jsonFile, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
@@ -25,11 +25,11 @@ func LoadSimpleNetData(path string) *DataSimpleNet {
 	defer jsonFile.Close()
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 
-	var res DataSimpleNet
+	var res Data
 	json.Unmarshal([]byte(byteValue), &res)
 	return &res
 }
-func (data *DataSimpleNet) Init(batchSize int) error {
+func (data *Data) Init(batchSize int) error {
 	data.BatchSize = batchSize
 	totData := len(data.Y)
 	data.NumBatches = int(math.Floor(float64(totData) / float64(batchSize)))
@@ -37,7 +37,7 @@ func (data *DataSimpleNet) Init(batchSize int) error {
 	return nil
 }
 
-func (data *DataSimpleNet) Batch() ([][]float64, []int, error) {
+func (data *Data) Batch() ([][]float64, []int, error) {
 	if data.CurrentBatch < data.NumBatches {
 		i := data.CurrentBatch * data.BatchSize
 		j := (data.CurrentBatch + 1) * data.BatchSize

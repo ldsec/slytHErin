@@ -338,7 +338,7 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 	C2, _ := plainUtils.PartitionMatrix(plainResults.OutPool1, Bb.RowP, Bb.ColP)
 	C3, err := plainUtils.MultiPlyBlocks(C2, plainUtils.MultiplyBlocksByConst(pool2Blocks, 0.1))
 	fmt.Println("Enc vs plain")
-	//all values are scaled by a factor -0.59, the same factor for every value...
+
 	cipherUtils.CompareBlocks(CC, C3, Box)
 	cipherUtils.PrintDebugBlocks(CC, C3, Box)
 	fmt.Println("Enc fresh vs plain")

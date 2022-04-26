@@ -23,9 +23,9 @@ v
 func TestEncMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
-	LDim := []int{64, 10}
-	W0Dim := []int{10, 10}
-	W1Dim := []int{2, 4}
+	LDim := []int{128, 23}
+	W0Dim := []int{23, 23}
+	W1Dim := []int{23, 10}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -93,11 +93,11 @@ func TestEncMult(t *testing.T) {
 	// Schemes parameters are created from scratch
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40},
+		LogQ:         []int{32, 32, 32, 32, 32},
 		LogP:         []int{61, 61},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
+		DefaultScale: float64(1 << 25),
 	})
 	if err != nil {
 		panic(err)
@@ -161,7 +161,7 @@ func TestEncMult(t *testing.T) {
 	CompareMatrices(B, len(L), len(W0[1]), &tmp, Box)
 	var res mat.Dense
 	res.Mul(&tmp, W1mat)
-	fmt.Println("________________-")
+	fmt.Println("Final distance")
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
 }
 

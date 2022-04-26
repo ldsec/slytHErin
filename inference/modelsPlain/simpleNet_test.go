@@ -18,7 +18,7 @@ func TestEvalPlain(t *testing.T) {
 	sn.InitActivation()
 	batchSize := 8
 	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight).Dims()
-	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
+	dataSn := data.LoadData("../../training/data/simpleNet_data.json")
 	dataSn.Init(batchSize)
 	corrects := 0
 	tot := 0
@@ -40,7 +40,7 @@ func TestEvalPlainBlocks(t *testing.T) {
 	sn.InitDim()
 	sn.InitActivation()
 	batchSize := 128
-	dataSn := data.LoadSimpleNetData("../../training/data/simpleNet_data.json")
+	dataSn := data.LoadData("../../training/data/simpleNet_data.json")
 	dataSn.Init(batchSize)
 	corrects := 0
 	tot := 0
@@ -158,7 +158,7 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	utils.ThrowErr(err)
 	fmt.Println("Created block matrixes...")
 
-	dataSn := data.LoadSimpleNetData("simpleNet_data.json")
+	dataSn := data.LoadData("simpleNet_data.json")
 	//dataSn := data.LoadSimpleNetData("/root/simpleNet_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
@@ -220,7 +220,7 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	//crypto
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         14,
-		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(Q) <= 438 for LogN 14
+		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
 		LogP:         []int{43, 43, 43},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     13,
@@ -287,7 +287,7 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	utils.ThrowErr(err)
 	fmt.Println("Created block matrixes...")
 
-	dataSn := data.LoadSimpleNetData("simpleNet_data.json")
+	dataSn := data.LoadData("simpleNet_data.json")
 	//dataSn := data.LoadSimpleNetData("/root/simpleNet_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
@@ -315,5 +315,5 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency:", float64(elapsed)/float64(iters))
+	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters)) //~8.14s/batch
 }
