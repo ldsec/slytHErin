@@ -1,4 +1,4 @@
-package modelsEnc
+package nn
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	//data encrypted - model enc, not distributed
 	/*
 		Current time:
-		NN20 = 681s per 128 batch -> 5.32s per sample
+		NN20 = 662s per 128 batch -> 5.17s per sample
 	*/
 	layers := 20
 
@@ -31,10 +31,10 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	rowP := 1
 	colP := 30 //inputs are 30x30
 
-	convM := buildKernelMatrix(nn.Conv.Weight)
+	convM := utils.BuildKernelMatrix(nn.Conv.Weight)
 	convMB, _ := plainUtils.PartitionMatrix(convM, colP, 28) //900x840 --> submatrices are 30x30
 	inputLayerDim := plainUtils.NumCols(convM)
-	biasConvM := buildBiasMatrix(nn.Conv.Bias, inputLayerDim, batchSize)
+	biasConvM := utils.BuildBiasMatrix(nn.Conv.Bias, inputLayerDim, batchSize)
 	biasConvMB, _ := plainUtils.PartitionMatrix(biasConvM, rowP, convMB.ColP)
 
 	denseMatrices := make([]*mat.Dense, layers)
@@ -43,9 +43,9 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	denseBiasMatricesBlock := make([]*plainUtils.BMatrix, layers)
 
 	for i := 0; i < layers; i++ {
-		denseMatrices[i] = buildKernelMatrix(nn.Dense[i].Weight)
+		denseMatrices[i] = utils.BuildKernelMatrix(nn.Dense[i].Weight)
 		inputLayerDim = plainUtils.NumCols(denseMatrices[i])
-		denseBiasMatrices[i] = buildBiasMatrix(nn.Dense[i].Bias, inputLayerDim, batchSize)
+		denseBiasMatrices[i] = utils.BuildBiasMatrix(nn.Dense[i].Bias, inputLayerDim, batchSize)
 		if i == 0 {
 			//840x92 --> 30x23
 			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 28, 4)
@@ -80,8 +80,8 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		rowsPW[w], colsPW[w] = weightMatricesBlock[w].RowP, weightMatricesBlock[w].ColP
 	}
 	// ======= CRYPTO =======
-	ckksParams := bootstrapping.DefaultCKKSParameters[4]
-	btpParams := bootstrapping.DefaultParameters[4]
+	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
+	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
@@ -106,7 +106,8 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	fmt.Println("Done")
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
-	btp, err := bootstrapping.NewBootstrapper(params, btpParams, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	evk := bootstrapping.GenEvaluationKeys(btpParams, params, sk)
+	btp, err := bootstrapping.NewBootstrapper(params, btpParams, evk)
 	utils.ThrowErr(err)
 	Box := cipherUtils.CkksBox{
 		Params:       params,
@@ -134,7 +135,8 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 			rowP, colsPW[i], level, Box)
 		level -= 2 //activation
 		if level <= 0 {
-			level = params.MaxLevel() //bootstrap
+			//lvl after btp is 2 --> #Qs after STC
+			level = 2
 		}
 	}
 	fmt.Println("Done...")
@@ -148,6 +150,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 
 	corrects := 0
 	tot := 0
+	iters := 0
 	var elapsed int64
 	fmt.Println("Starting inference on dataset...")
 	for true {
@@ -164,12 +167,8 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		elapsed += duration.Milliseconds()
 		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
 		tot += batchSize
+		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
 }
-
-/*
-TO DO:
-1 - check gob for storing rot keys on disk and spare time
-2 - check if the sub-matrices size works for the multiplicaiton
-*/

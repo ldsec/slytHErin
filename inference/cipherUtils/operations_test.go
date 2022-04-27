@@ -395,8 +395,8 @@ func TestBootstrap(t *testing.T) {
 	LDim := []int{64, 64}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
 	//crucial that parameters are conjuncted
-	ckksParams := bootstrapping.DefaultCKKSParameters[0]
-	btpParams := bootstrapping.DefaultParameters[0]
+	ckksParams := bootstrapping.DefaultParametersSparse[4].SchemeParams
+	btpParams := bootstrapping.DefaultParametersSparse[4].BootstrappingParams
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
@@ -411,14 +411,15 @@ func TestBootstrap(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
-	btp, err := bootstrapping.NewBootstrapper(params, btpParams, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+	evk := bootstrapping.GenEvaluationKeys(btpParams, params, sk)
+	btp, err := bootstrapping.NewBootstrapper(params, btpParams, evk)
 	if err != nil {
 		panic(err)
 	}
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
 	ecd := ckks.NewEncoder(params)
-	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil})
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
 	Box := CkksBox{
 		Params:       params,
 		Encoder:      ecd,

@@ -3,6 +3,7 @@ package cipherUtils
 import "C"
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -211,6 +212,7 @@ func BootStrapBlocks(X *EncInput, Box CkksBox) {
 		}
 	}
 	wg.Wait()
+	fmt.Println("Level after bootstrapping: ", X.Blocks[0][0].Level())
 }
 
 func RescaleBlocks(X *EncInput, Box CkksBox) {

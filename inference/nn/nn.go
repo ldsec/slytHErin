@@ -1,4 +1,4 @@
-package modelsEnc
+package nn
 
 import (
 	"encoding/json"
@@ -6,38 +6,16 @@ import (
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
-	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
-	"math"
 	"os"
 	"time"
 )
 
-type Bias struct {
-	B   []float64 `json:"b"`
-	Len int       `json:"len"`
-}
-
-type Kernel struct {
-	W    []float64 `json:"w"` //Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample (this actually can represent also a regular dense layer)
-	Rows int       `json:"rows"`
-	Cols int       `json:"cols"`
-}
-
-type Layer struct {
-	Weight Kernel `json:"weight"`
-	Bias   Bias   `json:"bias"`
-}
-type PolyApprox struct {
-	Interval float64
-	Degree   int
-	Coeffs   []float64
-}
 type NN struct {
-	Conv       Layer      `json:"conv"`
-	Dense      []Layer    `json:"dense"`
-	Layers     int        `json:"layers"`
-	ReLUApprox PolyApprox //this will store the coefficients of the poly approximating ReLU
+	Conv       utils.Layer      `json:"conv"`
+	Dense      []utils.Layer    `json:"dense"`
+	Layers     int              `json:"layers"`
+	ReLUApprox utils.PolyApprox //this will store the coefficients of the poly approximating ReLU
 
 	RowsOutConv, ColsOutConv, ChansOutConv, DimOutDense int //dimentions
 }
@@ -58,58 +36,13 @@ func LoadNN(path string) *NN {
 
 func (nn *NN) Init() {
 	//init activation
-	nn.ReLUApprox.Degree = 3
-	nn.ReLUApprox.Interval = 10.0
-	nn.ReLUApprox.Coeffs = make([]float64, nn.ReLUApprox.Degree)
-	nn.ReLUApprox.Coeffs[0] = 1.1155
-	nn.ReLUApprox.Coeffs[1] = 5
-	nn.ReLUApprox.Coeffs[2] = 4.4003
+	nn.ReLUApprox = utils.InitReLU()
 
 	//init dimentional values
 	nn.RowsOutConv = 21
 	nn.ColsOutConv = 20
 	nn.ChansOutConv = 2 //tot is 21*20*2 = 840 per sample after conv
 	nn.DimOutDense = 92 //per sample, all dense are the same but last one which is 92x10
-}
-
-func buildKernelMatrix(k Kernel) *mat.Dense {
-	/*
-		Returns a matrix M s.t X.M = conv(x,layer)
-	*/
-
-	res := mat.NewDense(k.Rows, k.Cols, nil)
-	for i := 0; i < k.Rows; i++ {
-		for j := 0; j < k.Cols; j++ {
-			res.Set(i, j, k.W[i*k.Cols+j])
-		}
-	}
-	return res
-}
-
-func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
-	// Compute a matrix containing the bias of the layer, to be added to the result
-	res := mat.NewDense(batchSize, cols, nil)
-	for i := 0; i < batchSize; i++ {
-		res.SetRow(i, plainUtils.Pad(b.B, cols-len(b.B)))
-	}
-	return res
-}
-
-func (nn *NN) ActivatePlain(X *mat.Dense) {
-	/*
-		Apply the activation function elementwise
-	*/
-	rows, cols := X.Dims()
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
-			v := X.At(r, c) / float64(nn.ReLUApprox.Interval)
-			res := 0.0
-			for deg := 0; deg < nn.ReLUApprox.Degree; deg++ {
-				res += (math.Pow(v, float64(deg)) * nn.ReLUApprox.Coeffs[deg])
-			}
-			X.Set(r, c, res)
-		}
-	}
 }
 
 func (nn *NN) EvalBatchEncrypted(XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput, weightsBlock []*cipherUtils.EncWeightDiag, biasBlock []*cipherUtils.EncInput, weightsBlockPlain, biasBlockPlain []*plainUtils.BMatrix, Box cipherUtils.CkksBox, labels int) (int, time.Duration) {
@@ -138,7 +71,8 @@ func (nn *NN) EvalBatchEncrypted(XBatchClear *plainUtils.BMatrix, Y []int, Xbatc
 		utils.ThrowErr(err)
 		XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(biasBlockPlain[i], 1/nn.ReLUApprox.Interval))
 		utils.ThrowErr(err)
-		cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+		//fmt.Printf("Bias ")
+		//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
 		//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(biasBlockPlain[i], 1-1/nn.ReLUApprox.Interval))
 		utils.ThrowErr(err)
@@ -155,7 +89,7 @@ func (nn *NN) EvalBatchEncrypted(XBatchClear *plainUtils.BMatrix, Y []int, Xbatc
 		cipherUtils.EvalPolyBlocks(Xint, nn.ReLUApprox.Coeffs, Box)
 		for ii := range XintPlain.Blocks {
 			for jj := range XintPlain.Blocks[ii] {
-				nn.ActivatePlain(XintPlain.Blocks[ii][jj])
+				utils.ActivatePlain(XintPlain.Blocks[ii][jj], nn.ReLUApprox)
 			}
 		}
 		cipherUtils.CompareBlocks(Xint, XintPlain, Box)
@@ -169,6 +103,7 @@ func (nn *NN) EvalBatchEncrypted(XBatchClear *plainUtils.BMatrix, Y []int, Xbatc
 	res := cipherUtils.DecInput(Xint, Box)
 	resPlain := plainUtils.MatToArray(plainUtils.ExpandBlocks(XintPlain))
 	predictions := make([]int, batchSize)
+	predictionsPlain := make([]int, batchSize)
 
 	corrects := 0
 	for i := 0; i < batchSize; i++ {
@@ -197,8 +132,8 @@ func (nn *NN) EvalBatchEncrypted(XBatchClear *plainUtils.BMatrix, Y []int, Xbatc
 				maxIdx = j
 			}
 		}
-		predictions[i] = maxIdx
-		if predictions[i] == Y[i] {
+		predictionsPlain[i] = maxIdx
+		if predictionsPlain[i] == Y[i] {
 			correctsPlain += 1
 		}
 	}

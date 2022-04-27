@@ -1,4 +1,4 @@
-package modelsPlain
+package simpleNet
 
 import (
 	"fmt"
@@ -14,10 +14,10 @@ import (
 
 func TestEvalPlain(t *testing.T) {
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
-	sn.InitDim()
-	sn.InitActivation()
+	sn.Init()
+
 	batchSize := 8
-	inputLayerDim, _ := buildKernelMatrix(sn.Conv1.Weight).Dims()
+	inputLayerDim, _ := utils.BuildKernelMatrix(sn.Conv1.Weight).Dims()
 	dataSn := data.LoadData("../../training/data/simpleNet_data.json")
 	dataSn.Init(batchSize)
 	corrects := 0
@@ -37,8 +37,8 @@ func TestEvalPlain(t *testing.T) {
 func TestEvalPlainBlocks(t *testing.T) {
 	//leverages matrix block arithmetics and concurrent execution
 	sn := LoadSimpleNet("../../training/models/simpleNet.json")
-	sn.InitDim()
-	sn.InitActivation()
+	sn.Init()
+
 	batchSize := 128
 	dataSn := data.LoadData("../../training/data/simpleNet_data.json")
 	dataSn.Init(batchSize)
@@ -64,28 +64,28 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	sn := LoadSimpleNet("simpleNet.json")
 	//cluster run
 	//sn := LoadSimpleNet("/root/simpleNet.json")
-	sn.InitDim()
-	sn.InitActivation()
+	sn.Init()
+
 	batchSize := 64
 	//for input block
 	rowP := 1
 	colP := 29
 
-	conv1M := buildKernelMatrix(sn.Conv1.Weight)
+	conv1M := utils.BuildKernelMatrix(sn.Conv1.Weight)
 	conv1MB, _ := plainUtils.PartitionMatrix(conv1M, colP, 13*5)
 	inputLayerDim := plainUtils.NumCols(conv1M)
-	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
+	bias1M := utils.BuildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
 
-	pool1M := buildKernelMatrix(sn.Pool1.Weight)
+	pool1M := utils.BuildKernelMatrix(sn.Pool1.Weight)
 	pool1MB, _ := plainUtils.PartitionMatrix(pool1M, 13*5, 10)
 	inputLayerDim = plainUtils.NumCols(pool1M)
-	bias2M := buildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
+	bias2M := utils.BuildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
 
-	pool2M := buildKernelMatrix(sn.Pool2.Weight)
+	pool2M := utils.BuildKernelMatrix(sn.Pool2.Weight)
 	pool2MB, err := plainUtils.PartitionMatrix(pool2M, 10, 1)
 	utils.ThrowErr(err)
 	inputLayerDim = plainUtils.NumCols(pool2M)
-	bias3M := buildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
+	bias3M := utils.BuildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
 	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
 	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
@@ -185,34 +185,33 @@ func TestEvalDataEncModelClear(t *testing.T) {
 }
 
 func TestEvalDataEncModelClearCompressed(t *testing.T) {
-	//data encrypted - model in clear
-
-	//local run
+	/*
+		data encrypted - model in clear
+		model is optimized by compressing conv and pool1 in 1 layer
+	*/
 	sn := LoadSimpleNet("simpleNet.json")
-	//cluster run
-	//sn := LoadSimpleNet("/root/simpleNet.json")
-	sn.InitDim()
-	sn.InitActivation()
+	sn.Init()
+
 	batchSize := 64
 	//for input block
 	rowP := 1
 	colP := 29
 
-	conv1M := buildKernelMatrix(sn.Conv1.Weight)
+	conv1M := utils.BuildKernelMatrix(sn.Conv1.Weight)
 	conv1MB, _ := plainUtils.PartitionMatrix(conv1M, colP, 13*5)
 	inputLayerDim := plainUtils.NumCols(conv1M)
-	bias1M := buildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
+	bias1M := utils.BuildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
 
-	pool1M := buildKernelMatrix(sn.Pool1.Weight)
+	pool1M := utils.BuildKernelMatrix(sn.Pool1.Weight)
 	pool1MB, _ := plainUtils.PartitionMatrix(pool1M, 13*5, 10)
 	inputLayerDim = plainUtils.NumCols(pool1M)
-	bias2M := buildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
+	bias2M := utils.BuildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
 
-	pool2M := buildKernelMatrix(sn.Pool2.Weight)
+	pool2M := utils.BuildKernelMatrix(sn.Pool2.Weight)
 	pool2MB, err := plainUtils.PartitionMatrix(pool2M, 10, 1)
 	utils.ThrowErr(err)
 	inputLayerDim = plainUtils.NumCols(pool2M)
-	bias3M := buildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
+	bias3M := utils.BuildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
 	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
 	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
@@ -315,5 +314,5 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters)) //~8.14s/batch
+	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters)) //~8.14s/64 batch
 }

@@ -64,7 +64,6 @@ func DesereliazeKeys(path string) (*rlwe.SecretKey, *rlwe.RotationKeySet) {
 	var sk rlwe.SecretKey
 	sk.UnmarshalBinary(dat)
 
-	fmt.Println("Reading keys from disk: ", path)
 	dat, err = os.ReadFile(path + "_rtks")
 	utils.ThrowErr(err)
 	var rotKeys rlwe.RotationKeySet

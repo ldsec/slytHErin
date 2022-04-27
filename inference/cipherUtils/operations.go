@@ -124,9 +124,9 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Plai
 	res = eval.MulNew(tmp, weights[0])
 
 	tmpRot := ckks.NewCiphertext(params, 1, tmp.Level(), tmp.Scale)
-	eval.GetKeySwitcher().DecomposeNTT(tmp.Level(), params.PCount()-1, params.PCount(), tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP)
+	eval.GetKeySwitcher().DecomposeNTT(tmp.Level(), params.PCount()-1, params.PCount(), tmp.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 	for i := 1; i < len(weights); i++ {
-		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimIn*i, tmpRot.Value[0], tmpRot.Value[1])
+		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().BuffDecompQP, 2*dimIn*i, tmpRot.Value[0], tmpRot.Value[1])
 		eval.MulAndAdd(tmpRot, weights[i], res)
 	}
 
@@ -168,9 +168,9 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Ciph
 	res = eval.MulNew(tmp, weights[0])
 
 	tmpRot := ckks.NewCiphertext(params, 1, tmp.Level(), tmp.Scale)
-	eval.GetKeySwitcher().DecomposeNTT(tmp.Level(), params.PCount()-1, params.PCount(), tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP)
+	eval.GetKeySwitcher().DecomposeNTT(tmp.Level(), params.PCount()-1, params.PCount(), tmp.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 	for i := 1; i < len(weights); i++ {
-		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimIn*i, tmpRot.Value[0], tmpRot.Value[1])
+		eval.PermuteNTTHoisted(tmp.Level(), tmp.Value[0], tmp.Value[1], eval.GetKeySwitcher().BuffDecompQP, 2*dimIn*i, tmpRot.Value[0], tmpRot.Value[1])
 		eval.MulAndAdd(tmpRot, weights[i], res)
 	}
 
