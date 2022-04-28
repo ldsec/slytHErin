@@ -9,7 +9,6 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
-	"gonum.org/v1/gonum/mat"
 	"os"
 	"strconv"
 	"testing"
@@ -24,78 +23,33 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	layers := 20
 
 	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn.Init(layers)
 
-	nn.Init()
-	batchSize := 128
+	batchSize := 256
 	//for input block
-	rowP := 1
-	colP := 30 //inputs are 30x30
+	InRowP := 1
+	InColP := 30 //inputs are 30x30
+	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
-	convM := utils.BuildKernelMatrix(nn.Conv.Weight)
-	convMB, _ := plainUtils.PartitionMatrix(convM, colP, 28) //900x840 --> submatrices are 30x30
-	inputLayerDim := plainUtils.NumCols(convM)
-	biasConvM := utils.BuildBiasMatrix(nn.Conv.Bias, inputLayerDim, batchSize)
-	biasConvMB, _ := plainUtils.PartitionMatrix(biasConvM, rowP, convMB.ColP)
-
-	denseMatrices := make([]*mat.Dense, layers)
-	denseBiasMatrices := make([]*mat.Dense, layers)
-	denseMatricesBlock := make([]*plainUtils.BMatrix, layers)
-	denseBiasMatricesBlock := make([]*plainUtils.BMatrix, layers)
-
-	for i := 0; i < layers; i++ {
-		denseMatrices[i] = utils.BuildKernelMatrix(nn.Dense[i].Weight)
-		inputLayerDim = plainUtils.NumCols(denseMatrices[i])
-		denseBiasMatrices[i] = utils.BuildBiasMatrix(nn.Dense[i].Bias, inputLayerDim, batchSize)
-		if i == 0 {
-			//840x92 --> 30x23
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 28, 4)
-		} else if i == layers-1 {
-			//92x10 --> 23x10
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 4, 1)
-		} else {
-			//92x92 --> 23x23
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 4, 4)
-		}
-		denseBiasMatricesBlock[i], _ = plainUtils.PartitionMatrix(
-			denseBiasMatrices[i],
-			rowP,
-			denseMatricesBlock[i].ColP)
-	}
-
-	weightMatrices := []*mat.Dense{convM}
-	weightMatrices = append(weightMatrices, denseMatrices...)
-	biasMatrices := []*mat.Dense{biasConvM}
-	biasMatrices = append(biasMatrices, denseBiasMatrices...)
-
-	weightMatricesBlock := []*plainUtils.BMatrix{convMB}
-	weightMatricesBlock = append(weightMatricesBlock, denseMatricesBlock...)
-	biasMatricesBlock := []*plainUtils.BMatrix{biasConvMB}
-	biasMatricesBlock = append(biasMatricesBlock, denseBiasMatricesBlock...)
-	rowsW := make([]int, len(weightMatricesBlock))
-	colsW := make([]int, len(weightMatricesBlock))
-	rowsPW := make([]int, len(weightMatricesBlock))
-	colsPW := make([]int, len(weightMatricesBlock))
-	for w := range weightMatricesBlock {
-		rowsW[w], colsW[w] = weightMatricesBlock[w].InnerRows, weightMatricesBlock[w].InnerCols
-		rowsPW[w], colsPW[w] = weightMatricesBlock[w].RowP, weightMatricesBlock[w].ColP
-	}
-	// ======= CRYPTO =======
+	// CRYPTO =========================================================================================================
+	// [!] Change
 	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
 	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
+	btpCapacity := 2 //remaining levels
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
-	keyPath := fmt.Sprintf("/root/nn%d", layers)
+	keyPath := fmt.Sprintf("/root/nn%d_paramSlots%d", layers, params.LogSlots())
 	_, err = os.OpenFile(keyPath+"_sk", os.O_RDONLY, 0755)
 	sk := new(rlwe.SecretKey)
 	rtks := new(rlwe.RotationKeySet)
 	kgen := ckks.NewKeyGenerator(params)
 	if os.IsNotExist(err) {
 		// create keys
+		fmt.Println("Generating keys...")
 		sk = kgen.GenSecretKey()
-		inputInnerRows := batchSize / rowP
-		rotations := cipherUtils.GenRotations(inputInnerRows, len(weightMatricesBlock), rowsW, colsW, params, &btpParams)
-		fmt.Println("Generating rot keys...")
+		inputInnerRows := batchSize / InRowP
+		rotations := cipherUtils.GenRotations(inputInnerRows, len(nnb.Weights), nnb.InnerRows, nnb.InnerCols, params, &btpParams)
 		rtks = kgen.GenRotationKeysForRotations(rotations, true, sk)
 		cipherUtils.SerializeKeys(keyPath, sk, rtks)
 	} else {
@@ -118,29 +72,10 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		BootStrapper: btp,
 	}
 
-	weightsBlock := make([]*cipherUtils.EncWeightDiag, layers+1)
-	biasBlock := make([]*cipherUtils.EncInput, layers+1)
+	//Encrypt weights in block form
+	nne, _ := nnb.NewEncNN(batchSize, InRowP, btpCapacity, Box)
 
-	level := params.MaxLevel()
-	fmt.Println("Creating weights encrypted block matrices...")
-	for i := 0; i < layers+1; i++ {
-		fmt.Println("Sizes:")
-		fmt.Printf("RowP: %d, ColP: %d, InnerR: %d, InnerC: %d \n", rowsPW[i], colsPW[i], rowsW[i], colsW[i])
-		weightsBlock[i], _ = cipherUtils.NewEncWeightDiag(
-			plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[i], 1.0/nn.ReLUApprox.Interval)),
-			rowsPW[i], colsPW[i], batchSize, level, Box)
-		level--
-		biasBlock[i], _ = cipherUtils.NewEncInput(
-			plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[i], 1.0/nn.ReLUApprox.Interval)),
-			rowP, colsPW[i], level, Box)
-		level -= 2 //activation
-		if level <= 0 {
-			//lvl after btp is 2 --> #Qs after STC
-			level = 2
-		}
-	}
-	fmt.Println("Done...")
-
+	//Load Dataset
 	dataSn := data.LoadData("/root/nn_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
@@ -151,18 +86,21 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	corrects := 0
 	tot := 0
 	iters := 0
+	maxIters := 5
 	var elapsed int64
+	//Start Inference run
 	fmt.Println("Starting inference on dataset...")
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
-		if err != nil {
+		if err != nil || iters == maxIters {
 			//dataset completed
 			break
 		}
-		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), rowP, colP)
-		Xenc, err := cipherUtils.NewEncInput(Xbatch, rowP, colP, params.MaxLevel(), Box)
+		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		correctsInBatch, duration := nn.EvalBatchEncrypted(X, Y, Xenc, weightsBlock, biasBlock, weightMatricesBlock, biasMatricesBlock, Box, 10)
+		//correctsInBatch, duration := nn.EvalBatchEncrypted(X, Y, Xenc, weightsBlock, biasBlock, weightMatricesBlock, biasMatricesBlock, Box, 10)
+		correctsInBatch, duration := EvalBatchEncrypted(nne, nnb, X, Y, Xenc, Box, 10, true)
 		corrects += correctsInBatch
 		elapsed += duration.Milliseconds()
 		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
@@ -171,4 +109,13 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
+}
+
+func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
+	/*
+		Setting:
+			Querier sends data encrypted under its sk
+			to cloud-cohort which has a distributed sk'
+			Data are collectively key-switched to pk', inference is performed, and key-switched back to sk
+	*/
 }
