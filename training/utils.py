@@ -49,14 +49,14 @@ def plot_history(key, train, history):
   else:
     when = "test"
   fig, ax = plt.subplots( 1, 2, figsize = (12,4) )
-  ax[0].plot(history['loss'], label = when+"----"+key)
+  ax[0].plot(history['loss'], label = "loss")
   ax[0].set_title( "Loss" )
   ax[0].set_xlabel( "Epochs" )
   ax[0].set_ylabel( "Loss" )
   ax[0].grid( True )
   ax[0].legend()
 
-  ax[1].plot(history['accuracy'], label = when+"----"+key)
+  ax[1].plot(history['accuracy'], label = "accuracy")
   ax[1].set_title( "Accuracy" )
   ax[1].set_xlabel( "Epochs" )
   ax[1].set_ylabel( "Accuracy" )

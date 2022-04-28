@@ -116,8 +116,8 @@ class NN(nn.Module):
     #safety check
     assert(len(self.dense)==layers)
     
-    self.dropout = nn.Dropout(p = 0.5)
-    self.activation = ReLUApprox()
+    self.activation = nn.ReLU()
+    #self.activation = ReLUApprox()
 
   def forward(self, x):
     x = self.pad(x, (1,1,1,1))
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     model = NN(layers)
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
-    train(logger, model, dataHandler, num_epochs=1, lr=0.001)
+    train(logger, model, dataHandler, num_epochs=10, lr=0.001)
     loss, accuracy = eval(logger, model, dataHandler)
 
     torch.save(model, f"./models/nn{layers}.pt")
