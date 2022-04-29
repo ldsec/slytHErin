@@ -3,8 +3,7 @@ from pytest import yield_fixture
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-import os
+from sklearn import preprocessing
 import json
 import argparse
 import numpy as np
@@ -24,9 +23,6 @@ def ReLU(X):
     return relu(X)
 
 def standard_eval(X,Y,serialized,layers):
-    
-    print("[*] Standard eval:")
-    
     conv = np.array(serialized['conv']['weight']['w'])
     bias_conv = np.array(serialized['conv']['bias']['b'])
     dense, bias_dense = [],[]
@@ -48,28 +44,57 @@ def standard_eval(X,Y,serialized,layers):
     return corrects
 
 def linear_eval(X,Y, serialized,layers):
-    print("[*] Linear eval:")
-
+    """
+        Linear pipeline without normalization and regular relu works fine
+        Problem is when introducing relu_approx which need normalization to stay within interval
+    """
+    #conv = np.array(serialized['conv']['weight']['w'])
+    #bias_conv = np.array(serialized['conv']['bias']['b'])
+    #CONV, CONV_BIAS = torch.from_numpy(conv).double(), torch.from_numpy(bias_conv).double()
+    #exp = F.conv2d(X, CONV, CONV_BIAS, stride=1, padding=1)
+    
     X = F.pad(X, [1,1,1,1])
     X = X.reshape(X.shape[0],-1)
     
+    print("mean of input:",X.mean())
+    
     conv, convMT = pack_conv_rect(np.array(serialized['conv']['weight']['w']), 10,11,1,30,30)
     bias_conv = pack_bias(np.array(serialized['conv']['bias']['b']), 2, 840//2)
+
     dense, bias_dense = [],[]
     for i in range(layers):
         dense.append(np.array(serialized[f'dense_{str(i+1)}']['weight']['w']))
-        bias_dense.append(np.array(serialized[f'dense_{str(i+1)}']['bias']['b']))
+        bias_dense.append(np.array(serialized[f'dense_{str(i+1)}']['bias']['b']).reshape(1,-1))
+    conv, conv_bias = convMT, np.array(bias_conv['b']).reshape(1,-1)
+    conv, conv_bias = preprocessing.normalize(conv), preprocessing.normalize(conv_bias)
     
-    conv, conv_bias = convMT, np.array(bias_conv['b'])
-    #v, vb = conv.std(), conv_bias.std()
-    X = X @ conv + conv_bias.T
-    X = relu_approx(X)
+    X = X @ conv
+    for i in range(len(X)):
+        X[i] += conv_bias
+    #X = relu_approx(X)
+    X = ReLU(X)
+    
     for d,b in zip(dense, bias_dense):
-        #v, vb = d.std(), b.std()
-        X = X @ d.T + b.T
-        X = relu_approx(X)
+        d,b = preprocessing.normalize(d), preprocessing.normalize(b)
+        X = X @ d.T
+        for i in range(len(X)):
+            ## needed for reasons...
+            try:
+                X[i] = np.array(X[i]) + b 
+            except:
+                X[i] = X[i] + b
+        
+        for x in X.flatten():
+            if x > interval or x < -interval:
+                print("Outside interval:", x)
+        #X = relu_approx(X)
+        X = ReLU(X)
+
+        #print("mean after activation:", X.mean()) #ok if normalized
 
     pred = np.argmax(X,axis=1)
+    #print("Results: ", pred)
+    #print("Expected labels: ", Y)
     corrects = np.sum(pred == Y.numpy())
 
     return corrects
@@ -87,7 +112,7 @@ def test_pipeline(eval):
         layers = 50
     elif args.model == "nn100":
         layers = 100
-    batchsize = 1
+    batchsize = 1000
     dh = DataHandlerNN("./data/mnist_validation", batchsize)
     corrects = 0.0
     tot = 0
@@ -186,7 +211,9 @@ if __name__ == '__main__':
     #train_nn_from_scratch()
     
     ## use to evaluate the standard nn model with conv and relu
+    print("[*] Standard eval:")
     test_pipeline(standard_eval)    
 
     ## use to evaluate the model with a linearized conv and approximated relus
+    print("[*] Linear eval:")
     test_pipeline(linear_eval)
