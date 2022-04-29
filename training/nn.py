@@ -81,13 +81,11 @@ def test_pipeline(eval):
         layers = 50
     elif args.model == "nn100":
         layers = 100
-    batchsize = 64
+    batchsize = 1
     dh = DataHandlerNN("./data/mnist_validation", batchsize)
     corrects = 0.0
-    tot = 0.0
-    for batch, fin in dh.batch():
-        if fin:
-            break
+    tot = 0
+    for batch in dh.batch():
         x = np.array(batch[0]).reshape(batchsize,1,28,28)
         X = torch.from_numpy(x)
         y = np.array(batch[1]).reshape(batchsize)
@@ -138,43 +136,43 @@ class NN(nn.Module):
 
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
-    args = parser.parse_args()
-    
-    if args.model == "nn20":
-        layers = 20
-    elif args.model == "nn50":
-        layers = 50
-    elif args.model == "nn100":
-        layers = 100
-
-    dataHandler = DataHandler(dataset="MNIST", batch_size=256)
-    model = NN(layers)
-    logger = Logger("./logs/",f"nn{layers}")
-    model.apply(model.weights_init)
-    train(logger, model, dataHandler, num_epochs=10, lr=0.001)
-    loss, accuracy = eval(logger, model, dataHandler)
-
-    torch.save(model, f"./models/nn{layers}.pt")
-    
-    ##store as json for Go
-    dense = []
-    bias = []
-    for name, p in model.named_parameters():
-        if "conv" in name:
-            if "weight" in name:
-                conv = p.data.cpu().numpy()
-            else:
-                bias_conv = p.data.cpu().numpy()
-        else:
-            if "weight" in name:
-                dense.append(p.data.cpu().numpy())
-            else:
-                bias.append(p.data.cpu().numpy())
-    serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
-    packed = pack_nn(serialized,layers)
-    
-    with open(f'./models/{args.model}_packed.json', 'w') as f:
-        json.dump(packed, f)
-    #test_pipeline(linear_eval)    
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
+    #args = parser.parse_args()
+    #
+    #if args.model == "nn20":
+    #    layers = 20
+    #elif args.model == "nn50":
+    #    layers = 50
+    #elif args.model == "nn100":
+    #    layers = 100
+#
+    #dataHandler = DataHandler(dataset="MNIST", batch_size=256)
+    #model = NN(layers)
+    #logger = Logger("./logs/",f"nn{layers}")
+    #model.apply(model.weights_init)
+    #train(logger, model, dataHandler, num_epochs=10, lr=0.001)
+    #loss, accuracy = eval(logger, model, dataHandler)
+#
+    #torch.save(model, f"./models/nn{layers}.pt")
+    #
+    ###store as json for Go
+    #dense = []
+    #bias = []
+    #for name, p in model.named_parameters():
+    #    if "conv" in name:
+    #        if "weight" in name:
+    #            conv = p.data.cpu().numpy()
+    #        else:
+    #            bias_conv = p.data.cpu().numpy()
+    #    else:
+    #        if "weight" in name:
+    #            dense.append(p.data.cpu().numpy())
+    #        else:
+    #            bias.append(p.data.cpu().numpy())
+    #serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
+    #packed = pack_nn(serialized,layers)
+    #
+    #with open(f'./models/{args.model}_packed.json', 'w') as f:
+    #    json.dump(packed, f)
+    test_pipeline(standard_eval)    

@@ -66,11 +66,9 @@ class DataHandlerNN():
       self.labels = list(map(int,labels))
 
   def batch(self):
-    if self.idx >= self.num_batches:
-      yield None, True
-    else:
+    while self.idx < self.num_batches:
       yield (self.data[self.idx*self.batchsize:(self.idx+1)*self.batchsize],
-            self.labels[self.idx*self.batchsize:(self.idx+1)*self.batchsize]), False
+            self.labels[self.idx*self.batchsize:(self.idx+1)*self.batchsize])
       self.idx += 1
 
 
