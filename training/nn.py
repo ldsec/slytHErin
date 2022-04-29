@@ -16,13 +16,17 @@ from conv_transform import *
 from activation import *
 
 """
-    Test the NN model
+    Test the NN model or retrain from scratch, see if __main__
+    In any case, run via python3 nn.py --model nnX for X = 20,50,100
 """
 def ReLU(X):
     relu = np.vectorize(lambda x: x * (x > 0))
     return relu(X)
 
 def standard_eval(X,Y,serialized,layers):
+    
+    print("[*] Standard eval:")
+    
     conv = np.array(serialized['conv']['weight']['w'])
     bias_conv = np.array(serialized['conv']['bias']['b'])
     dense, bias_dense = [],[]
@@ -44,6 +48,8 @@ def standard_eval(X,Y,serialized,layers):
     return corrects
 
 def linear_eval(X,Y, serialized,layers):
+    print("[*] Linear eval:")
+
     X = F.pad(X, [1,1,1,1])
     X = X.reshape(X.shape[0],-1)
     
@@ -134,45 +140,53 @@ class NN(nn.Module):
         if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
             nn.init.xavier_uniform_(m.weight)
 
-if __name__ == '__main__':
+def train_nn_from_scratch():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
+    args = parser.parse_args()
     
-    #parser = argparse.ArgumentParser()
-    #parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
-    #args = parser.parse_args()
-    #
-    #if args.model == "nn20":
-    #    layers = 20
-    #elif args.model == "nn50":
-    #    layers = 50
-    #elif args.model == "nn100":
-    #    layers = 100
-#
-    #dataHandler = DataHandler(dataset="MNIST", batch_size=256)
-    #model = NN(layers)
-    #logger = Logger("./logs/",f"nn{layers}")
-    #model.apply(model.weights_init)
-    #train(logger, model, dataHandler, num_epochs=10, lr=0.001)
-    #loss, accuracy = eval(logger, model, dataHandler)
-#
-    #torch.save(model, f"./models/nn{layers}.pt")
-    #
-    ###store as json for Go
-    #dense = []
-    #bias = []
-    #for name, p in model.named_parameters():
-    #    if "conv" in name:
-    #        if "weight" in name:
-    #            conv = p.data.cpu().numpy()
-    #        else:
-    #            bias_conv = p.data.cpu().numpy()
-    #    else:
-    #        if "weight" in name:
-    #            dense.append(p.data.cpu().numpy())
-    #        else:
-    #            bias.append(p.data.cpu().numpy())
-    #serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
-    #packed = pack_nn(serialized,layers)
-    #
-    #with open(f'./models/{args.model}_packed.json', 'w') as f:
-    #    json.dump(packed, f)
+    if args.model == "nn20":
+        layers = 20
+    elif args.model == "nn50":
+        layers = 50
+    elif args.model == "nn100":
+        layers = 100
+
+    dataHandler = DataHandler(dataset="MNIST", batch_size=256)
+    model = NN(layers)
+    logger = Logger("./logs/",f"nn{layers}")
+    model.apply(model.weights_init)
+    train(logger, model, dataHandler, num_epochs=10, lr=0.001)
+    loss, accuracy = eval(logger, model, dataHandler)
+
+    torch.save(model, f"./models/nn{layers}.pt")
+    
+    ##store as json for Go
+    dense = []
+    bias = []
+    for name, p in model.named_parameters():
+        if "conv" in name:
+            if "weight" in name:
+                conv = p.data.cpu().numpy()
+            else:
+                bias_conv = p.data.cpu().numpy()
+        else:
+            if "weight" in name:
+                dense.append(p.data.cpu().numpy())
+            else:
+                bias.append(p.data.cpu().numpy())
+    serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
+    packed = pack_nn(serialized,layers)
+    
+    with open(f'./models/{args.model}_packed.json', 'w') as f:
+        json.dump(packed, f)
+    
+if __name__ == '__main__':
+    ## use for training a new model
+    #train_nn_from_scratch()
+    
+    ## use to evaluate the standard nn model with conv and relu
     test_pipeline(standard_eval)    
+
+    ## use to evaluate the model with a linearized conv and approximated relus
+    test_pipeline(linear_eval)
