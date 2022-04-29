@@ -9,6 +9,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
+	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
 	"os"
 	"strconv"
 	"testing"
@@ -25,14 +26,13 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
 
-	batchSize := 256
+	batchSize := 128
 	//for input block
 	InRowP := 1
 	InColP := 30 //inputs are 30x30
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	// [!] Change
 	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
 	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
 	btpCapacity := 2 //remaining levels
@@ -108,14 +108,56 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
+	fmt.Println("Latency (avg ms per batch):", float64(elapsed)/float64(iters))
 }
 
 func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	/*
 		Setting:
-			Querier sends data encrypted under its sk
-			to cloud-cohort which has a distributed sk'
-			Data are collectively key-switched to pk', inference is performed, and key-switched back to sk
+			Querier has sk and pk
+			Parties have collective pk' and sk' shares
+			Querier sends data encrypted under pk' to cloud-cohort (parties)
+			Inference is performed, and key-switched back to pk to be decrypted by querier
 	*/
+	layers := 20
+
+	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn.Init(layers)
+
+	batchSize := 128
+	//for input block
+	InRowP := 1
+	InColP := 30 //inputs are 30x30
+	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
+
+	// CRYPTO =========================================================================================================
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{43, 43, 43},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 40),
+	})
+	// QUERIER
+	kgen := ckks.NewKeyGenerator(params)
+	skQ := kgen.GenSecretKey()
+	encQ := ckks.NewEncryptor(params, skQ)
+	decQ := ckks.NewDecryptor(params, skQ)
+
+	BoxQ := cipherUtils.CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),
+		Evaluator:    nil,
+		Decryptor:    decQ,
+		Encryptor:    encQ,
+		BootStrapper: nil,
+	}
+	// PARTIES
+	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
+	// [!] We assume that these protocols have been run in a setup phase by the parties
+	prng, _ := lattigoUtils.NewKeyedPRNG([]byte{'t', 'e', 's', 't'})
+	//Encrypt weights in block form
+	nne, _ := nnb.NewEncNN(batchSize, InRowP, btpCapacity, Box)
+
 }

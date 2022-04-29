@@ -225,9 +225,6 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		LogSlots:     13,
 		DefaultScale: float64(1 << 40),
 	})
-	//ckksParams := bootstrapping.DefaultCKKSParameters[4]
-	//btpParams := bootstrapping.DefaultParameters[4]
-	//params, err := ckks.NewParametersFromLiteral(ckksParams)
 
 	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)

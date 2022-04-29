@@ -28,6 +28,8 @@ if __name__ == '__main__':
 
     onnx_model = onnx.load(path)
     W = onnx_model.graph.initializer
+    ## to see the model
+    #print(onnx.helper.printable_graph(onnx_model.graph))
     conv = nph.to_array(W[0])
     dense = [nph.to_array(w) for w in W[1:layers]]
     B = W[-layers:]

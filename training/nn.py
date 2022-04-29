@@ -18,6 +18,13 @@ from activation import *
     Test the NN model or retrain from scratch, see if __main__
     In any case, run via python3 nn.py --model nnX for X = 20,50,100
 """
+
+# explicit function to normalize array
+def normalize(matrix):
+    norm = np.linalg.norm(matrix)
+    matrix = matrix/norm  # normalized matrix
+    return matrix
+
 def ReLU(X):
     relu = np.vectorize(lambda x: x * (x > 0))
     return relu(X)
@@ -55,19 +62,19 @@ def linear_eval(X,Y, serialized,layers):
     
     X = F.pad(X, [1,1,1,1])
     X = X.reshape(X.shape[0],-1)
+    X = normalize(X.numpy())
     
     print("mean of input:",X.mean())
     
-    conv, convMT = pack_conv_rect(np.array(serialized['conv']['weight']['w']), 10,11,1,30,30)
-    bias_conv = pack_bias(np.array(serialized['conv']['bias']['b']), 2, 840//2)
+    conv, convMT = pack_conv_rect(normalize(np.array(serialized['conv']['weight']['w'])), 10,11,1,30,30)
+    ## since value get replicated in the bias packed, normalize before doing that
+    bias_conv = pack_bias(normalize(np.array(serialized['conv']['bias']['b'])), 2, 840//2)
 
     dense, bias_dense = [],[]
     for i in range(layers):
-        dense.append(np.array(serialized[f'dense_{str(i+1)}']['weight']['w']))
-        bias_dense.append(np.array(serialized[f'dense_{str(i+1)}']['bias']['b']).reshape(1,-1))
-    conv, conv_bias = convMT, np.array(bias_conv['b']).reshape(1,-1)
-    conv, conv_bias = preprocessing.normalize(conv), preprocessing.normalize(conv_bias)
-    
+        dense.append(normalize(np.array(serialized[f'dense_{str(i+1)}']['weight']['w'])))
+        bias_dense.append(normalize(np.array(serialized[f'dense_{str(i+1)}']['bias']['b'])))
+    conv,conv_bias = convMT, np.array(bias_conv['b'])
     X = X @ conv
     for i in range(len(X)):
         X[i] += conv_bias
@@ -75,14 +82,9 @@ def linear_eval(X,Y, serialized,layers):
     X = ReLU(X)
     
     for d,b in zip(dense, bias_dense):
-        d,b = preprocessing.normalize(d), preprocessing.normalize(b)
         X = X @ d.T
         for i in range(len(X)):
-            ## needed for reasons...
-            try:
-                X[i] = np.array(X[i]) + b 
-            except:
-                X[i] = X[i] + b
+            X[i] = X[i] + b
         
         for x in X.flatten():
             if x > interval or x < -interval:
