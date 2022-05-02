@@ -14,8 +14,8 @@ import (
 	Thus, they are implemented in a dummy way
 */
 
-//Returns array of secret key shares and collective encryption key
-func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties int) ([]*rlwe.SecretKey, *rlwe.PublicKey) {
+//Returns array of secret key shares, secret key and collective encryption key
+func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties int) ([]*rlwe.SecretKey, *rlwe.SecretKey, *rlwe.PublicKey, ckks.KeyGenerator) {
 	type Party struct {
 		*dckks.CKGProtocol
 		sk *rlwe.SecretKey
@@ -23,8 +23,11 @@ func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties
 	}
 	kgen := ckks.NewKeyGenerator(params)
 	skShares := make([]*rlwe.SecretKey, parties)
+	sk := ckks.NewSecretKey(params)
+	ringQP, levelQ, levelP := params.RingQP(), params.QCount()-1, params.PCount()-1
 	for i := 0; i < parties; i++ {
 		skShares[i] = kgen.GenSecretKey()
+		ringQP.AddLvl(levelQ, levelP, sk.Value, skShares[i].Value, sk.Value)
 	}
 
 	ckgParties := make([]*Party, parties)
@@ -49,7 +52,7 @@ func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties
 
 	pk := ckks.NewPublicKey(params)
 	P0.GenPublicKey(P0.p, crp, pk)
-	return skShares, pk
+	return skShares, sk, pk, kgen
 }
 
 func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, shares []*rlwe.SecretKey) *rlwe.RelinearizationKey {

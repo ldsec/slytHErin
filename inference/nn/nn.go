@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
+	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"os"
@@ -321,6 +323,136 @@ func EvalBatchEncrypted(nne *NNEnc, nnb *NNBlock, XBatchClear *plainUtils.BMatri
 			}
 			cipherUtils.CompareBlocks(Xint, XintPlain, Box)
 			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+		}
+	}
+	elapsed := time.Since(now)
+	fmt.Println("Done", elapsed)
+
+	batchSize := XBatchClear.RowP * XBatchClear.InnerRows
+	res := cipherUtils.DecInput(Xint, Box)
+	resPlain := plainUtils.MatToArray(plainUtils.ExpandBlocks(XintPlain))
+	predictions := make([]int, batchSize)
+	predictionsPlain := make([]int, batchSize)
+
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res[i][j]
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	if debug {
+		correctsPlain := 0
+		for i := 0; i < batchSize; i++ {
+			maxIdx := 0
+			maxConfidence := 0.0
+			for j := 0; j < labels; j++ {
+				confidence := resPlain[i][j]
+				if confidence > maxConfidence {
+					maxConfidence = confidence
+					maxIdx = j
+				}
+			}
+			predictionsPlain[i] = maxIdx
+			if predictionsPlain[i] == Y[i] {
+				correctsPlain += 1
+			}
+		}
+		fmt.Println("Corrects clear:", correctsPlain)
+	}
+	fmt.Println("Corrects enc:", corrects)
+	return corrects, elapsed
+}
+
+func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
+	XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput,
+	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey,
+	minLevel int, labels int, debug bool,
+	master *distributed.DummyMaster, players []*distributed.DummyPlayer) (int, time.Duration) {
+
+	Xint := XbatchEnc
+	XintPlain := XBatchClear
+	var err error
+	now := time.Now()
+	for i := range nne.Weights {
+		fmt.Printf("======================> Layer %d\n", i+1)
+		level := Xint.Blocks[0][0].Level()
+		if level == minLevel { //minLevel for Bootstrapping
+			fmt.Println("MinLevel, Bootstrapping...")
+			for ii := 0; ii < Xint.RowP; ii++ {
+				for jj := 0; jj < Xint.ColP; jj++ {
+					//parallel bootstrapping of all blocks
+					go func(ii, jj int) {
+						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+						utils.ThrowErr(err)
+					}(ii, jj)
+				}
+			}
+		}
+		Xint, err = cipherUtils.BlocksC2CMul(Xint, nne.Weights[i], Box)
+		utils.ThrowErr(err)
+		if debug {
+			XintPlain, err = plainUtils.MultiPlyBlocks(XintPlain, nnb.Weights[i])
+			utils.ThrowErr(err)
+			fmt.Printf("Mul ")
+			cipherUtils.CompareBlocks(Xint, plainUtils.MultiplyBlocksByConst(XintPlain, 1/nnb.ReLUApprox.Interval), Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+		}
+
+		//bias
+		Xint, err = cipherUtils.AddBlocksC2C(Xint, nne.Bias[i], Box)
+		utils.ThrowErr(err)
+		if debug {
+			XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(nnb.Bias[i], 1/nnb.ReLUApprox.Interval))
+			utils.ThrowErr(err)
+			//fmt.Printf("Bias ")
+			//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(nnb.Bias[i], 1-1/nnb.ReLUApprox.Interval))
+			utils.ThrowErr(err)
+		}
+		level = Xint.Blocks[0][0].Level()
+		if level < 2 {
+			fmt.Println("Level < 2 before activation , Bootstrapping...")
+			for ii := 0; ii < Xint.RowP; ii++ {
+				for jj := 0; jj < Xint.ColP; jj++ {
+					//parallel bootstrapping of all blocks
+					go func(ii, jj int) {
+						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+						utils.ThrowErr(err)
+					}(ii, jj)
+				}
+			}
+		}
+		fmt.Printf("Activation ")
+		cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+		if debug {
+			for ii := range XintPlain.Blocks {
+				for jj := range XintPlain.Blocks[ii] {
+					utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
+				}
+			}
+			cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+		}
+	}
+	fmt.Println("Key Switch to querier secret key")
+	for ii := 0; ii < Xint.RowP; ii++ {
+		for jj := 0; jj < Xint.ColP; jj++ {
+			//parallel key switching
+			go func(ii, jj int) {
+				Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+				utils.ThrowErr(err)
+			}(ii, jj)
 		}
 	}
 	elapsed := time.Since(now)
