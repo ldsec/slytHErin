@@ -136,13 +136,31 @@ func (dmst *DummyMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	switch proto {
 	case TYPES[0]:
 		//prepare PubKeySwitch
+		dmst.ProtoBuf[ctId] = &DummyProtocol{
+			Proto:        dckks.NewPCKSProtocol(dmst.Params, 3.2),
+			Shares:       make([]interface{}, dmst.Parties),
+			Completion:   1,
+			FeedbackChan: make(chan *ckks.Ciphertext),
+		}
 		go dmst.RunPubKeySwitch(pkQ, ct, ctId)
 		for _, c := range dmst.PlayerChans {
 			go dmst.DispatchPCKS(c, ct)
 		}
 	case TYPES[1]:
 		//prepare Refresh
-		go dmst.RunRefresh(ct, ctId)
+		var minLevel, logBound int
+		var ok bool
+		if minLevel, logBound, ok = dckks.GetMinimumLevelForBootstrapping(128, ct.Scale, dmst.Parties, dmst.Params.Q()); ok != true || minLevel+1 > dmst.Params.MaxLevel() {
+			utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
+		}
+		//creates proto instance
+		dmst.ProtoBuf[ctId] = &DummyProtocol{
+			Proto:        dckks.NewRefreshProtocol(dmst.Params, logBound, 3.2),
+			Shares:       make([]interface{}, dmst.Parties),
+			Completion:   1,
+			FeedbackChan: make(chan *ckks.Ciphertext),
+		}
+		go dmst.RunRefresh(ct, minLevel, logBound, ctId)
 		for _, c := range dmst.PlayerChans {
 			go dmst.DispatchRef(c, ct)
 		}
@@ -156,12 +174,7 @@ func (dmst *DummyMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 //Initiates the PCKS protocol from master
 func (dmst *DummyMaster) RunPubKeySwitch(pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) {
 	//create protocol instance
-	dmst.ProtoBuf[ctId] = &DummyProtocol{
-		Proto:      dckks.NewPCKSProtocol(dmst.Params, 3.2),
-		Shares:     make([]interface{}, dmst.Parties),
-		Completion: 1,
-	}
-	proto := dmst.ProtoBuf[ctId].Proto.(dckks.PCKSProtocol)
+	proto := dmst.ProtoBuf[ctId].Proto.(*dckks.PCKSProtocol)
 	share := proto.AllocateShare(ct.Level())
 	proto.GenShare(dmst.sk, pkQ, ct.Value[1], share)
 	dmst.ProtoBuf[ctId].Shares[0] = share
@@ -182,20 +195,9 @@ func (dmst *DummyMaster) RunPubKeySwitch(pkQ *rlwe.PublicKey, ct *ckks.Ciphertex
 }
 
 //Initiates the Refresh protocol from master
-func (dmst *DummyMaster) RunRefresh(ct *ckks.Ciphertext, ctId int) error {
+func (dmst *DummyMaster) RunRefresh(ct *ckks.Ciphertext, minLevel int, logBound int, ctId int) error {
 	//setup
-	var minLevel, logBound int
-	var ok bool
-	if minLevel, logBound, ok = dckks.GetMinimumLevelForBootstrapping(128, ct.Scale, dmst.Parties, dmst.Params.Q()); ok != true || minLevel+1 > dmst.Params.MaxLevel() {
-		return errors.New("Not enough levels to ensure correcness and 128 security")
-	}
-	//creates proto instance
-	dmst.ProtoBuf[ctId] = &DummyProtocol{
-		Proto:      dckks.NewRefreshProtocol(dmst.Params, logBound, 3.2),
-		Shares:     make([]interface{}, dmst.Parties),
-		Completion: 1,
-	}
-	proto := dmst.ProtoBuf[ctId].Proto.(dckks.RefreshProtocol)
+	proto := dmst.ProtoBuf[ctId].Proto.(*dckks.RefreshProtocol)
 	crp := proto.SampleCRP(dmst.Params.MaxLevel(), dmst.Crs)
 	dmst.ProtoBuf[ctId].Crp = crp
 	share := proto.AllocateShare(minLevel, dmst.Params.MaxLevel())

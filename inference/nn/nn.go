@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
@@ -375,7 +376,7 @@ func EvalBatchEncrypted(nne *NNEnc, nnb *NNBlock, XBatchClear *plainUtils.BMatri
 
 func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 	XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput,
-	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey,
+	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
 	minLevel int, labels int, debug bool,
 	master *distributed.DummyMaster, players []*distributed.DummyPlayer) (int, time.Duration) {
 
@@ -391,8 +392,9 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 			for ii := 0; ii < Xint.RowP; ii++ {
 				for jj := 0; jj < Xint.ColP; jj++ {
 					//parallel bootstrapping of all blocks
+					fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
 					go func(ii, jj int) {
-						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
 						utils.ThrowErr(err)
 					}(ii, jj)
 				}
@@ -426,6 +428,7 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 			for ii := 0; ii < Xint.RowP; ii++ {
 				for jj := 0; jj < Xint.ColP; jj++ {
 					//parallel bootstrapping of all blocks
+					fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
 					go func(ii, jj int) {
 						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
 						utils.ThrowErr(err)
@@ -449,8 +452,9 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 	for ii := 0; ii < Xint.RowP; ii++ {
 		for jj := 0; jj < Xint.ColP; jj++ {
 			//parallel key switching
+			fmt.Println("Switch id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
 			go func(ii, jj int) {
-				Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+				Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
 				utils.ThrowErr(err)
 			}(ii, jj)
 		}
@@ -459,6 +463,8 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 	fmt.Println("Done", elapsed)
 
 	batchSize := XBatchClear.RowP * XBatchClear.InnerRows
+	//use querier key to do the final decryption
+	Box.Decryptor = decQ
 	res := cipherUtils.DecInput(Xint, Box)
 	resPlain := plainUtils.MatToArray(plainUtils.ExpandBlocks(XintPlain))
 	predictions := make([]int, batchSize)

@@ -162,12 +162,13 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
 	rotations := cipherUtils.GenRotations(inputInnerRows, len(nnb.Weights), nnb.InnerRows, nnb.InnerCols, params, nil)
 	rtks := kgenP.GenRotationKeysForRotations(rotations, true, skP)
+	decP := ckks.NewDecryptor(params, skP)
 
 	Box := cipherUtils.CkksBox{
 		Params:       params,
 		Encoder:      ckks.NewEncoder(params),                                             //public
 		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}), //from parties
-		Decryptor:    decQ,                                                                //from querier
+		Decryptor:    decP,                                                                //from parties for debug
 		Encryptor:    ckks.NewEncryptor(params, pkP),                                      //from parties
 		BootStrapper: nil,
 	}
@@ -215,7 +216,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
 		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		correctsInBatch, duration := EvalBatchEncryptedDistributed(nne, nnb, X, Y, Xenc, Box, pkQ, minLevel, 10, true, master, players)
+		correctsInBatch, duration := EvalBatchEncryptedDistributed(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, true, master, players)
 		corrects += correctsInBatch
 		elapsed += duration.Milliseconds()
 		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
