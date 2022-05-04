@@ -41,10 +41,13 @@ def standard_eval(X,Y,serialized,layers):
     X = F.conv2d(X, CONV, CONV_BIAS, stride=1, padding=1)
     X = F.relu(X)
     X = X.reshape(X.shape[0], -1)
+    iter = 0
     for d,b in zip(dense, bias_dense):
         D,B = torch.from_numpy(d).double(), torch.from_numpy(b).double()
-        X = F.relu(F.linear(X, D, B))
-    
+        X = F.linear(X, D, B)
+        if iter != layers-1:
+            X = F.relu(X)
+        iter += 1
     _, predicted_labels = X.max(1)
     corrects = (predicted_labels == Y).sum().item()
 
