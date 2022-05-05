@@ -49,7 +49,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	utils.ThrowErr(err)
 
 	// read or generate secret keys
-	keyPath := fmt.Sprintf("/root/nn%d__paramSlots%d", layers, params.LogSlots())
+	keyPath := fmt.Sprintf("/root/nn%d__paramSlots%d__batch%d", layers, params.LogSlots(), batchSize)
 	_, err = os.OpenFile(keyPath+"_sk", os.O_RDONLY, 0755)
 	sk := new(rlwe.SecretKey)
 	rtks := new(rlwe.RotationKeySet)
@@ -92,7 +92,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	}
 
 	//encrypt weights
-	nne, _ := nnb.NewEncNN(batchSize, rowP, 2, Box, -1)
+	nne, _ := nnb.NewEncNN(batchSize, rowP, 2, Box, -1) //-1 means not distributed
 
 	corrects := 0
 	tot := 0
@@ -133,6 +133,10 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			The distributed setting corresponds to the Cloud-assisted setting of https://eprint.iacr.org/2020/304.pdf
 			Root has one share of the key
 			Topology is star with root at the centre, supposing small enough # of parties
+
+		Runtime:
+			Latency (avg ms per batch): 191676.8
+			Latency (avg ms per sample): 1497.475
 	*/
 	layers := 20
 
@@ -191,6 +195,12 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		players[i], err = distributed.NewDummyPlayer(skShares[i+1], pkP, params, i+1, master.P2MChans[i+1], master.M2PChans[i+1])
 		utils.ThrowErr(err)
 	}
+	//start master
+	master.Listen()
+	//start players
+	for _, p := range players {
+		go p.Dispatch()
+	}
 
 	// info for bootstrapping
 	var minLevel int
@@ -210,9 +220,11 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	}
 
 	corrects := 0
+	correctsPlain := 0
 	tot := 0
 	iters := 0
-	maxIters := 5
+	maxIters := 10
+	debug := true
 	var elapsed int64
 	//Start Inference run
 	fmt.Println("Starting inference on dataset...")
@@ -225,14 +237,19 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
 		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		correctsInBatch, duration := EvalBatchEncryptedDistributed(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, true, master, players)
+		correctsInBatchPlain, correctsInBatch, duration := EvalBatchEncryptedDistributed(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, debug, master, players)
 		corrects += correctsInBatch
+		correctsPlain += correctsInBatchPlain
 		elapsed += duration.Milliseconds()
 		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
 		tot += batchSize
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	if debug {
+		fmt.Println("Expected Accuracy:", float64(correctsPlain)/float64(tot))
+	}
+
 	avg := float64(elapsed) / float64(iters)
 	fmt.Println("Latency (avg ms per batch):", avg)
 	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))

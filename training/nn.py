@@ -161,7 +161,8 @@ class NN(nn.Module):
     
     for i,layer in enumerate(self.dense):
         x = layer(x)
-        x = self.activation(x)
+        if i != len(self.dense)-1:
+            x = self.activation(x)
 
     return x
  
@@ -182,12 +183,15 @@ def train_nn_from_scratch():
     elif args.model == "nn100":
         layers = 100
 
-    dataHandler = DataHandler(dataset="MNIST", batch_size=256)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=512)
     model = NN(layers)
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
-    train(logger, model, dataHandler, num_epochs=10, lr=0.001)
-    loss, accuracy = eval(logger, model, dataHandler)
+    start = time.time()
+    train_advanced(logger, model, dataHandler, num_epochs=50, lr=0.001)
+    end = time.time()
+    print("--- %s seconds for train---" % (end - start))
+    loss, accuracy = eval_advanced(logger, model, dataHandler)
 
     torch.save(model, f"./models/nn{layers}.pt")
     

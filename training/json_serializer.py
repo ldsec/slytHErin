@@ -5,6 +5,7 @@ from activation import relu_approx, sigmoid_approx
 from dataHandler import DataHandler, DataHandlerAlex
 from cryptonet import SimpleNet
 from alexnet import AlexNet
+from nn import NN
 import os
 import glob
 import json
@@ -42,16 +43,21 @@ if __name__ == '__main__':
             #    #    j_name += "_simplified"
             #    pack_alexNet(m)
 
-    elif args.model:
-        with open(f'{args.model}.json', 'r') as f:
-            serialized = json.load(f)
+    elif "nn" in args.model:
+        #with open(f'{args.model}.json', 'r') as f:
+        #    serialized = json.load(f)
         if args.model == "nn20":
+            model = torch.load("nn20.pt")
             layers = 20
         elif args.model == "nn50":
+            model = torch.load("nn50.pt")
             layers = 50
         elif args.model == "nn100":
+            model = torch.load("nn100.pt")
             layers = 100
         j_name = f"nn{layers}_packed"
+        conv,bias_conv,dense,bias = extract_nn(model)
+        serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
         packed = pack_nn(serialized, layers)
         with open(f'{j_name}.json', 'w') as f:
             json.dump(packed, f)

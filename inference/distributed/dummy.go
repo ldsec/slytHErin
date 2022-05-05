@@ -151,7 +151,7 @@ func (dmst *DummyMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	switch proto {
 	case TYPES[0]:
 		//prepare PubKeySwitch
-		fmt.Println("[*] Master -- Registering PubKeySwitch ID: %d", ctId)
+		fmt.Printf("[*] Master -- Registering PubKeySwitch ID: %d\n\n", ctId)
 		protocol := dckks.NewPCKSProtocol(dmst.Params, 3.2)
 		dmst.ProtoBuf.Store(ctId, &DummyProtocol{
 			Protocol:     protocol,

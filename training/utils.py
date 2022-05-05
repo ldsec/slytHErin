@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from torch.autograd import Variable
-
+import time
 ## interactive off
 plt.ioff()
 ## setup torch enviro
@@ -95,13 +95,10 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
       predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
       loss = criterion(predictions, labels_one_hot)
       epoch_loss += loss.item()
-      loss = Variable(loss, requires_grad = True)
+      #loss = Variable(loss, requires_grad = True)
       loss.backward()
-      if not TPU:
-        optimizer.step()
-      else:
-        xm.optimizer_step(optimizer, barrier=True) ## if TPU 
-      
+      optimizer.step()
+
       if model.verbose and (i+1)%100 == 0:
         print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
       _, predicted_labels = predictions.max(1)
@@ -142,6 +139,95 @@ def eval(logger, model, dataHandler):
         loss = criterion(predicted_labels, labels).item()
         
         test_loss += loss
+        num_correct += (predicted_labels == labels).sum().item()
+        num_samples += predicted_labels.size(0)
+        
+        testHistory['loss'].append(loss)
+        testHistory['accuracy'].append(float(num_correct) / float(num_samples))
+        
+        logger.log_batch(batch+1, loss, float(num_correct) / float(num_samples))
+    
+    test_accuracy = float(num_correct) / float(num_samples)
+    test_loss = test_loss/len(dataHandler.test_dl) ## avg loss
+    logger.finalize(test_loss, test_accuracy)
+
+    plot_history(logger.name, False, testHistory)
+
+  return test_loss, test_accuracy
+
+## TRAIN with Cross Entropy and Optimizer
+def train_advanced(logger, model, dataHandler, num_epochs, lr=0.001, TPU=False):
+  
+  num_epochs = num_epochs
+  optimizer = optim.Adam(model.parameters(),lr=lr)
+  criterion = nn.CrossEntropyLoss()
+
+  trainHistory = {}
+  trainHistory['loss'] = []
+  trainHistory['accuracy'] = []
+
+  model.train()
+  for epoch in range(num_epochs):
+    start_epoch = time.time()
+    epoch_loss = 0
+    num_correct = 0
+    num_samples = 0
+    
+    for i, (data, labels) in enumerate(dataHandler.train_dl):
+      start_batch = time.time()
+      data = data.to(device=device)
+      labels = labels.to(device=device)
+
+      optimizer.zero_grad()
+      
+      predictions = model(data)
+      #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
+      loss = criterion(predictions, labels)
+      epoch_loss += loss.item()
+      loss.backward()
+      optimizer.step()
+
+      if model.verbose and (i+1)%100 == 0:
+        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
+      _, predicted_labels = predictions.max(1)
+      num_correct += (predicted_labels == labels).sum().item()
+      num_samples += predicted_labels.size(0)
+      end_batch = time.time()
+      #print("--- %s seconds for batch---" % (end_batch - start_batch))
+
+    end_epoch = time.time()
+    print("--- %s seconds for epoch ---" % (end_epoch - start_epoch))
+    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f}")
+    logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
+    trainHistory['loss'].append(loss.item())
+    trainHistory['accuracy'].append(num_correct/num_samples)
+    
+  plot_history(logger.name, True, trainHistory)
+
+## EVAL with Cross Entropy
+def eval_advanced(logger, model, dataHandler):
+  num_correct = 0
+  num_samples = 0
+
+  criterion = nn.CrossEntropyLoss()
+  model.eval()
+  
+  testHistory = {}
+  testHistory['loss'] = []
+  testHistory['accuracy'] = []
+  test_loss = 0
+  test_accuracy = 0
+  
+  with torch.no_grad():
+    for batch, (data,labels) in enumerate(dataHandler.test_dl):
+        data = data.to(device=device)
+        labels = labels.to(device=device)
+        
+        predictions = model(data)
+        loss = criterion(predictions, labels).item()
+        
+        test_loss += loss
+        _,predicted_labels = predictions.max(1)
         num_correct += (predicted_labels == labels).sum().item()
         num_samples += predicted_labels.size(0)
         

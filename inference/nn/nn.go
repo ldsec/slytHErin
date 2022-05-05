@@ -17,7 +17,7 @@ import (
 )
 
 /*
-	Stores NN model in clear, right as in json format
+	Stores NN model in clear, as in json format
 */
 type NN struct {
 	Conv       utils.Layer      `json:"conv"`
@@ -80,7 +80,7 @@ func (nn *NN) Init(layers int) {
 	nn.DimOutDense = 92 //per sample, all dense are the same but last one which is 92x10
 }
 
-//Builds BlockMatrices from the layers (cleartext)
+//Builds BlockMatrices from the layers in cleartext
 func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 	rowP, colP := InRowP, InColP
 	layers := nn.Layers
@@ -145,7 +145,7 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 	}, nil
 }
 
-//Forms an encrypted NN from the plaintext repr
+//Forms an encrypted NN from the plaintext representation
 func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils.CkksBox, minLevel int) (*NNEnc, error) {
 	layers := nnb.Layers
 	nne := new(NNEnc)
@@ -176,8 +176,7 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 			plainUtils.MatToArray(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Bias[i]),
 				1.0/nnb.ReLUApprox.Interval)),
 			InRowP, nnb.ColsP[i], level, Box)
-		level -= 2 //activation
-		if level == 0 || (minLevel != -1 && (level < 2 || level == minLevel+1 || level-2 <= minLevel)) {
+		if level < 2 || (minLevel != -1 && (level < 2 || level == minLevel+1 || level-2 <= minLevel)) {
 			if minLevel != -1 {
 				//distributed
 				level = maxLevel
@@ -186,6 +185,7 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 				level = btpCapacity
 			}
 		}
+		level -= 2 //activation
 	}
 	fmt.Println("Done...")
 	return nne, nil
@@ -391,15 +391,7 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 	XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput,
 	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
 	minLevel int, labels int, debug bool,
-	master *distributed.DummyMaster, players []*distributed.DummyPlayer) (int, time.Duration) {
-
-	//start master
-	master.Listen()
-	//start players
-	for _, p := range players {
-		go p.Dispatch()
-	}
-
+	master *distributed.DummyMaster, players []*distributed.DummyPlayer) (int, int, time.Duration) {
 	Xint := XbatchEnc
 	XintPlain := XBatchClear
 	var err error
@@ -523,6 +515,7 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 	predictionsPlain := make([]int, batchSize)
 
 	corrects := 0
+	correctsPlain := 0
 	for i := 0; i < batchSize; i++ {
 		maxIdx := 0
 		maxConfidence := 0.0
@@ -539,7 +532,6 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 		}
 	}
 	if debug {
-		correctsPlain := 0
 		for i := 0; i < batchSize; i++ {
 			maxIdx := 0
 			maxConfidence := 0.0
@@ -558,5 +550,5 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 		fmt.Println("Corrects clear:", correctsPlain)
 	}
 	fmt.Println("Corrects enc:", corrects)
-	return corrects, elapsed
+	return correctsPlain, corrects, elapsed
 }

@@ -194,6 +194,7 @@ def gen_kernel_matrix_rect(kernel, kernel_rows, kernel_cols, stride, input_rows,
 
     return m
 
+#to be used for SimpleNet
 def extract_param(param_name, param):
     '''
         Params are extracted in row-major order:
@@ -636,6 +637,25 @@ def pack_alexNet(model):
 
     return packed
 """
+## takes model from pytorch
+def extract_nn(model):
+    dense = []
+    bias = []
+    for name, param in model.named_parameters():
+        if 'conv' in name:
+            if 'weight' in name:
+                conv = param.data.cpu().numpy()
+            else:
+                bias_conv = param.data.cpu().numpy()
+        else:
+            if 'weight' in name:
+                dense.append(param.data.cpu().numpy())
+            else:
+                bias.append(param.data.cpu().numpy())
+    return conv, bias_conv, dense, bias
+    
+
+## takes nn 
 def serialize_nn(conv, bias_conv, dense, bias, layers):
     #layers is expected to be layers + 1, e.g 21 for nn20
     serialized = {}
