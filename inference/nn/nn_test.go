@@ -21,29 +21,35 @@ import (
 func TestEvalDataEncModelEnc(t *testing.T) {
 	//data encrypted - model enc, not distributed
 	/*
-		Current time:
-		NN20 = 662s per 128 batch -> 5.17s per sample
+		5 runs measure:
+		1 - 638s
+		2 - 640s
+		3 - 643s
+		4 - 642s
+		5 - 643s
+		_____________
+		5.009s/sample
 	*/
 	layers := 20
 
 	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
-	nn.Init(layers)
 
+	nn.Init(layers)
 	batchSize := 128
 	//for input block
-	InRowP := 1
-	InColP := 30 //inputs are 30x30
-	inputInnerRows := batchSize / InRowP
-	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
+	rowP := 1
+	colP := 30 //inputs are 30x30
+	inputInnerRows := batchSize / rowP
+	nnb, _ := nn.NewBlockNN(batchSize, rowP, colP)
 
-	// CRYPTO =========================================================================================================
+	// CRYPTO
 	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
 	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
-	btpCapacity := 2 //remaining levels
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
-	keyPath := fmt.Sprintf("/root/nn%d_paramSlots%d", layers, params.LogSlots())
+	// read or generate secret keys
+	keyPath := fmt.Sprintf("/root/nn%d__paramSlots%d", layers, params.LogSlots())
 	_, err = os.OpenFile(keyPath+"_sk", os.O_RDONLY, 0755)
 	sk := new(rlwe.SecretKey)
 	rtks := new(rlwe.RotationKeySet)
@@ -60,7 +66,9 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		sk, rtks = cipherUtils.DesereliazeKeys(keyPath)
 	}
 	rlk := kgen.GenRelinearizationKey(sk, 2)
+
 	fmt.Println("Done")
+
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
 	evk := bootstrapping.GenEvaluationKeys(btpParams, params, sk)
@@ -75,10 +83,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		BootStrapper: btp,
 	}
 
-	//Encrypt weights in block form
-	nne, _ := nnb.NewEncNN(batchSize, InRowP, btpCapacity, Box)
-
-	//Load Dataset
+	//load dataset
 	dataSn := data.LoadData("/root/nn_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
@@ -86,24 +91,25 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		return
 	}
 
+	//encrypt weights
+	nne, _ := nnb.NewEncNN(batchSize, rowP, 2, Box, -1)
+
 	corrects := 0
 	tot := 0
 	iters := 0
 	maxIters := 5
 	var elapsed int64
-	//Start Inference run
 	fmt.Println("Starting inference on dataset...")
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
-		if err != nil || iters == maxIters {
+		if err != nil && iters == maxIters {
 			//dataset completed
 			break
 		}
-		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
-		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
+		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), rowP, colP)
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, rowP, colP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		//correctsInBatch, duration := nn.EvalBatchEncrypted(X, Y, Xenc, weightsBlock, biasBlock, weightMatricesBlock, biasMatricesBlock, Box, 10)
-		correctsInBatch, duration := EvalBatchEncrypted(nne, nnb, X, Y, Xenc, Box, 10, true)
+		correctsInBatch, duration := nne.EvalBatchEncrypted(nnb, X, Y, Xenc, Box, 10, true)
 		corrects += correctsInBatch
 		elapsed += duration.Milliseconds()
 		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
@@ -111,7 +117,9 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency (avg ms per batch):", float64(elapsed)/float64(iters))
+	avg := float64(elapsed) / float64(iters)
+	fmt.Println("Latency (avg ms per batch):", avg)
+	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
 }
 
 func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
@@ -131,7 +139,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
 
-	batchSize := 128
+	batchSize := 64
 	//for input block
 	InRowP := 1
 	InColP := 30 //inputs are 30x30
@@ -139,14 +147,15 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         14,
-		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
-		LogP:         []int{43, 43, 43},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     13,
-		DefaultScale: float64(1 << 40),
-	})
+	//params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	//	LogP:         []int{33, 33, 33},
+	//	Sigma:        rlwe.DefaultSigma,
+	//	LogSlots:     13,
+	//	DefaultScale: float64(1 << 30),
+	//})
+	params, _ := ckks.NewParametersFromLiteral(ckks.DefaultParams[2])
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
 	skQ := kgenQ.GenSecretKey()
@@ -156,8 +165,9 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
+
 	parties := 3
-	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'t', 'e', 's', 't'})
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
 	rotations := cipherUtils.GenRotations(inputInnerRows, len(nnb.Weights), nnb.InnerRows, nnb.InnerCols, params, nil)
@@ -174,16 +184,13 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	}
 
 	//Create distributed parties
-	master, err := distributed.NewDummyMaster(skShares[0], pkP, params, crs, parties)
+	master, err := distributed.NewDummyMaster(skShares[0], pkP, params, parties)
 	utils.ThrowErr(err)
 	players := make([]*distributed.DummyPlayer, parties-1)
 	for i := 0; i < parties-1; i++ {
-		players[i], err = distributed.NewDummyPlayer(skShares[i+1], pkP, params, crs, i+1, master.PlayerChans[i+1])
+		players[i], err = distributed.NewDummyPlayer(skShares[i+1], pkP, params, i+1, master.P2MChans[i+1], master.M2PChans[i+1])
 		utils.ThrowErr(err)
 	}
-
-	//Encrypt weights in block form
-	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box)
 
 	// info for bootstrapping
 	var minLevel int
@@ -191,6 +198,8 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel+1 > params.MaxLevel() {
 		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 	}
+	//Encrypt weights in block form
+	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box, minLevel)
 
 	//Load Dataset
 	dataSn := data.LoadData("/root/nn_data.json")
@@ -224,5 +233,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency (avg ms per batch):", float64(elapsed)/float64(iters))
+	avg := float64(elapsed) / float64(iters)
+	fmt.Println("Latency (avg ms per batch):", avg)
+	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
 }

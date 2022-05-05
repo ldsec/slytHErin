@@ -44,7 +44,7 @@ func InitActivation(degree int, interval float64, coeffs []float64) PolyApprox {
 }
 
 func InitReLU() PolyApprox {
-	//use ReLU approximation: deg is 2 and inteval is [-10,10]
+	//use ReLU approximation: deg is 3 and inteval is [-10,10]
 	var relu PolyApprox
 	relu.Degree = 3
 	relu.Interval = 10.0

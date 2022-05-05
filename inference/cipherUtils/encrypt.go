@@ -1,7 +1,9 @@
 package cipherUtils
 
 import (
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"gonum.org/v1/gonum/mat"
 	"sync"
 )
 
@@ -14,6 +16,32 @@ func EncryptInput(level int, w [][]float64, Box CkksBox) (ctW *ckks.Ciphertext) 
 	pt := ckks.NewPlaintext(params, level, params.DefaultScale())
 	ecd.EncodeSlots(wF, pt, params.LogSlots())
 	return enc.EncryptNew(pt)
+}
+
+func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
+	/*
+		Given a block input matrix, decrypts and returns the underlying original matrix
+		The sub-matrices are also transposed (remember that they are in form flatten(A.T))
+	*/
+	Xb := new(plainUtils.BMatrix)
+	Xb.RowP = XEnc.RowP
+	Xb.ColP = XEnc.ColP
+	Xb.InnerRows = XEnc.InnerRows
+	Xb.InnerCols = XEnc.InnerCols
+	Xb.Blocks = make([][]*mat.Dense, Xb.RowP)
+	for i := 0; i < XEnc.RowP; i++ {
+		Xb.Blocks[i] = make([]*mat.Dense, Xb.ColP)
+		for j := 0; j < XEnc.ColP; j++ {
+			pt := Box.Decryptor.DecryptNew(XEnc.Blocks[i][j])
+			ptArray := Box.Encoder.DecodeSlots(pt, Box.Params.LogSlots())
+			//this is flatten(x.T)
+			resReal := plainUtils.ComplexToReal(ptArray)[:XEnc.InnerRows*XEnc.InnerCols]
+			res := plainUtils.TransposeDense(mat.NewDense(XEnc.InnerCols, XEnc.InnerRows, resReal))
+			// now this is x
+			Xb.Blocks[i][j] = res
+		}
+	}
+	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
 func EncodeInput(level int, w [][]float64, Box CkksBox) *ckks.Plaintext {
