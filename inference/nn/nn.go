@@ -322,21 +322,23 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 			XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(nnb.Bias[i], 1-1/nnb.ReLUApprox.Interval))
 			utils.ThrowErr(err)
 		}
-		level = Xint.Blocks[0][0].Level()
-		if level < 2 {
-			fmt.Println("Bootstrapping for Activation")
-			cipherUtils.BootStrapBlocks(Xint, Box)
-		}
-		fmt.Printf("Activation ")
-		cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
-		if debug {
-			for ii := range XintPlain.Blocks {
-				for jj := range XintPlain.Blocks[ii] {
-					utils.ActivatePlain(XintPlain.Blocks[ii][jj], nnb.ReLUApprox)
-				}
+		if i != len(nne.Weights)-1 {
+			level = Xint.Blocks[0][0].Level()
+			if level < 2 {
+				fmt.Println("Bootstrapping for Activation")
+				cipherUtils.BootStrapBlocks(Xint, Box)
 			}
-			cipherUtils.CompareBlocks(Xint, XintPlain, Box)
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			fmt.Printf("Activation ")
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			if debug {
+				for ii := range XintPlain.Blocks {
+					for jj := range XintPlain.Blocks[ii] {
+						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nnb.ReLUApprox)
+					}
+				}
+				cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			}
 		}
 	}
 	elapsed := time.Since(now)
@@ -449,44 +451,46 @@ func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
 
 		level = Xint.Blocks[0][0].Level()
 		fmt.Println("Ct level: ", level)
-		if level < 2 || level == minLevel+1 || level-2 <= minLevel {
-			if level < 2 {
-				fmt.Println("Level < 2 before activation , Bootstrapping...")
-			} else if level == minLevel+1 {
-				fmt.Println("Min Level , Bootstrapping...")
-			} else {
-				fmt.Println("Activation would set level below threshold, Pre-emptive Bootstraping...")
-				fmt.Println("Curr level: ", level)
-				fmt.Println("Drop to: ", minLevel+1)
-				fmt.Println("Diff: ", level-minLevel-1)
-			}
-			for ii := 0; ii < Xint.RowP; ii++ {
-				for jj := 0; jj < Xint.ColP; jj++ {
-					//parallel bootstrapping of all blocks
-					fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
-					wg.Add(1)
-					go func(ii, jj int, eval ckks.Evaluator) {
-						defer wg.Done()
-						eval.DropLevel(Xint.Blocks[ii][jj], Xint.Blocks[ii][jj].Level()-minLevel-1)
-						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
-						utils.ThrowErr(err)
-					}(ii, jj, Box.Evaluator.ShallowCopy())
+		if i != len(nne.Weights) {
+			if level < 2 || level == minLevel+1 || level-2 <= minLevel {
+				if level < 2 {
+					fmt.Println("Level < 2 before activation , Bootstrapping...")
+				} else if level == minLevel+1 {
+					fmt.Println("Min Level , Bootstrapping...")
+				} else {
+					fmt.Println("Activation would set level below threshold, Pre-emptive Bootstraping...")
+					fmt.Println("Curr level: ", level)
+					fmt.Println("Drop to: ", minLevel+1)
+					fmt.Println("Diff: ", level-minLevel-1)
 				}
+				for ii := 0; ii < Xint.RowP; ii++ {
+					for jj := 0; jj < Xint.ColP; jj++ {
+						//parallel bootstrapping of all blocks
+						fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
+						wg.Add(1)
+						go func(ii, jj int, eval ckks.Evaluator) {
+							defer wg.Done()
+							eval.DropLevel(Xint.Blocks[ii][jj], Xint.Blocks[ii][jj].Level()-minLevel-1)
+							Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+							utils.ThrowErr(err)
+						}(ii, jj, Box.Evaluator.ShallowCopy())
+					}
+				}
+				wg.Wait()
+				fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
 			}
-			wg.Wait()
-			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
-		}
 
-		fmt.Println("Activation")
-		cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
-		if debug {
-			for ii := range XintPlain.Blocks {
-				for jj := range XintPlain.Blocks[ii] {
-					utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
+			fmt.Println("Activation")
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			if debug {
+				for ii := range XintPlain.Blocks {
+					for jj := range XintPlain.Blocks[ii] {
+						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
+					}
 				}
+				cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}
-			cipherUtils.CompareBlocks(Xint, XintPlain, Box)
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 	}
 	fmt.Println("Key Switch to querier secret key")
