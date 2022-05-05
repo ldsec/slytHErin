@@ -685,7 +685,7 @@ def pack_nn(serialized, layers):
     
     packed['conv'] = {
         'weight': conv_matrix,
-        'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, serialized['dense_1']['weight']['rows']//num_chans)}
+        'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, conv_matrix['cols']//num_chans)}
     packed['dense'] = []
     for i in range(layers):
         packed['dense'].append({
