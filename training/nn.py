@@ -38,8 +38,8 @@ class NN(nn.Module):
     #safety check
     assert(len(self.dense)==layers)
     
-    self.activation = nn.ReLU()
-    #self.activation = ReLUApprox()
+    #self.activation = nn.ReLU()
+    self.activation = ReLUApprox()
 
   def forward(self, x):
     x = self.pad(x, (1,1,1,1))

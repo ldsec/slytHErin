@@ -59,9 +59,9 @@ def linear_eval(X,Y, serialized):
         for i in range(len(X)):
             X[i] = X[i] + b
         
-        #for x in X.flatten():
-        #    if x > interval or x < -interval:
-        #        print("Outside interval:", x)
+        for x in X.flatten():
+            if x > interval or x < -interval:
+                print("Outside interval", interval, ":", x)
         if iter != len(dense)-1:
             X = ReLU(X)
         iter += 1

@@ -174,7 +174,6 @@ def train_advanced(logger, model, dataHandler, num_epochs, lr=0.001, TPU=False):
     num_samples = 0
     
     for i, (data, labels) in enumerate(dataHandler.train_dl):
-      start_batch = time.time()
       data = data.to(device=device)
       labels = labels.to(device=device)
 
@@ -192,12 +191,9 @@ def train_advanced(logger, model, dataHandler, num_epochs, lr=0.001, TPU=False):
       _, predicted_labels = predictions.max(1)
       num_correct += (predicted_labels == labels).sum().item()
       num_samples += predicted_labels.size(0)
-      end_batch = time.time()
-      #print("--- %s seconds for batch---" % (end_batch - start_batch))
 
     end_epoch = time.time()
-    print("--- %s seconds for epoch ---" % (end_epoch - start_epoch))
-    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f}")
+    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f} Time: {end_epoch-start_epoch:.4f}s")
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
     trainHistory['loss'].append(loss.item())
     trainHistory['accuracy'].append(num_correct/num_samples)
