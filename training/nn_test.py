@@ -29,6 +29,15 @@ def ReLU(X):
     relu = np.vectorize(lambda x: x * (x > 0))
     return relu(X)
 
+def silu(X):
+    return X/(1 + np.exp(-X))
+
+def silu_Approx(X):
+    X = torch.from_numpy(X)
+    X = X * sigmoid_approx(X)
+    X = X.numpy()
+    return X
+
 def linear_eval(X,Y, serialized):
     """
         Linear pipeline without normalization and regular relu works fine
@@ -52,7 +61,8 @@ def linear_eval(X,Y, serialized):
     X = X @ conv
     for i in range(len(X)):
         X[i] += conv_bias
-    X = ReLU(X)
+    X = silu(X)
+    print(X.max())
     
     iter = 0
     for d,b in zip(dense, bias):
@@ -60,11 +70,9 @@ def linear_eval(X,Y, serialized):
         for i in range(len(X)):
             X[i] = X[i] + b
         
-        for x in X.flatten():
-            if x > interval or x < -interval:
-                print("Outside interval", interval, ":", x)
         if iter != len(dense)-1:
-            X = ReLU(X)
+            X = silu(X)
+        print(X.max())
         iter += 1
 
     pred = np.argmax(X,axis=1)

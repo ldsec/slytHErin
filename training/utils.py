@@ -68,16 +68,18 @@ def plot_history(key, train, history):
   plt.close()
 
 ## TRAIN
-def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, L1Ratio=0.5, optim_algo='SGD', loss='MSE', regularizer='None'):
-  l2_penalty =(1-L1Ratio)/2
+def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, l1_ratio=0.5, l1_penalty=0.1, l2_penalty=0.1, optim_algo='SGD', loss='MSE', regularizer='None'):
   if regularizer == 'None':
     l2_penalty = 0
-    L1Ratio = 0
+    l1_penalty = 0
   elif regularizer == 'L1':
-    L1Ratio = 1
+    l2_penalty = 0
   elif regularizer == 'L2':
-    L1Ratio = 0
-  elif regularizer != 'Elastic':
+    l1_penalty = 0
+  elif regularizer == 'Elastic':
+    l1_penalty = l1_ratio
+    l2_penalty = (1-l1_ratio)/2
+  else:
     print("regularizer is None, L1, L2 or Elastic")
     exit()
 
@@ -124,12 +126,11 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, L1Ratio
         predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
         loss_value = criterion(predictions, labels_one_hot)
       else:
-        predictions = model(data)
         #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
         loss_value = criterion(predictions, labels)
       
       l1_norm = sum(torch.linalg.norm(p) for p in model.parameters())
-      loss_value = loss_value + L1Ratio*l1_norm
+      loss_value = loss_value + l1_penalty*l1_norm
       epoch_loss += loss_value.item()
       
       loss_value.backward()

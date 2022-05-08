@@ -14,6 +14,11 @@ from activation import *
 """
     Train NN
     run via python3 nn.py --model nnX for X = 20,50,100
+
+    Jounral:
+        -   Best is model with ReLU, SiLU also performs good
+        -   These models create intermediate values outside approx range
+        -   Training with approximated funcs does not work
 """
 
 class NN(nn.Module):
@@ -40,7 +45,7 @@ class NN(nn.Module):
     #self.activation = ReLUApprox()
     #self.activation = SigmoidApprox()
     #self.activation = SILUApprox()
-    self.activation = SILU() ##lr=0.01
+    self.activation = SILU() ##lr=0.003
     #self.activation = nn.Softplus(threshold=100)
 
   def forward(self, x):
@@ -48,19 +53,27 @@ class NN(nn.Module):
     x = self.pad(x, (1,1,1,1))
     
     x = self.conv(x)
+    #print("Conv")
+    #print(torch.abs(x).max())
     x = self.activation(x)
+    #print("Act")
+    #print(torch.abs(x).max())
     x = x.reshape(x.shape[0],-1) #flatten
     
     for i,layer in enumerate(self.dense):
         x = layer(x)
+        #print("Layer ", i+1)
+        #print(torch.abs(x).max())
         if i != len(self.dense)-1:
+            #print("Act")
             x = self.activation(x)
+            #print(torch.abs(x).max())
     return x
  
   def weights_init(self, m):
     for m in self.children():
         if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
-            nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
+            nn.init.xavier_uniform_(m.weight, gain=0.1)
 
 def train_nn_from_scratch():
     parser = argparse.ArgumentParser()
@@ -79,7 +92,7 @@ def train_nn_from_scratch():
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
     start = time.time()
-    train(logger, model, dataHandler, num_epochs=10, lr=0.001, optim_algo='Adam', loss='CSE', regularizer='Elastic')
+    train(logger, model, dataHandler, num_epochs=15, lr=0.003,optim_algo='Adam', loss='CSE', regularizer='None')
     end = time.time()
     print("--- %s seconds for train---" % (end - start))
     loss, accuracy = eval(logger, model, dataHandler, loss='CSE')
