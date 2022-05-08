@@ -173,6 +173,6 @@ if __name__ == "__main__":
   dataHandler = DataHandlerAlex("MNIST",128)
   logger = Logger("./logs/", name)
   model = AlexNet(simplified=simplified, verbose=verbose).to(device=device)
-  train(logger, model, dataHandler, 50, lr=lr, TPU=False) ##if simplified set lr=0.001
-  eval(logger, model, dataHandler)
+  train(logger, model, dataHandler, 50, lr=lr, regularizer='None') ##if simplified set lr=0.001
+  eval(logger, model, dataHandler, loss='MSE')
   #torch.save(model, f"{name}.pt")

@@ -133,8 +133,8 @@ if __name__ == "__main__":
     for key, model in models.items():
       logger = Logger("./logs/",f"SimpleNet_{key}")
       model.apply(model.weights_init)
-      train(logger, model, dataHandler, num_epochs=400, lr=0.001)
-      loss, accuracy = eval(logger, model, dataHandler)
+      train(logger, model, dataHandler, num_epochs=400, lr=0.001, regularizer='None')
+      loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
       scores[key] = {"loss":loss, "accuracy":accuracy}
       torch.save(model, f"./models/SimpleNet_{key}.pt")
     

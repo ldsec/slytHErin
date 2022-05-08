@@ -3,7 +3,7 @@ import torch.nn as nn
 """ Approximated polynomial activation functions """
 
 degree = 3
-interval = 12
+interval = 10
 
 '''
 def approx_relu_2d(x):
@@ -58,8 +58,8 @@ def sigmoid_approx(x):
 
 def identity(x):
   return x
-## Wrap as nn modules
 
+## Wrap as nn modules
 class ReLUApprox(nn.Module):
   def __init__(self):
     super().__init__()
@@ -73,3 +73,22 @@ class SigmoidApprox(nn.Module):
 
   def forward(self,x):
     return sigmoid_approx(x)
+
+
+class SILU(nn.Module):
+  def __init__(self):
+    super().__init__()
+    self.sig = nn.Sigmoid()
+
+  def forward(self,x):
+    return x*self.sig(x)
+
+
+class SILUApprox(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+  def forward(self,x):
+    return sigmoid_approx(x)*x
+
+  

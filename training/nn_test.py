@@ -18,6 +18,7 @@ from activation import *
     Script for testing nn with approximations for homomorphic encryption
 """
 os.chdir(".")
+
 # explicit function to normalize array
 def normalize(matrix):
     norm = np.linalg.norm(matrix)

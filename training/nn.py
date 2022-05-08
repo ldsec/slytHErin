@@ -1,16 +1,13 @@
-from pkg_resources import yield_lines
-from pytest import yield_fixture
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn import preprocessing
 import json
 import argparse
 import numpy as np
+from utils import *
 from activation import *
 from logger import Logger
 from dataHandler import *
-from utils import *
 from conv_transform import *
 from activation import *
 
@@ -38,11 +35,18 @@ class NN(nn.Module):
     #safety check
     assert(len(self.dense)==layers)
     
-    #self.activation = nn.ReLU()
-    self.activation = ReLUApprox()
+    #self.activation = nn.ReLU() ##lr = 0.001, Adam, CSE
+    #self.activation = nn.Sigmoid()
+    #self.activation = ReLUApprox()
+    #self.activation = SigmoidApprox()
+    #self.activation = SILUApprox()
+    self.activation = SILU() ##lr=0.01
+    #self.activation = nn.Softplus(threshold=100)
 
   def forward(self, x):
+    ## preprocessing
     x = self.pad(x, (1,1,1,1))
+    
     x = self.conv(x)
     x = self.activation(x)
     x = x.reshape(x.shape[0],-1) #flatten
@@ -51,13 +55,12 @@ class NN(nn.Module):
         x = layer(x)
         if i != len(self.dense)-1:
             x = self.activation(x)
-
     return x
  
   def weights_init(self, m):
     for m in self.children():
         if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
-            nn.init.xavier_uniform_(m.weight)
+            nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
 
 def train_nn_from_scratch():
     parser = argparse.ArgumentParser()
@@ -76,10 +79,12 @@ def train_nn_from_scratch():
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
     start = time.time()
-    train_advanced(logger, model, dataHandler, num_epochs=50, lr=0.001)
+    train(logger, model, dataHandler, num_epochs=10, lr=0.001, optim_algo='Adam', loss='CSE', regularizer='Elastic')
     end = time.time()
     print("--- %s seconds for train---" % (end - start))
-    loss, accuracy = eval_advanced(logger, model, dataHandler)
+    loss, accuracy = eval(logger, model, dataHandler, loss='CSE')
+    print(f"Loss test: {loss}")
+    print(f"Accuracy test: {accuracy}")
 
     torch.save(model, f"./models/nn{layers}.pt")
     

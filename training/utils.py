@@ -7,10 +7,10 @@ import time
 ## interactive off
 plt.ioff()
 ## setup torch enviro
+
 torch.manual_seed(42)
+torch.cuda.manual_seed_all(42)
 torch.autograd.set_detect_anomaly(True)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(42)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -48,6 +48,7 @@ def plot_history(key, train, history):
     when = "train"
   else:
     when = "test"
+
   fig, ax = plt.subplots( 1, 2, figsize = (12,4) )
   ax[0].plot(history['loss'], label = "loss")
   ax[0].set_title( "Loss" )
@@ -67,11 +68,35 @@ def plot_history(key, train, history):
   plt.close()
 
 ## TRAIN
-def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
+def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, L1Ratio=0.5, optim_algo='SGD', loss='MSE', regularizer='None'):
+  l2_penalty =(1-L1Ratio)/2
+  if regularizer == 'None':
+    l2_penalty = 0
+    L1Ratio = 0
+  elif regularizer == 'L1':
+    L1Ratio = 1
+  elif regularizer == 'L2':
+    L1Ratio = 0
+  elif regularizer != 'Elastic':
+    print("regularizer is None, L1, L2 or Elastic")
+    exit()
+
+  if optim_algo == 'Adam':
+    optimizer = optim.Adam(model.parameters(),lr=lr, weight_decay=l2_penalty, amsgrad=True)
+  elif optim_algo == 'SGD':
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=l2_penalty, nesterov=True)
+  else:
+    print("Optimizer is Adam or SGD")
+    exit
+  if loss == 'CSE':
+    criterion = nn.CrossEntropyLoss()
+  elif loss == 'MSE':
+    criterion = nn.MSELoss()  
+  else:
+    print("Loss is CrossEntropy or MSE")
+    exit
   
-  num_epochs = num_epochs
-  optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-  criterion = nn.MSELoss()
+  print(f"Train summary:\n lr={lr}\n epochs={num_epochs}\n optim={optim_algo}\n loss={loss}\n regularizer={regularizer}")
 
   trainHistory = {}
   trainHistory['loss'] = []
@@ -79,46 +104,64 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, TPU=False):
 
   model.train()
   for epoch in range(num_epochs):
-    
+    start = time.time()
     epoch_loss = 0
-    num_correct = 0
-    num_samples = 0
+    num_correct = 0.0
+    num_samples = 0.0
     
     for i, (data, labels) in enumerate(dataHandler.train_dl):
       data = data.to(device=device)
-      labels_one_hot = single_to_multi_label(labels)
-      labels_one_hot = labels_one_hot.to(device=device)
-
+      if loss == 'MSE':
+        labels_one_hot = single_to_multi_label(labels)
+        labels_one_hot = labels_one_hot.to(device=device)
+      else:
+        labels = labels.to(device=device)
+      
       optimizer.zero_grad()
       
       predictions = model(data)
-      predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
-      loss = criterion(predictions, labels_one_hot)
-      epoch_loss += loss.item()
-      #loss = Variable(loss, requires_grad = True)
-      loss.backward()
+      if loss == 'MSE':
+        predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
+        loss_value = criterion(predictions, labels_one_hot)
+      else:
+        predictions = model(data)
+        #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
+        loss_value = criterion(predictions, labels)
+      
+      l1_norm = sum(torch.linalg.norm(p) for p in model.parameters())
+      loss_value = loss_value + L1Ratio*l1_norm
+      epoch_loss += loss_value.item()
+      
+      loss_value.backward()
       optimizer.step()
 
       if model.verbose and (i+1)%100 == 0:
-        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
-      _, predicted_labels = predictions.max(1)
-      _, labels = labels_one_hot.max(1)
-      num_correct += (predicted_labels == labels).sum().item()
-      num_samples += predicted_labels.size(0)
+        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss_value.item()}")
+    _, predicted_labels = predictions.max(1)
+    num_correct += (predicted_labels == labels).sum().item()
+    num_samples += predicted_labels.size(0)
 
-    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f}")
+    end = time.time()
+    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f} Accuracy {num_correct/num_samples:.4f} Time: {end-start:.4f}s")
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
-    trainHistory['loss'].append(loss.item())
+    trainHistory['loss'].append(loss_value.item())
     trainHistory['accuracy'].append(num_correct/num_samples)
     
   plot_history(logger.name, True, trainHistory)
 
 ## EVAL 
-def eval(logger, model, dataHandler):
+def eval(logger, model, dataHandler, loss='MSE'):
   num_correct = 0
   num_samples = 0
 
-  criterion = nn.MSELoss()
+  if loss == 'CSE':
+    criterion = nn.CrossEntropyLoss()
+  elif loss == 'MSE':
+    criterion = nn.MSELoss()  
+  else:
+    print("Loss is CrossEntropy or MSE")
+    exit
+  
   model.eval()
   
   testHistory = {}
@@ -130,107 +173,30 @@ def eval(logger, model, dataHandler):
   with torch.no_grad():
     for batch, (data,labels) in enumerate(dataHandler.test_dl):
         data = data.to(device=device)
-        labels = labels.to(device=device)
+        if loss == 'MSE':
+          labels_one_hot = single_to_multi_label(labels)
+          labels_one_hot = labels_one_hot.to(device=device)
+        else:
+          labels = labels.to(device=device)
         
         predictions = model(data)
+        if loss == 'MSE':
+          predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
+          loss_value = criterion(predictions, labels_one_hot).item()
+        else:
+          predictions = model(data)
+          #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
+          loss_value = criterion(predictions, labels).item()
+        
+        test_loss += loss_value
         _, predicted_labels = predictions.max(1)
-        predicted_labels, labels = predicted_labels.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
-      
-        loss = criterion(predicted_labels, labels).item()
-        
-        test_loss += loss
         num_correct += (predicted_labels == labels).sum().item()
         num_samples += predicted_labels.size(0)
         
-        testHistory['loss'].append(loss)
+        testHistory['loss'].append(loss_value)
         testHistory['accuracy'].append(float(num_correct) / float(num_samples))
         
-        logger.log_batch(batch+1, loss, float(num_correct) / float(num_samples))
-    
-    test_accuracy = float(num_correct) / float(num_samples)
-    test_loss = test_loss/len(dataHandler.test_dl) ## avg loss
-    logger.finalize(test_loss, test_accuracy)
-
-    plot_history(logger.name, False, testHistory)
-
-  return test_loss, test_accuracy
-
-## TRAIN with Cross Entropy and Optimizer
-def train_advanced(logger, model, dataHandler, num_epochs, lr=0.001, TPU=False):
-  
-  num_epochs = num_epochs
-  optimizer = optim.Adam(model.parameters(),lr=lr)
-  criterion = nn.CrossEntropyLoss()
-
-  trainHistory = {}
-  trainHistory['loss'] = []
-  trainHistory['accuracy'] = []
-
-  model.train()
-  for epoch in range(num_epochs):
-    start_epoch = time.time()
-    epoch_loss = 0
-    num_correct = 0
-    num_samples = 0
-    
-    for i, (data, labels) in enumerate(dataHandler.train_dl):
-      data = data.to(device=device)
-      labels = labels.to(device=device)
-
-      optimizer.zero_grad()
-      
-      predictions = model(data)
-      #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
-      loss = criterion(predictions, labels)
-      epoch_loss += loss.item()
-      loss.backward()
-      optimizer.step()
-
-      if model.verbose and (i+1)%100 == 0:
-        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss.item()}")
-      _, predicted_labels = predictions.max(1)
-      num_correct += (predicted_labels == labels).sum().item()
-      num_samples += predicted_labels.size(0)
-
-    end_epoch = time.time()
-    print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f} Time: {end_epoch-start_epoch:.4f}s")
-    logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
-    trainHistory['loss'].append(loss.item())
-    trainHistory['accuracy'].append(num_correct/num_samples)
-    
-  plot_history(logger.name, True, trainHistory)
-
-## EVAL with Cross Entropy
-def eval_advanced(logger, model, dataHandler):
-  num_correct = 0
-  num_samples = 0
-
-  criterion = nn.CrossEntropyLoss()
-  model.eval()
-  
-  testHistory = {}
-  testHistory['loss'] = []
-  testHistory['accuracy'] = []
-  test_loss = 0
-  test_accuracy = 0
-  
-  with torch.no_grad():
-    for batch, (data,labels) in enumerate(dataHandler.test_dl):
-        data = data.to(device=device)
-        labels = labels.to(device=device)
-        
-        predictions = model(data)
-        loss = criterion(predictions, labels).item()
-        
-        test_loss += loss
-        _,predicted_labels = predictions.max(1)
-        num_correct += (predicted_labels == labels).sum().item()
-        num_samples += predicted_labels.size(0)
-        
-        testHistory['loss'].append(loss)
-        testHistory['accuracy'].append(float(num_correct) / float(num_samples))
-        
-        logger.log_batch(batch+1, loss, float(num_correct) / float(num_samples))
+        logger.log_batch(batch+1, loss_value, float(num_correct) / float(num_samples))
     
     test_accuracy = float(num_correct) / float(num_samples)
     test_loss = test_loss/len(dataHandler.test_dl) ## avg loss
