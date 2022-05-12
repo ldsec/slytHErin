@@ -235,6 +235,7 @@ func (dmst *DummyMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
 	msg.Extension = DummyPCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
+	fmt.Println("Len proto message: ", len(dat))
 	utils.ThrowErr(err)
 
 	//"send" msgs
@@ -270,6 +271,7 @@ func (dmst *DummyMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	}
 	buf, err := json.Marshal(msg)
 	utils.ThrowErr(err)
+	fmt.Println("Len proto message: ", len(dat))
 
 	//"send" msgs
 	for i := 0; i < dmst.Parties-1; i++ {
@@ -392,6 +394,7 @@ func (dp *DummyPlayer) RunPubKeySwitch(msg DummyProtocolMsg) {
 	resp := &DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: dp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	fmt.Printf("[+] Player %d -- Sending Share PCKS ID: %d to master\n\n", dp.Id, msg.Id)
+	fmt.Println("Len proto resp: ", len(dat))
 	dp.ToMasterChan <- dat
 }
 
@@ -414,6 +417,7 @@ func (dp *DummyPlayer) RunRefresh(msg DummyProtocolMsg) {
 	utils.ThrowErr(err)
 	resp := &DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: dp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
+	fmt.Println("Len proto resp: ", len(dat))
 	fmt.Printf("[+] Player %d -- Sending Share Refresh ID: %d to master\n\n", dp.Id, msg.Id)
 	dp.ToMasterChan <- dat
 }
