@@ -2,10 +2,6 @@ import numpy as np
 import torch
 import math
 from collections import deque
-from activation import relu_approx, sigmoid_approx
-from dataHandler import DataHandler, DataHandlerAlex
-from cryptonet import SimpleNet
-from alexnet import AlexNet
 import time
 import sys
 import os
@@ -654,6 +650,18 @@ def extract_nn(model):
                 bias.append(param.data.cpu().numpy())
     return conv, bias_conv, dense, bias
     
+## reads models from json format from Go training
+def read_nn(json_data, layers=20):
+    serialized = {}
+    serialized['conv'] = json_data['conv']
+    w = np.array(json_data['conv']['weight']['w']).reshape(json_data['conv']['weight']['kernels'],json_data['conv']['weight']['filters'],json_data['conv']['weight']['rows'],json_data['conv']['weight']['cols'])
+    serialized['conv']['weight']['w'] = w.tolist()
+    for i in range(layers):
+        serialized['dense_'+str(i+1)]=json_data["D"]['dense_'+str(i+1)]
+        serialized['dense_'+str(i+1)]['weight']['w'] = np.array(serialized['dense_'+str(i+1)]['weight']['w']).reshape(serialized['dense_'+str(i+1)]['weight']['rows'],serialized['dense_'+str(i+1)]['weight']['cols']).tolist()
+   
+    return serialized
+
 
 ## takes nn 
 def serialize_nn(conv, bias_conv, dense, bias, layers):
@@ -672,24 +680,27 @@ def serialize_nn(conv, bias_conv, dense, bias, layers):
         serialized['dense_'+str(i+1)]['bias'] = {'b': bias[i].tolist(), 'rows': 1, 'cols': bias[i].shape[0]}
     return serialized
 
-def pack_nn(serialized, layers):
+def pack_nn(serialized, layers, transpose_dense=True):
     packed = {}
     num_chans = serialized['conv']['weight']['kernels']
     conv_matrix,_ = pack_conv_rect(np.array(serialized['conv']['weight']['w']),
         serialized['conv']['weight']['rows'],
         serialized['conv']['weight']['cols'],
         1,
-        28+2*1,28+2*1)
+        28,28)
 
-    assert(conv_matrix['cols'] == 840)
+    #assert(conv_matrix['cols'] == 840)
     
     packed['conv'] = {
         'weight': conv_matrix,
         'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, conv_matrix['cols']//num_chans)}
     packed['dense'] = []
     for i in range(layers):
+        w = np.array(serialized['dense_'+str(i+1)]['weight']['w'])
+        if transpose_dense:
+            w = w.T
         packed['dense'].append({
-            'weight': pack_linear(np.array(serialized['dense_'+str(i+1)]['weight']['w']).T), #transpose
+            'weight': pack_linear(w),
             'bias': {'b':serialized['dense_'+str(i+1)]['bias']['b'], 'len':serialized['dense_'+str(i+1)]['bias']['cols']}})
     
     packed['layers'] = layers

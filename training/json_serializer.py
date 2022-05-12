@@ -1,15 +1,11 @@
 import torch
 import argparse
-from collections import deque
-from activation import relu_approx, sigmoid_approx
-from dataHandler import DataHandler, DataHandlerAlex
-from cryptonet import SimpleNet
-from alexnet import AlexNet
-from nn import NN
 import os
 import glob
 import json
 from conv_transform import *
+from nn import NN
+from cryptonet import SimpleNet
 
 """
     Script to serialize models in a json format ready to be deserialized in Go implementation 
@@ -55,11 +51,18 @@ if __name__ == '__main__':
         elif args.model == "nn100":
             model = torch.load("nn100.pt")
             layers = 100
-        j_name = f"nn{layers}_packed"
-        conv,bias_conv,dense,bias = extract_nn(model)
-        serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
-        packed = pack_nn(serialized, layers)
-        with open(f'{j_name}.json', 'w') as f:
+        j_name = f"nn{layers}_packed.json"
+        
+        ##go stuff
+        with open(f'nn_{layers}.json', 'r') as f:
+            json_data = json.load(f)
+        serialized = read_nn(json_data, layers)
+        
+        #conv,bias_conv,dense,bias = extract_nn(model)
+        #serialized = serialize_nn(conv,bias_conv,dense,bias,layers+1)
+        
+        packed = pack_nn(serialized, layers, transpose_dense=False) #if read_nn set False
+        with open(j_name, 'w') as f:
             json.dump(packed, f)
     else:
         exit("Define model")

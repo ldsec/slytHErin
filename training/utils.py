@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
-from torch.autograd import Variable
+import torch.nn.functional as F
 import time
 ## interactive off
 plt.ioff()
@@ -68,7 +68,7 @@ def plot_history(key, train, history):
   plt.close()
 
 ## TRAIN
-def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, l1_ratio=0.5, l1_penalty=0.1, l2_penalty=0.1, optim_algo='SGD', loss='MSE', regularizer='None'):
+def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_ratio=0.5, l1l2_penalty=0.0000001, l1_penalty=0.01, l2_penalty=0.01, optim_algo='SGD', loss='MSE', regularizer='None'):
   if regularizer == 'None':
     l2_penalty = 0
     l1_penalty = 0
@@ -77,8 +77,8 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, l1_rati
   elif regularizer == 'L2':
     l1_penalty = 0
   elif regularizer == 'Elastic':
-    l1_penalty = l1_ratio
-    l2_penalty = (1-l1_ratio)/2
+    l1_penalty = l1_ratio*l1l2_penalty
+    l2_penalty = l1l2_penalty*(1-l1_ratio)
   else:
     print("regularizer is None, L1, L2 or Elastic")
     exit()
@@ -104,6 +104,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, l1_rati
   trainHistory['loss'] = []
   trainHistory['accuracy'] = []
 
+  model.to(device)
   model.train()
   for epoch in range(num_epochs):
     start = time.time()
@@ -116,31 +117,34 @@ def train(logger, model, dataHandler, num_epochs, lr=0.05, momentum=0.9, l1_rati
       if loss == 'MSE':
         labels_one_hot = single_to_multi_label(labels)
         labels_one_hot = labels_one_hot.to(device=device)
-      else:
-        labels = labels.to(device=device)
+      labels = labels.to(device)
       
       optimizer.zero_grad()
-      
+            
       predictions = model(data)
       if loss == 'MSE':
-        predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
+        #predictions, labels_one_hot = predictions.type('torch.FloatTensor'), labels_one_hot.type('torch.FloatTensor')
         loss_value = criterion(predictions, labels_one_hot)
       else:
         #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
         loss_value = criterion(predictions, labels)
       
-      l1_norm = sum(torch.linalg.norm(p) for p in model.parameters())
-      loss_value = loss_value + l1_penalty*l1_norm
-      epoch_loss += loss_value.item()
+      if regularizer != 'L2' or regularizer != 'None':
+        l1_norm = sum(torch.linalg.norm(p) for p in model.parameters())
+        loss_value = loss_value + l1_penalty*l1_norm
       
       loss_value.backward()
       optimizer.step()
 
+      epoch_loss += loss_value.item()
+      _, predicted_labels = predictions.max(1)
+      correct = (predicted_labels == labels).sum().item()
+      samples = predicted_labels.size(0)
+      num_correct += correct
+      num_samples += samples
+
       if model.verbose and (i+1)%100 == 0:
-        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss_value.item()}")
-    _, predicted_labels = predictions.max(1)
-    num_correct += (predicted_labels == labels).sum().item()
-    num_samples += predicted_labels.size(0)
+        print(f"[?] Step {i+1}/{len(dataHandler.train_dl)} Epoch {epoch+1}/{num_epochs} Loss {loss_value.item()} Accuracy {correct/samples:.4f}")
 
     end = time.time()
     print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f} Accuracy {num_correct/num_samples:.4f} Time: {end-start:.4f}s")
