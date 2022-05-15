@@ -389,11 +389,181 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 	return corrects, elapsed
 }
 
-func EvalBatchEncryptedDistributed(nne *NNEnc, nnb *NNBlock,
+func EvalBatchEncryptedDistributedDummy(nne *NNEnc, nnb *NNBlock,
 	XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput,
 	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
 	minLevel int, labels int, debug bool,
-	master *distributed.DummyMaster, players []*distributed.DummyPlayer) (int, int, time.Duration) {
+	master *distributed.DummyMaster) (int, int, time.Duration) {
+
+	Xint := XbatchEnc
+	XintPlain := XBatchClear
+	var err error
+	var wg sync.WaitGroup
+	fmt.Println("Minlevel: ", minLevel)
+	fmt.Println("MaxLevel: ", Box.Params.MaxLevel())
+	now := time.Now()
+	for i := range nne.Weights {
+		fmt.Printf("======================> Layer %d\n", i+1)
+
+		level := Xint.Blocks[0][0].Level()
+		fmt.Println("Ct level: ", level)
+		if level == minLevel+1 { //minLevel for Bootstrapping
+			fmt.Println("MinLevel, Bootstrapping...")
+			for ii := 0; ii < Xint.RowP; ii++ {
+				for jj := 0; jj < Xint.ColP; jj++ {
+					//parallel bootstrapping of all blocks
+					fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
+					wg.Add(1)
+					go func(ii, jj int, eval ckks.Evaluator) {
+						defer wg.Done()
+						eval.DropLevel(Xint.Blocks[ii][jj], Xint.Blocks[ii][jj].Level()-minLevel-1)
+						Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+						utils.ThrowErr(err)
+					}(ii, jj, Box.Evaluator.ShallowCopy())
+				}
+			}
+			wg.Wait()
+			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
+		}
+
+		Xint, err = cipherUtils.BlocksC2CMul(Xint, nne.Weights[i], Box)
+		utils.ThrowErr(err)
+		if debug {
+			XintPlain, err = plainUtils.MultiPlyBlocks(XintPlain, nnb.Weights[i])
+			utils.ThrowErr(err)
+			fmt.Println("Multiplication")
+			cipherUtils.CompareBlocks(Xint, plainUtils.MultiplyBlocksByConst(XintPlain, 1/nnb.ReLUApprox.Interval), Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+		}
+		level = Xint.Blocks[0][0].Level()
+		fmt.Println("Ct level: ", level)
+		//bias
+		Xint, err = cipherUtils.AddBlocksC2C(Xint, nne.Bias[i], Box)
+		utils.ThrowErr(err)
+		if debug {
+			XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(nnb.Bias[i], 1/nnb.ReLUApprox.Interval))
+			utils.ThrowErr(err)
+			fmt.Println("Bias")
+			//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			XintPlain, err = plainUtils.AddBlocks(XintPlain, plainUtils.MultiplyBlocksByConst(nnb.Bias[i], 1-1/nnb.ReLUApprox.Interval))
+			utils.ThrowErr(err)
+		}
+
+		level = Xint.Blocks[0][0].Level()
+		fmt.Println("Ct level: ", level)
+		if i != len(nne.Weights) {
+			if level < 2 || level == minLevel+1 || level-2 <= minLevel {
+				if level < 2 {
+					fmt.Println("Level < 2 before activation , Bootstrapping...")
+				} else if level == minLevel+1 {
+					fmt.Println("Min Level , Bootstrapping...")
+				} else {
+					fmt.Println("Activation would set level below threshold, Pre-emptive Bootstraping...")
+					fmt.Println("Curr level: ", level)
+					fmt.Println("Drop to: ", minLevel+1)
+					fmt.Println("Diff: ", level-minLevel-1)
+				}
+				for ii := 0; ii < Xint.RowP; ii++ {
+					for jj := 0; jj < Xint.ColP; jj++ {
+						//parallel bootstrapping of all blocks
+						fmt.Println("Bootstrapping id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
+						wg.Add(1)
+						go func(ii, jj int, eval ckks.Evaluator) {
+							defer wg.Done()
+							eval.DropLevel(Xint.Blocks[ii][jj], Xint.Blocks[ii][jj].Level()-minLevel-1)
+							Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[1], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+							utils.ThrowErr(err)
+						}(ii, jj, Box.Evaluator.ShallowCopy())
+					}
+				}
+				wg.Wait()
+				fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
+			}
+
+			fmt.Println("Activation")
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			if debug {
+				for ii := range XintPlain.Blocks {
+					for jj := range XintPlain.Blocks[ii] {
+						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
+					}
+				}
+				cipherUtils.CompareBlocks(Xint, XintPlain, Box)
+				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			}
+		}
+	}
+	fmt.Println("Key Switch to querier secret key")
+	for ii := 0; ii < Xint.RowP; ii++ {
+		for jj := 0; jj < Xint.ColP; jj++ {
+			//parallel key switching
+			fmt.Println("Switch id:", ii*Xint.RowP+jj, " / ", Xint.RowP*Xint.ColP-1)
+			wg.Add(1)
+			go func(ii, jj int) {
+				defer wg.Done()
+				Xint.Blocks[ii][jj], err = master.InitProto(distributed.TYPES[0], pkQ, Xint.Blocks[ii][jj], ii*Xint.RowP+jj)
+				utils.ThrowErr(err)
+			}(ii, jj)
+		}
+	}
+	wg.Wait()
+	elapsed := time.Since(now)
+	fmt.Println("Done", elapsed)
+
+	batchSize := XBatchClear.RowP * XBatchClear.InnerRows
+	//use querier key to do the final decryption
+	Box.Decryptor = decQ
+	res := cipherUtils.DecInput(Xint, Box)
+	resPlain := plainUtils.MatToArray(plainUtils.ExpandBlocks(XintPlain))
+	predictions := make([]int, batchSize)
+	predictionsPlain := make([]int, batchSize)
+
+	corrects := 0
+	correctsPlain := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res[i][j]
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	if debug {
+		for i := 0; i < batchSize; i++ {
+			maxIdx := 0
+			maxConfidence := 0.0
+			for j := 0; j < labels; j++ {
+				confidence := resPlain[i][j]
+				if confidence > maxConfidence {
+					maxConfidence = confidence
+					maxIdx = j
+				}
+			}
+			predictionsPlain[i] = maxIdx
+			if predictionsPlain[i] == Y[i] {
+				correctsPlain += 1
+			}
+		}
+		fmt.Println("Corrects clear:", correctsPlain)
+	}
+	fmt.Println("Corrects enc:", corrects)
+	return correctsPlain, corrects, elapsed
+}
+
+func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
+	XBatchClear *plainUtils.BMatrix, Y []int, XbatchEnc *cipherUtils.EncInput,
+	Box cipherUtils.CkksBox, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
+	minLevel int, labels int, debug bool,
+	master *distributed.LocalMaster) (int, int, time.Duration) {
+
 	Xint := XbatchEnc
 	XintPlain := XBatchClear
 	var err error

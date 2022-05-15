@@ -122,7 +122,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
 }
 
-func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
+func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	/*
 		Setting:
 			Querier has sk and pk
@@ -134,6 +134,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			Root has one share of the key
 			Topology is star with root at the centre, supposing small enough # of parties
 
+			This test uses Go channels for communication
 		Runtime:
 			Latency (avg ms per batch): 191676.8
 			Latency (avg ms per sample): 1497.475
@@ -237,7 +238,145 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
 		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		correctsInBatchPlain, correctsInBatch, duration := EvalBatchEncryptedDistributed(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, debug, master, players)
+		correctsInBatchPlain, correctsInBatch, duration := EvalBatchEncryptedDistributedDummy(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, debug, master)
+		corrects += correctsInBatch
+		correctsPlain += correctsInBatchPlain
+		elapsed += duration.Milliseconds()
+		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
+		tot += batchSize
+		iters++
+	}
+	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	if debug {
+		fmt.Println("Expected Accuracy:", float64(correctsPlain)/float64(tot))
+	}
+
+	avg := float64(elapsed) / float64(iters)
+	fmt.Println("Latency (avg ms per batch):", avg)
+	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
+}
+
+func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
+	/*
+		Setting:
+			Querier has sk and pk
+			Parties have collective pk' and sk' shares
+			Querier sends data encrypted under pk' to cloud-cohort (parties)
+			Inference is performed, and key-switched back to pk to be decrypted by querier
+
+			The distributed setting corresponds to the Cloud-assisted setting of https://eprint.iacr.org/2020/304.pdf
+			Root has one share of the key
+			Topology is star with root at the centre, supposing small enough # of parties
+
+			This test uses TCP sockets for communication, on localhost
+		Runtime:
+			3m16s
+	*/
+	layers := 20
+
+	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn.Init(layers)
+
+	batchSize := 64
+	//for input block
+	InRowP := 1
+	InColP := 30 //inputs are 30x30
+	inputInnerRows := batchSize / InRowP
+	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
+
+	// CRYPTO =========================================================================================================
+	//params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	//	LogP:         []int{33, 33, 33},
+	//	Sigma:        rlwe.DefaultSigma,
+	//	LogSlots:     13,
+	//	DefaultScale: float64(1 << 30),
+	//})
+	params, _ := ckks.NewParametersFromLiteral(ckks.DefaultParams[2])
+	// QUERIER
+	kgenQ := ckks.NewKeyGenerator(params)
+	skQ := kgenQ.GenSecretKey()
+	pkQ := kgenQ.GenPublicKey(skQ)
+	decQ := ckks.NewDecryptor(params, skQ)
+
+	// PARTIES
+	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
+	// [!] We assume that these protocols have been run in a setup phase by the parties
+
+	parties := 3
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
+	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
+	rotations := cipherUtils.GenRotations(inputInnerRows, len(nnb.Weights), nnb.InnerRows, nnb.InnerCols, params, nil)
+	rtks := kgenP.GenRotationKeysForRotations(rotations, true, skP)
+	decP := ckks.NewDecryptor(params, skP)
+
+	Box := cipherUtils.CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),                                             //public
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}), //from parties
+		Decryptor:    decP,                                                                //from parties for debug
+		Encryptor:    ckks.NewEncryptor(params, pkP),                                      //from parties
+		BootStrapper: nil,
+	}
+
+	//Create distributed parties
+	localhost := "127.0.0.1"
+	partiesAddr := make([]string, parties)
+	for i := 0; i < parties; i++ {
+		if i == 0 {
+			partiesAddr[i] = localhost + ":" + strconv.Itoa(8000)
+		} else {
+			partiesAddr[i] = localhost + ":" + strconv.Itoa(8080+i)
+		}
+	}
+	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr)
+	utils.ThrowErr(err)
+	players := make([]*distributed.LocalPlayer, parties-1)
+	//start players
+	for i := 0; i < parties-1; i++ {
+		players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1])
+		go players[i].Listen()
+		utils.ThrowErr(err)
+	}
+
+	// info for bootstrapping
+	var minLevel int
+	var ok bool
+	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel+1 > params.MaxLevel() {
+		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
+	}
+	//Encrypt weights in block form
+	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box, minLevel)
+
+	//Load Dataset
+	dataSn := data.LoadData("/root/nn_data.json")
+	err = dataSn.Init(batchSize)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	corrects := 0
+	correctsPlain := 0
+	tot := 0
+	iters := 0
+	maxIters := 10
+	debug := true
+	var elapsed int64
+	//Start Inference run
+	fmt.Println("Starting inference on dataset...")
+	for true {
+		Xbatch, Y, err := dataSn.Batch()
+		if err != nil || iters == maxIters {
+			//dataset completed
+			break
+		}
+		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), InRowP, InColP)
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, InRowP, InColP, params.MaxLevel(), Box)
+		utils.ThrowErr(err)
+		correctsInBatchPlain, correctsInBatch, duration := EvalBatchEncryptedDistributedTCP(nne, nnb, X, Y, Xenc, Box, pkQ, decQ, minLevel, 10, debug, master)
 		corrects += correctsInBatch
 		correctsPlain += correctsInBatchPlain
 		elapsed += duration.Milliseconds()

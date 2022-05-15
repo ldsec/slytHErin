@@ -1,8 +1,9 @@
 package distributed
 
 import (
-	"bufio"
 	"bytes"
+	"crypto/md5"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,9 +24,16 @@ Local version of distributed protocols using  localhost for communication
 */
 
 var DELIM = []byte{'\r', '\n', '\r', '\n'}
+var TYP = uint8(255)
+var KB = 1024
+var MB = 1024 * KB
+var MAX_SIZE = 10 * MB
 
 //HELPERS
+
+//custom Split function for bufio.Scanner to read until the DELIM sequence
 func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	//fmt.Println("Scanner: len of data", len(data))
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -38,15 +46,46 @@ func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, nil, nil
 }
 
-func Read(c io.Reader) []byte {
-	scanner := bufio.NewScanner(c)
-	scanner.Split(Split)
-	scanner.Scan()
-	err := scanner.Err()
+//Append DELIM sequence to bytes
+func DelimEncode(buf []byte) []byte {
+	return append(buf, DELIM...)
+}
+
+//write TLV value
+func WriteTo(c io.Writer, buf []byte) error {
+	err := binary.Write(c, binary.LittleEndian, TYP) //1-byte type
 	if err != nil {
-		utils.ThrowErr(err)
+		return err
 	}
-	return scanner.Bytes()
+	err = binary.Write(c, binary.LittleEndian, uint32(len(buf))) //4-byte len
+	if err != nil {
+		return err
+	}
+	err = binary.Write(c, binary.LittleEndian, buf)
+	return err
+}
+
+//reads TLV value
+func ReadFrom(c io.Reader) ([]byte, error) {
+	var typ uint8
+	err := binary.Read(c, binary.LittleEndian, &typ)
+	if err != nil {
+		return nil, err
+	}
+	if typ != TYP {
+		return nil, errors.New("Not TYP")
+	}
+	var l uint32
+	err = binary.Read(c, binary.LittleEndian, &l)
+	if err != nil {
+		return nil, err
+	}
+	if int(l) > MAX_SIZE {
+		return nil, errors.New("Payload too large")
+	}
+	buf := make([]byte, l)
+	err = binary.Read(c, binary.LittleEndian, buf)
+	return buf, err
 }
 
 type LocalMaster struct {
@@ -58,7 +97,6 @@ type LocalMaster struct {
 	//comms
 	Addr        *net.TCPAddr
 	PartiesAddr []*net.TCPAddr
-	PartiesConn []*net.TCPConn
 	//for Ending
 	runningMux    sync.RWMutex
 	runningProtos int       //counter for how many protos are running
@@ -86,7 +124,6 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	master.ProtoBuf = new(sync.Map)
 
 	master.PartiesAddr = make([]*net.TCPAddr, parties)
-	master.PartiesConn = make([]*net.TCPConn, parties)
 	master.Addr, _ = net.ResolveTCPAddr("tcp", partiesAddr[0])
 	for i := 1; i < parties; i++ {
 		master.PartiesAddr[i], _ = net.ResolveTCPAddr("tcp", partiesAddr[i])
@@ -94,7 +131,7 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	return master, nil
 }
 
-func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr, masterAddr string) (*LocalPlayer, error) {
+func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr string) (*LocalPlayer, error) {
 	player := new(LocalPlayer)
 	player.sk = sk
 	player.Cpk = cpk
@@ -103,23 +140,12 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 	player.Addr, _ = net.ResolveTCPAddr("tcp", addr)
 	player.Conn, _ = net.ListenTCP("tcp", player.Addr)
-
 	return player, nil
 }
 
-//connects to players listening
-func (lmst *LocalMaster) Connect() {
-	var err error
-	for i := 1; i < lmst.Parties; i++ {
-		fmt.Printf("\"[*] Master -- Dialing player %d\n\n", i)
-		lmst.PartiesConn[i], err = net.DialTCP("tcp", lmst.Addr, lmst.PartiesAddr[i])
-		utils.ThrowErr(err)
-		fmt.Printf("\"[*] Master -- Started listening for player %d\n\n", i)
-		go lmst.Dispatch(lmst.PartiesConn[i])
-	}
-}
-
 //MASTER PROTOCOL
+
+//starts a new protocol instance and runs it
 func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
 	switch proto {
 	case TYPES[0]:
@@ -165,25 +191,27 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	return res, nil
 }
 
+//reads reply from open connection to player
 func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
-	for {
-		buf := Read(c)
-		var resp DummyProtocolResp
-		err := json.Unmarshal(buf, &resp)
-		utils.ThrowErr(err)
-		switch resp.Type {
-		case TYPES[0]:
-			//key switch
-			go lmst.DispatchPCKS(resp)
-		case TYPES[1]:
-			go lmst.DispatchRef(resp)
-		default:
-			utils.ThrowErr(errors.New("resp for unknown protocol"))
-		}
+	buf, err := ReadFrom(c)
+	utils.ThrowErr(err)
+	sum := md5.Sum(buf)
+	fmt.Printf("[*] Master received data %d B. Checksum: %x\n\n", len(buf), sum)
+	var resp DummyProtocolResp
+	err = json.Unmarshal(buf, &resp)
+	utils.ThrowErr(err)
+	switch resp.Type {
+	case TYPES[0]:
+		//key switch
+		go lmst.DispatchPCKS(resp)
+	case TYPES[1]:
+		go lmst.DispatchRef(resp)
+	default:
+		utils.ThrowErr(errors.New("resp for unknown protocol"))
 	}
 }
 
-//Initiates the PCKS protocol from master
+//Runs the PCKS protocol from master and sends messages to players
 func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) {
 	//create protocol instance
 	entry, _ := lmst.ProtoBuf.Load(ctId)
@@ -201,22 +229,29 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
 	msg.Extension = DummyPCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
-	buf = append(buf, DELIM...)
+	sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
-	//"send" msgs
+	// send message and listen for reply:
+	// every proto instance uses its proper socket in order to have a dedicated channel for
+	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
+	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		c := lmst.PartiesConn[i]
+		fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		//c := lmst.PartiesConn[i]
+		addr := lmst.PartiesAddr[i]
+		c, err := net.DialTCP("tcp", nil, addr)
+		utils.ThrowErr(err)
 		go func(c *net.TCPConn, buf []byte) {
-			_, err := c.Write(buf)
-			if err != nil {
-				utils.ThrowErr(err)
-			}
+			defer c.Close()
+			err = WriteTo(c, buf)
+			utils.ThrowErr(err)
+			lmst.Dispatch(c)
 		}(c, buf)
 	}
 }
 
-//Initiates the Refresh protocol from master
+//Runs the Refresh protocol from master and sends messages to players
 func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphertext, crp drlwe.CKSCRP, minLevel int, logBound int, ctId int) {
 	//setup
 	entry, _ := lmst.ProtoBuf.Load(ctId)
@@ -239,17 +274,24 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 		Scale:     ct.Scale,
 	}
 	buf, err := json.Marshal(msg)
-	buf = append(buf, DELIM...)
+	sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
-	//"send" msgs
+	// send message and listen for reply:
+	// every proto instance uses its proper socket in order to have a dedicated channel for
+	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
+	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		c := lmst.PartiesConn[i]
+		fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		//c := lmst.PartiesConn[i]
+		addr := lmst.PartiesAddr[i]
+		c, err := net.DialTCP("tcp", nil, addr)
+		utils.ThrowErr(err)
 		go func(c *net.TCPConn, buf []byte) {
-			_, err := c.Write(buf)
-			if err != nil {
-				utils.ThrowErr(err)
-			}
+			defer c.Close()
+			err = WriteTo(c, buf)
+			utils.ThrowErr(err)
+			lmst.Dispatch(c)
 		}(c, buf)
 	}
 }
@@ -326,7 +368,7 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 
 //PLAYERS PROTOCOL
 
-//Accepts an incoming TCP connection and handles it
+//Accepts an incoming TCP connection and handles it (blocking)
 func (lp *LocalPlayer) Listen() {
 	fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
@@ -342,18 +384,25 @@ func (lp *LocalPlayer) Listen() {
 
 //Handler for the connection
 func (lp *LocalPlayer) Dispatch(c net.Conn) {
+	//listen from Master
 	for {
-		//listen from Master
-		netData := Read(c)
+		netData, err := ReadFrom(c)
+		if err == io.EOF {
+			c.Close()
+			break
+		}
+		utils.ThrowErr(err)
+		sum := md5.Sum(netData)
+		fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
 		var msg DummyProtocolMsg
 		json.Unmarshal(netData, &msg)
 		switch msg.Type {
 		case TYPES[0]: //PubKeySwitch
-			go lp.RunPubKeySwitch(c, msg)
+			lp.RunPubKeySwitch(c, msg)
 		case TYPES[1]: //Refresh
-			go lp.RunRefresh(c, msg)
+			lp.RunRefresh(c, msg)
 		case TYPES[2]: //End
-			go lp.End()
+			lp.End()
 			break
 		default:
 			panic(errors.New("Unknown Protocol from Master"))
@@ -378,14 +427,13 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	proto.GenShare(lp.sk, &pk, &ct, share)
 	dat, err := share.MarshalBinary()
 	utils.ThrowErr(err)
-	resp := &DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
+	resp := DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
-	dat = append(dat, DELIM...)
-	fmt.Printf("[+] Player %d -- Sending Share PCKS ID: %d to master\n\n", lp.Id, msg.Id)
-	_, err = c.Write(dat)
-	if err != nil {
-		utils.ThrowErr(err)
-	}
+	utils.ThrowErr(err)
+	sum := md5.Sum(dat)
+	fmt.Printf("[+] Player %d -- Sending Share (%d B) PCKS ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	err = WriteTo(c, dat)
+	utils.ThrowErr(err)
 }
 
 func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
@@ -405,14 +453,14 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	proto.GenShare(lp.sk, precision, lp.Params.LogSlots(), &ct, scale, crp, share)
 	dat, err := share.MarshalBinary()
 	utils.ThrowErr(err)
-	resp := &DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
+	resp := DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
-	dat = append(dat, DELIM...)
-	fmt.Printf("[+] Player %d -- Sending Share Refresh ID: %d to master\n\n", lp.Id, msg.Id)
-	_, err = c.Write(dat)
-	if err != nil {
-		utils.ThrowErr(err)
-	}
+	utils.ThrowErr(err)
+	sum := md5.Sum(dat)
+	fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	err = WriteTo(c, dat)
+	utils.ThrowErr(err)
+	utils.ThrowErr(err)
 }
 
 func (lp *LocalPlayer) End() {
