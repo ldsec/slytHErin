@@ -18,6 +18,50 @@ import (
 	"testing"
 )
 
+func TestEvalPlain(t *testing.T) {
+	layers := 20
+
+	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+
+	nn.Init(layers)
+	batchSize := 512
+	//for input block
+	rowP := 1
+	colP := 28
+	nnb, err := nn.NewBlockNN(batchSize, rowP, colP)
+	utils.ThrowErr(err)
+	//load dataset
+	dataSn := data.LoadData("/root/nn_data.json")
+	err = dataSn.Init(batchSize)
+	if err != nil {
+		utils.ThrowErr(err)
+	}
+
+	corrects := 0
+	tot := 0
+	iters := 0
+	var elapsed int64
+	fmt.Println("Starting inference on dataset...")
+	for true {
+		Xbatch, Y, err := dataSn.Batch()
+		if err != nil {
+			//dataset completed
+			break
+		}
+		X, _ := plainUtils.PartitionMatrix(plainUtils.NewDense(Xbatch), rowP, colP)
+		correctsInBatch, duration := nnb.EvalBatchPlain(X, Y, 10)
+		corrects += correctsInBatch
+		elapsed += duration.Milliseconds()
+		fmt.Println("Corrects/Tot:", correctsInBatch, "/", batchSize)
+		tot += len(Y)
+		iters++
+	}
+	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	avg := float64(elapsed) / float64(iters)
+	fmt.Println("Latency (avg ms per batch):", avg)
+	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
+}
+
 func TestEvalDataEncModelEnc(t *testing.T) {
 	//data encrypted - model enc, not distributed
 	/*
@@ -102,7 +146,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	fmt.Println("Starting inference on dataset...")
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
-		if err != nil && iters == maxIters {
+		if err != nil || iters == maxIters {
 			//dataset completed
 			break
 		}
@@ -136,8 +180,8 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 
 			This test uses Go channels for communication
 		Runtime:
-			Latency (avg ms per batch): 191676.8
-			Latency (avg ms per sample): 1497.475
+			Latency (avg ms per batch 64): 191676.8
+			Latency (avg ms per sample): 2994.95
 	*/
 	layers := 20
 
@@ -152,14 +196,6 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	//params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-	//	LogN:         14,
-	//	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
-	//	LogP:         []int{33, 33, 33},
-	//	Sigma:        rlwe.DefaultSigma,
-	//	LogSlots:     13,
-	//	DefaultScale: float64(1 << 30),
-	//})
 	params, _ := ckks.NewParametersFromLiteral(ckks.DefaultParams[2])
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
@@ -270,7 +306,8 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 
 			This test uses TCP sockets for communication, on localhost
 		Runtime:
-			3m16s
+			Latency (avg ms per batch 64): 194782.8
+			Latency (avg ms per sample): 3042.15
 	*/
 	layers := 20
 
@@ -280,20 +317,14 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	batchSize := 64
 	//for input block
 	InRowP := 1
-	InColP := 30 //inputs are 30x30
+	//InColP := 30 //inputs are 30x30
+	InColP := 28 //if go training --> 28x28
 	inputInnerRows := batchSize / InRowP
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	//params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-	//	LogN:         14,
-	//	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
-	//	LogP:         []int{33, 33, 33},
-	//	Sigma:        rlwe.DefaultSigma,
-	//	LogSlots:     13,
-	//	DefaultScale: float64(1 << 30),
-	//})
-	params, _ := ckks.NewParametersFromLiteral(ckks.DefaultParams[2])
+	pl := ckks.DefaultParams[2]
+	params, _ := ckks.NewParametersFromLiteral(pl)
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
 	skQ := kgenQ.GenSecretKey()

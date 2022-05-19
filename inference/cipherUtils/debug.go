@@ -9,6 +9,8 @@ import (
 )
 
 func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBox) (valuesTest []complex128) {
+	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
+
 	encoder := Box.Encoder
 	params := Box.Params
 	decryptor := Box.Decryptor
@@ -25,9 +27,27 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 
 	fmt.Println(precStats.String())
-	fmt.Println("Distance:")
+	fmt.Println("L2 Distance:")
 	fmt.Println(plainUtils.Distance(plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant)))
 	fmt.Println()
+	fmt.Println("Scale:")
+	fmt.Println(Box.Params.DefaultScale() - ciphertext.Scale)
+	fmt.Println()
+	fmt.Println("Max value:")
+	maxTest := 0.0
+	maxWant := 0.0
+	vT, vW := plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant)
+	for i := 0; i < len(valuesWant); i++ {
+		if math.Abs(vT[i]) > maxTest {
+			maxTest = math.Abs(vT[i])
+		}
+		if math.Abs(vW[i]) > maxWant {
+			maxWant = math.Abs(vW[i])
+		}
+	}
+	fmt.Printf("Test: %.8f\n", maxTest)
+	fmt.Printf("Want: %.8f\n\n", maxWant)
+	fmt.Println("----------------------------------------------------------------------------------------")
 
 	return
 }
@@ -38,6 +58,7 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 			//because the plaintext in X.Blocks is the matrix transposed and flattened, so transpose the plaintext
 			pt := plainUtils.MatToArray(plainUtils.TransposeDense(Pt.Blocks[i][j]))
 			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), Box)
+			return //only first
 		}
 	}
 

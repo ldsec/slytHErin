@@ -200,6 +200,7 @@ func EvalPolyBlocks(X *EncInput, coeffs []float64, Box CkksBox) {
 	//fmt.Println("Level after:", X.Blocks[0][0].Level())
 }
 
+//Centralized Bootstrapping
 func BootStrapBlocks(X *EncInput, Box CkksBox) {
 	var wg sync.WaitGroup
 	for i := 0; i < X.RowP; i++ {

@@ -1,12 +1,36 @@
 package cipherUtils
 
+import (
+	"errors"
+	"fmt"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"gonum.org/v1/gonum/mat"
+	"math"
+	"math/rand"
+	"sync"
+	"testing"
+	"time"
+)
+
 /********************************************
 BLOCK MATRICES OPS
 |
 |
 v
 *********************************************/
-/*
+var LDim = []int{64, 841}
+var W0Dim = []int{841, 845}
+var W1Dim = []int{845, 100}
+var W2Dim = []int{100, 10}
+
+var L = plainUtils.MatToArray(plainUtils.RandMatrix(LDim[0], LDim[1]))
+var W0 = plainUtils.MatToArray(plainUtils.RandMatrix(W0Dim[0], W0Dim[1]))
+var W1 = plainUtils.MatToArray(plainUtils.RandMatrix(W1Dim[0], W1Dim[1]))
+var W2 = plainUtils.MatToArray(plainUtils.RandMatrix(W2Dim[0], W2Dim[1]))
+
 func TestDecInput(t *testing.T) {
 	LDim := []int{64, 10}
 
@@ -50,19 +74,20 @@ func TestDecInput(t *testing.T) {
 		Encryptor: enc,
 	}
 
-	ctA, err := NewEncInput(L, 1, 1, Box)
+	ctA, err := NewEncInput(L, 1, 1, params.MaxLevel(), Box)
 	CompareBlocks(ctA, Lb, Box)
 }
 
 func TestBlocksC2PMul__Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	ADim := []int{4, 4}
-	BDim := []int{4, 4}
-	rowPA := 2
-	colPA := 2
-	rowPB := 2
-	colPB := 2
+	ADim := []int{64, 676}
+	BDim := []int{676, 92}
+	rowPA := 1
+	colPA := 26
+	rowPB := 26
+	colPB := 4
+
 	rd := rand.New(rand.NewSource(0))
 
 	A := make([][]float64, ADim[0])
@@ -85,11 +110,11 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40, 40, 40, 40, 40},
+		LogQ:         []int{45, 34, 34, 34, 34, 34, 34, 34, 34},
 		LogP:         []int{61, 61, 61},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
+		DefaultScale: float64(1 << 34),
 	})
 	if err != nil {
 		panic(err)
@@ -114,9 +139,9 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-	X, err := NewEncInput(A, rowPA, colPA, Box)
+	X, err := NewEncInput(A, rowPA, colPA, params.MaxLevel(), Box)
 	utils.ThrowErr(err)
-	W, err := NewPlainWeightDiag(B, rowPB, colPB, X.InnerRows, Box)
+	W, err := NewPlainWeightDiag(B, rowPB, colPB, X.InnerRows, params.MaxLevel(), Box)
 	utils.ThrowErr(err)
 
 	//BlOCK MULT ROUTINE
@@ -189,51 +214,11 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 	}
 	Cpb := &plainUtils.BMatrix{Blocks: Blocks, RowP: q, ColP: r, InnerRows: Ab.InnerRows, InnerCols: Bb.InnerCols}
 	CompareBlocks(C, Cpb, Box)
+	PrintDebugBlocks(C, Cpb, Box)
 }
 
 func TestBlockCipher2P(t *testing.T) {
-	//dist = 0.01
-	LDim := []int{128, 841}
-	W0Dim := []int{841, 845}
-	W1Dim := []int{845, 100}
-	W2Dim := []int{100, 10}
-
-	r := rand.New(rand.NewSource(0))
-
-	L := make([][]float64, LDim[0])
-	for i := range L {
-		L[i] = make([]float64, LDim[1])
-
-		for j := range L[i] {
-			L[i][j] = r.NormFloat64()
-		}
-	}
-
-	W0 := make([][]float64, W0Dim[0])
-	for i := range W0 {
-		W0[i] = make([]float64, W0Dim[1])
-
-		for j := range W0[i] {
-			W0[i][j] = r.NormFloat64()
-		}
-	}
-
-	W1 := make([][]float64, W1Dim[0])
-	for i := range W1 {
-		W1[i] = make([]float64, W1Dim[1])
-
-		for j := range W1[i] {
-			W1[i][j] = r.NormFloat64()
-		}
-	}
-
-	W2 := make([][]float64, W2Dim[0])
-	for i := range W2 {
-		W2[i] = make([]float64, W2Dim[1])
-		for j := range W2[i] {
-			W2[i][j] = r.NormFloat64()
-		}
-	}
+	fmt.Println("Encrypted to Plain")
 
 	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 29)
 	utils.ThrowErr(err)
@@ -248,27 +233,9 @@ func TestBlockCipher2P(t *testing.T) {
 	utils.ThrowErr(err)
 	D, err := plainUtils.MultiPlyBlocks(C, W2b)
 
-	//ckksParams := bootstrapping.DefaultCKKSParameters[0]
-	//ckksParams := ckks.PN14QP438
-	//params, err := ckks.NewParametersFromLiteral(ckksParams)
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40, 40, 40, 40, 40},
-		LogP:         []int{61, 61, 61},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
-	})
+	ckksParams := ckks.PN14QP438
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
-
-	//params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-	//	LogN:         15,
-	//	LogQ:         []int{60, 60, 60, 40, 40},
-	//	LogP:         []int{61, 61},
-	//	Sigma:        rlwe.DefaultSigma,
-	//	LogSlots:     14,
-	//	DefaultScale: float64(1 << 40),
-	//})
 
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
@@ -289,80 +256,48 @@ func TestBlockCipher2P(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-
-	ctA, err := NewEncInput(L, 1, 29, Box)
+	level := params.MaxLevel()
+	ctA, err := NewEncInput(L, 1, 29, level, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeightDiag(W0, 29, 65, ctA.InnerRows, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 29, 65, ctA.InnerRows, level, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainWeightDiag(W1, 65, 10, ctA.InnerRows, Box)
+	W1bp, err := NewPlainWeightDiag(W1, 65, 10, ctA.InnerRows, level-1, Box)
 	utils.ThrowErr(err)
-	W2bp, err := NewPlainWeightDiag(W2, 10, 1, ctA.InnerRows, Box)
+	W2bp, err := NewPlainWeightDiag(W2, 10, 1, ctA.InnerRows, level-2, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Start multiplications")
 	now := time.Now()
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Mul 1", time.Since(now))
-	CompareBlocks(ctB, B, Box)
+	PrintDebugBlocks(ctB, B, Box)
 	ctC, err := BlocksC2PMul(ctB, W1bp, Box)
 	utils.ThrowErr(err)
-	ctD, err := BlocksC2PMul(ctC, W2bp, Box)
-	utils.ThrowErr(err)
 	fmt.Println("Mul 2")
-	CompareBlocks(ctD, D, Box)
+	PrintDebugBlocks(ctC, C, Box)
+	ctD, err := BlocksC2PMul(ctC, W2bp, Box)
+
+	utils.ThrowErr(err)
+	fmt.Println("Mul 3")
+	PrintDebugBlocks(ctD, D, Box)
 }
 
 func TestBlockCipher2C(t *testing.T) {
-	LDim := []int{64, 64}
-	W0Dim := []int{64, 64}
-	W1Dim := []int{64, 64}
+	fmt.Println("Encrypted to Encrypted")
 
-	r := rand.New(rand.NewSource(0))
-
-	L := make([][]float64, LDim[0])
-	for i := range L {
-		L[i] = make([]float64, LDim[1])
-
-		for j := range L[i] {
-			L[i][j] = r.NormFloat64()
-		}
-	}
-
-	W0 := make([][]float64, W0Dim[0])
-	for i := range W0 {
-		W0[i] = make([]float64, W0Dim[1])
-
-		for j := range W0[i] {
-			W0[i][j] = r.NormFloat64()
-		}
-	}
-
-	W1 := make([][]float64, W1Dim[0])
-	for i := range W1 {
-		W1[i] = make([]float64, W1Dim[1])
-
-		for j := range W1[i] {
-			W1[i][j] = r.NormFloat64()
-		}
-	}
-
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 8, 16)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 16, 32)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 32, 16)
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), 1, 29)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 65)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 65, 10)
+	W2b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W2), 10, 1)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
 	C, err := plainUtils.MultiPlyBlocks(B, W1b)
 	utils.ThrowErr(err)
-
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40},
-		LogP:         []int{61, 61},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
-	})
+	D, err := plainUtils.MultiPlyBlocks(C, W2b)
+	utils.ThrowErr(err)
+	ckksParams := ckks.PN14QP438
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
 	}
@@ -371,7 +306,7 @@ func TestBlockCipher2C(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(len(L), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(len(L), 3, []int{W0b.InnerRows, W1b.InnerRows, W2b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols, W2b.InnerRows}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -386,22 +321,37 @@ func TestBlockCipher2C(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-
-	ctA, err := NewEncInput(L, 8, 16, Box)
+	level := params.MaxLevel()
+	ctA, err := NewEncInput(L, 1, 29, level, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewEncWeightDiag(W0, 16, 32, ctA.InnerRows, Box)
+	W0bp, err := NewEncWeightDiag(W0, 29, 65, ctA.InnerRows, level, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewEncWeightDiag(W1, 32, 16, ctA.InnerRows, Box)
+	W1bp, err := NewEncWeightDiag(W1, 65, 10, ctA.InnerRows, level-1, Box)
+	utils.ThrowErr(err)
+	W2bp, err := NewEncWeightDiag(W2, 10, 1, ctA.InnerRows, level-2, Box)
 	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2CMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Mul 1")
-	CompareBlocks(ctB, B, Box)
+
+	PrintDebugBlocks(ctB, B, Box)
 	ctC, err := BlocksC2CMul(ctB, W1bp, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Mul 2")
-	CompareBlocks(ctC, C, Box)
+
+	PrintDebugBlocks(ctC, C, Box)
+	ctD, err := BlocksC2CMul(ctC, W2bp, Box)
+	utils.ThrowErr(err)
+	fmt.Println("Mul 3")
+
+	PrintDebugBlocks(ctD, D, Box)
+}
+
+func TestBlockCipherMul(t *testing.T) {
+	//make sure they have the same params
+	t.Run("E2P", TestBlockCipher2P)
+	t.Run("E2C", TestBlockCipher2C)
 }
 
 func TestAddBlockCipher2P(t *testing.T) {
@@ -490,12 +440,12 @@ func TestAddBlockCipher2P(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-
-	ctA, err := NewEncInput(L, 1, 65, Box)
+	level := params.MaxLevel()
+	ctA, err := NewEncInput(L, 1, 65, level, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainInput(W0, 1, 65, Box)
+	W0bp, err := NewPlainInput(W0, 1, 65, level, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainInput(W1, 1, 65, Box)
+	W1bp, err := NewPlainInput(W1, 1, 65, level, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Start additions")
 	now := time.Now()
@@ -615,8 +565,8 @@ func TestMixCipher2P(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-
-	ctA, err := NewEncInput(L, 1, 10, Box)
+	level := params.MaxLevel()
+	ctA, err := NewEncInput(L, 1, 10, level, Box)
 	utils.ThrowErr(err)
 	for i := range W0 {
 		for j := range W0[i] {
@@ -629,9 +579,9 @@ func TestMixCipher2P(t *testing.T) {
 			W1[i][j] *= 1 / interval
 		}
 	}
-	W0bp, err := NewPlainWeightDiag(W0, 10, 1, ctA.InnerRows, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 10, 1, ctA.InnerRows, level, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainInput(W1, 1, 1, Box)
+	W1bp, err := NewPlainInput(W1, 1, 1, level-1, Box)
 	utils.ThrowErr(err)
 	now := time.Now()
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
@@ -684,12 +634,10 @@ func TestRemoveImagFromBlocks(t *testing.T) {
 		Decryptor: dec,
 		Encryptor: enc,
 	}
-	ct, err := NewEncInput(L, 2, 2, Box)
+	ct, err := NewEncInput(L, 2, 2, params.MaxLevel(), Box)
 	utils.ThrowErr(err)
 	RemoveImagFromBlocks(ct, Box)
 
 	CompareBlocks(ct, Lb, Box)
 	PrintDebugBlocks(ct, Lb, Box)
 }
-
-*/

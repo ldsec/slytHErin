@@ -53,8 +53,8 @@ SIMPLENET METHODS
  ***************/
 
 func (sn *SimpleNet) Init() {
-
-	sn.ReLUApprox = utils.InitReLU()
+	deg := 3
+	sn.ReLUApprox = utils.InitReLU(deg)
 }
 
 func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels int) *SimpleNetPipeLine {

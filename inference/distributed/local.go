@@ -2,11 +2,9 @@ package distributed
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
@@ -150,7 +148,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	switch proto {
 	case TYPES[0]:
 		//prepare PubKeySwitch
-		fmt.Printf("[*] Master -- Registering PubKeySwitch ID: %d\n\n", ctId)
+		//fmt.Printf("[*] Master -- Registering PubKeySwitch ID: %d\n\n", ctId)
 		protocol := dckks.NewPCKSProtocol(lmst.Params, 3.2)
 		lmst.ProtoBuf.Store(ctId, &DummyProtocol{
 			Protocol:     protocol,
@@ -163,7 +161,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 
 	case TYPES[1]:
 		//prepare Refresh
-		fmt.Printf("[*] Master -- Registering Refresh ID: %d\n\n", ctId)
+		//fmt.Printf("[*] Master -- Registering Refresh ID: %d\n\n", ctId)
 		var minLevel, logBound int
 		var ok bool
 		if minLevel, logBound, ok = dckks.GetMinimumLevelForBootstrapping(128, ct.Scale, lmst.Parties, lmst.Params.Q()); ok != true || minLevel+1 > lmst.Params.MaxLevel() {
@@ -195,8 +193,8 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
 	buf, err := ReadFrom(c)
 	utils.ThrowErr(err)
-	sum := md5.Sum(buf)
-	fmt.Printf("[*] Master received data %d B. Checksum: %x\n\n", len(buf), sum)
+	//sum := md5.Sum(buf)
+	//fmt.Printf("[*] Master received data %d B. Checksum: %x\n\n", len(buf), sum)
 	var resp DummyProtocolResp
 	err = json.Unmarshal(buf, &resp)
 	utils.ThrowErr(err)
@@ -229,7 +227,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
 	msg.Extension = DummyPCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
-	sum := md5.Sum(buf)
+	//sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
 	// send message and listen for reply:
@@ -237,7 +235,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		//fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
@@ -274,7 +272,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 		Scale:     ct.Scale,
 	}
 	buf, err := json.Marshal(msg)
-	sum := md5.Sum(buf)
+	//sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
 	// send message and listen for reply:
@@ -282,7 +280,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		//fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
@@ -302,7 +300,7 @@ func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
 		//ignore invalid
 		return
 	}
-	fmt.Printf("[*] Master -- Received share of PCKS ID: %d from %d\n\n", resp.ProtoId, resp.PlayerId)
+	//fmt.Printf("[*] Master -- Received share of PCKS ID: %d from %d\n\n", resp.ProtoId, resp.PlayerId)
 	entry, ok := lmst.ProtoBuf.Load(resp.ProtoId)
 	if !ok {
 		return
@@ -337,7 +335,7 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 		//ignore invalid
 		return
 	}
-	fmt.Printf("[*] Master -- Received share of Refresh ID: %d from %d\n\n", resp.ProtoId, resp.PlayerId)
+	//fmt.Printf("[*] Master -- Received share of Refresh ID: %d from %d\n\n", resp.ProtoId, resp.PlayerId)
 	entry, ok := lmst.ProtoBuf.Load(resp.ProtoId)
 	if !ok {
 		return
@@ -370,14 +368,13 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 
 //Accepts an incoming TCP connection and handles it (blocking)
 func (lp *LocalPlayer) Listen() {
-	fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
+	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
 		c, err := lp.Conn.Accept()
 		if err != nil {
-			fmt.Println(err)
-			return
+			utils.ThrowErr(err)
 		}
-		fmt.Printf("[+] Player %d accepted connection\n\n", lp.Id)
+		//fmt.Printf("[+] Player %d accepted connection\n\n", lp.Id)
 		go lp.Dispatch(c)
 	}
 }
@@ -392,8 +389,8 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 			break
 		}
 		utils.ThrowErr(err)
-		sum := md5.Sum(netData)
-		fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
+		//sum := md5.Sum(netData)
+		//fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
 		var msg DummyProtocolMsg
 		json.Unmarshal(netData, &msg)
 		switch msg.Type {
@@ -412,7 +409,7 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 
 //Generates and send share to Master
 func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
-	fmt.Printf("[+] Player %d -- Received msg PCKS ID: %d from master\n\n", lp.Id, msg.Id)
+	//fmt.Printf("[+] Player %d -- Received msg PCKS ID: %d from master\n\n", lp.Id, msg.Id)
 	proto := dckks.NewPCKSProtocol(lp.Params, 3.2)
 	var ct ring.Poly
 	var pk rlwe.PublicKey
@@ -430,15 +427,15 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	resp := DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
-	sum := md5.Sum(dat)
-	fmt.Printf("[+] Player %d -- Sending Share (%d B) PCKS ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	//sum := md5.Sum(dat)
+	//fmt.Printf("[+] Player %d -- Sending Share (%d B) PCKS ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
 	err = WriteTo(c, dat)
 	utils.ThrowErr(err)
 }
 
 func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	var ct ring.Poly
-	fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)
+	//fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)
 	ct.UnmarshalBinary(msg.Ct)
 	var Ext DummyRefreshExt
 	jsonString, _ := json.Marshal(msg.Extension)
@@ -456,8 +453,8 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	resp := DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
-	sum := md5.Sum(dat)
-	fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	//sum := md5.Sum(dat)
+	//fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
 	err = WriteTo(c, dat)
 	utils.ThrowErr(err)
 	utils.ThrowErr(err)
