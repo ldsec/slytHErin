@@ -2,9 +2,11 @@ package distributed
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
@@ -25,7 +27,9 @@ var DELIM = []byte{'\r', '\n', '\r', '\n'}
 var TYP = uint8(255)
 var KB = 1024
 var MB = 1024 * KB
-var MAX_SIZE = 10 * MB
+
+//var MAX_SIZE = 10 * MB //LogN = 14
+var MAX_SIZE = 21 * MB //LogN = 15
 
 //HELPERS
 
@@ -227,7 +231,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
 	msg.Extension = DummyPCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
-	//sum := md5.Sum(buf)
+	sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
 	// send message and listen for reply:
@@ -235,7 +239,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		//fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
@@ -272,7 +276,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 		Scale:     ct.Scale,
 	}
 	buf, err := json.Marshal(msg)
-	//sum := md5.Sum(buf)
+	sum := md5.Sum(buf)
 	utils.ThrowErr(err)
 
 	// send message and listen for reply:
@@ -280,7 +284,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	// its message. This might not be efficient, but we avoid define a logic for reassembling packets
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
-		//fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
+		fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
@@ -427,8 +431,8 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	resp := DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
-	//sum := md5.Sum(dat)
-	//fmt.Printf("[+] Player %d -- Sending Share (%d B) PCKS ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	sum := md5.Sum(dat)
+	fmt.Printf("[+] Player %d -- Sending Share (%d B) PCKS ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
 	err = WriteTo(c, dat)
 	utils.ThrowErr(err)
 }
@@ -453,8 +457,8 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	resp := DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
-	//sum := md5.Sum(dat)
-	//fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
+	sum := md5.Sum(dat)
+	fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
 	err = WriteTo(c, dat)
 	utils.ThrowErr(err)
 	utils.ThrowErr(err)

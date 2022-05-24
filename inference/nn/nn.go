@@ -21,10 +21,9 @@ import (
 	Stores NN model in clear, as in json format
 */
 type NN struct {
-	Conv       utils.Layer      `json:"conv"`
-	Dense      []utils.Layer    `json:"dense"`
-	Layers     int              `json:"layers"`
-	ReLUApprox utils.PolyApprox //this will store the coefficients of the poly approximating ReLU
+	Conv   utils.Layer   `json:"conv"`
+	Dense  []utils.Layer `json:"dense"`
+	Layers int           `json:"layers"`
 
 	RowsOutConv, ColsOutConv, ChansOutConv, DimOutDense int //dimentions
 }
@@ -38,7 +37,8 @@ type NNBlock struct {
 	InnerRows, InnerCols []int //inner dim of sub-matrices
 	RowsP, ColsP         []int //partition of BMatrix
 
-	ReLUApprox utils.PolyApprox //this will store the coefficients of the poly approximating ReLU
+	ActName    string
+	Activation func(*plainUtils.BMatrix) *plainUtils.BMatrix
 	Layers     int
 }
 
@@ -49,7 +49,7 @@ type NNEnc struct {
 	Weights []*cipherUtils.EncWeightDiag
 	Bias    []*cipherUtils.EncInput
 
-	ReLUApprox utils.PolyApprox //this will store the coefficients of the poly approximating ReLU
+	ReLUApprox *utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
 	Box        cipherUtils.CkksBox
 	Layers     int
 }
@@ -70,10 +70,6 @@ func LoadNN(path string) *NN {
 }
 
 func (nn *NN) Init(layers int) {
-	//init activation
-	deg := 32
-	nn.ReLUApprox = utils.InitReLU(deg)
-
 	//init dimensional values (not really used, just for reference)
 	nn.Layers = layers
 	//nn.RowsOutConv = 21
@@ -139,6 +135,21 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 		rowsW[w], colsW[w] = weightMatricesBlock[w].InnerRows, weightMatricesBlock[w].InnerCols
 		rowsPW[w], colsPW[w] = weightMatricesBlock[w].RowP, weightMatricesBlock[w].ColP
 	}
+	actName := "soft relu"
+	activation := func(matrix *plainUtils.BMatrix) *plainUtils.BMatrix {
+		for i := 0; i < matrix.RowP; i++ {
+			for j := 0; j < matrix.ColP; j++ {
+				for ii := 0; ii < matrix.InnerRows; ii++ {
+					for jj := 0; jj < matrix.InnerCols; jj++ {
+						//soft relu
+						matrix.Blocks[i][j].Set(ii, jj, utils.SoftReLu(matrix.Blocks[i][j].At(ii, jj)))
+					}
+				}
+			}
+		}
+		return matrix
+	}
+
 	return &NNBlock{
 		Weights:    weightMatricesBlock,
 		Bias:       biasMatricesBlock,
@@ -146,7 +157,8 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 		InnerCols:  colsW,
 		RowsP:      rowsPW,
 		ColsP:      colsPW,
-		ReLUApprox: nn.ReLUApprox,
+		ActName:    actName,
+		Activation: activation,
 		Layers:     layers,
 	}, nil
 }
@@ -158,7 +170,7 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 	nne.Weights = make([]*cipherUtils.EncWeightDiag, layers+1)
 	nne.Bias = make([]*cipherUtils.EncInput, layers+1)
 	nne.Layers = nnb.Layers
-	nne.ReLUApprox = nnb.ReLUApprox
+	nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, -35.0, 35.0, 63)
 	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel
 	fmt.Println("Creating weights encrypted block matrices...")
@@ -177,14 +189,24 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 				level = btpCapacity
 			}
 		}
+		//change to cheby base
+		a := nne.ReLUApprox.A
+		b := nne.ReLUApprox.B
+		mulC := 2 / (b - a)
+		addC := (-a - b) / (b - a)
+		if i == layers {
+			//skip base switch for activation, since there is none in last layer
+			mulC = 1.0
+			addC = 0.0
+		}
 		nne.Weights[i], _ = cipherUtils.NewEncWeightDiag(
 			plainUtils.MatToArray(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Weights[i]),
-				1.0/nnb.ReLUApprox.Interval)),
+				mulC)),
 			nnb.RowsP[i], nnb.ColsP[i], batchSize, level, Box)
 		level-- //mul
 		nne.Bias[i], _ = cipherUtils.NewEncInput(
-			plainUtils.MatToArray(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Bias[i]),
-				1.0/nnb.ReLUApprox.Interval)),
+			plainUtils.MatToArray(plainUtils.AddConst(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Bias[i]),
+				mulC), addC)),
 			InRowP, nnb.ColsP[i], level, Box)
 		if level < nne.ReLUApprox.LevelsOfAct() || (minLevel != -1 && (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel)) {
 			if minLevel != -1 {
@@ -214,13 +236,7 @@ func (nnb *NNBlock) EvalBatchPlain(XBatchClear *plainUtils.BMatrix, Y []int, lab
 		utils.ThrowErr(err)
 		XintPlain, err = plainUtils.AddBlocks(XintPlain, nnb.Bias[i])
 		utils.ThrowErr(err)
-		if i != len(nnb.Weights)-1 {
-			for ii := range XintPlain.Blocks {
-				for jj := range XintPlain.Blocks[ii] {
-					utils.ActivatePlain(XintPlain.Blocks[ii][jj], nnb.ReLUApprox)
-				}
-			}
-		}
+		XintPlain = nnb.Activation(XintPlain)
 	}
 	elapsed := time.Since(now)
 	fmt.Println("Done", elapsed)
@@ -259,8 +275,11 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 		level := Xint.Blocks[0][0].Level()
 		if level == 0 {
 			fmt.Println("Level 0, Bootstrapping...")
-			cipherUtils.BootStrapBlocks(Xint, Box)
-
+			fmt.Println("pre boot")
+			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			cipherUtils.DummyBootStrapBlocks(Xint, Box)
+			fmt.Println("after boot")
+			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 		Xint, err = cipherUtils.BlocksC2CMul(Xint, nne.Weights[i], Box)
 		utils.ThrowErr(err)
@@ -279,23 +298,21 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 			XintPlain, err = plainUtils.AddBlocks(XintPlain, nnb.Bias[i])
 			utils.ThrowErr(err)
 		}
-
 		//activation
 		if i != len(nne.Weights)-1 {
 			level = Xint.Blocks[0][0].Level()
 			if level < nne.ReLUApprox.LevelsOfAct() {
 				fmt.Println("Bootstrapping for Activation")
-				cipherUtils.BootStrapBlocks(Xint, Box)
-
+				fmt.Println("pre boot")
+				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+				cipherUtils.DummyBootStrapBlocks(Xint, Box)
+				fmt.Println("after boot")
+				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}
 			fmt.Printf("Activation ")
-			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
 			if debug {
-				for ii := range XintPlain.Blocks {
-					for jj := range XintPlain.Blocks[ii] {
-						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nnb.ReLUApprox)
-					}
-				}
+				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
 				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}
@@ -447,13 +464,9 @@ func EvalBatchEncryptedDistributedDummy(nne *NNEnc, nnb *NNBlock,
 			}
 
 			fmt.Println("Activation")
-			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
 			if debug {
-				for ii := range XintPlain.Blocks {
-					for jj := range XintPlain.Blocks[ii] {
-						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
-					}
-				}
+				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
 				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}
@@ -535,6 +548,9 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 	var wg sync.WaitGroup
 	fmt.Println("Minlevel: ", minLevel)
 	fmt.Println("MaxLevel: ", Box.Params.MaxLevel())
+	if debug {
+		cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+	}
 	now := time.Now()
 	for i := range nne.Weights {
 		fmt.Printf("======================> Layer %d\n", i+1)
@@ -621,13 +637,9 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 			}
 
 			fmt.Println("Activation")
-			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Coeffs, Box)
+			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
 			if debug {
-				for ii := range XintPlain.Blocks {
-					for jj := range XintPlain.Blocks[ii] {
-						utils.ActivatePlain(XintPlain.Blocks[ii][jj], nne.ReLUApprox)
-					}
-				}
+				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
 				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}

@@ -21,10 +21,10 @@ REGULAR MATRICES OPS
 v
 *********************************************/
 func TestEncMult(t *testing.T) {
-	//make sure that input dim*2 < 2^logSlots
+	//make sure that input dim*4 < 2^logSlots
 	//ct x ct
-	LDim := []int{128, 23}
-	W0Dim := []int{23, 23}
+	LDim := []int{64, 26}
+	W0Dim := []int{26, 23}
 	W1Dim := []int{23, 10}
 
 	r := rand.New(rand.NewSource(0))
@@ -91,14 +91,8 @@ func TestEncMult(t *testing.T) {
 	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
 
 	// Schemes parameters are created from scratch
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{32, 32, 32, 32, 32},
-		LogP:         []int{61, 61},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 25),
-	})
+	ckksParams := ckks.DefaultParams[2]
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
 	}
@@ -140,17 +134,17 @@ func TestEncMult(t *testing.T) {
 		Encryptor: enc,
 	}
 	ctW0 := EncryptWeights(params.MaxLevel(), W0, len(L), Box)
-	ctW1 := EncryptWeights(params.MaxLevel(), W1, len(L), Box)
+	ctW1 := EncryptWeights(params.MaxLevel()-1, W1, len(L), Box)
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2CMul(ctA, len(L), len(W0), ctW0, true, true, Box)
-	// -> Activate
+	B := Cipher2CMul(ctA, len(L), len(W0), len(W0[0]), ctW0, true, true, Box)
+
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2CMul(B, len(L), len(W1), ctW1, true, true, Box)
-	// -> Activate
+	C := Cipher2CMul(B, len(L), len(W1), len(W1[0]), ctW1, true, true, Box)
+
 	fmt.Println("Done:", time.Since(now))
 	resPt := dec.DecryptNew(C)
 	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
@@ -158,11 +152,13 @@ func TestEncMult(t *testing.T) {
 
 	var tmp mat.Dense
 	tmp.Mul(Lmat, W0mat)
+	PrintDebug(B, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp))), Box)
 	CompareMatrices(B, len(L), len(W0[1]), &tmp, Box)
 	var res mat.Dense
 	res.Mul(&tmp, W1mat)
 	fmt.Println("Final distance")
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
+	PrintDebug(C, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&res))), Box)
 }
 
 func TestEncPlainMult(t *testing.T) {
@@ -249,8 +245,8 @@ func TestEncPlainMult(t *testing.T) {
 	W2mat := mat.NewDense(W2Dim[0], W2Dim[1], plainUtils.Vectorize(W2, true))
 
 	// Schemes parameters are created from scratc
-	//ckksParams := bootstrapping.DefaultCKKSParameters[0]
-	//ckksParams := ckks.PN15QP880
+
+	//ckksParams := ckks.PN14QP438
 	//params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral(ckksParams))
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         15,
@@ -299,29 +295,32 @@ func TestEncPlainMult(t *testing.T) {
 		Encryptor: enc,
 	}
 	ptW0 := EncodeWeights(params.MaxLevel(), W0, len(L), Box)
-	ptW1 := EncodeWeights(params.MaxLevel(), W1, len(L), Box)
-	ptW2 := EncodeWeights(params.MaxLevel(), W2, len(L), Box)
+	ptW1 := EncodeWeights(params.MaxLevel()-1, W1, len(L), Box)
+	ptW2 := EncodeWeights(params.MaxLevel()-2, W2, len(L), Box)
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2PMul(ctA, len(L), len(W0), ptW0, true, true, Box)
+	B := Cipher2PMul(ctA, len(L), len(W0), len(W0[0]), ptW0, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
 	now = time.Now()
-	C := Cipher2PMul(B, len(L), len(W1), ptW1, true, true, Box)
+	C := Cipher2PMul(B, len(L), len(W1), len(W1[0]), ptW1, true, true, Box)
 	// -> Activate
 	fmt.Println("Done:", time.Since(now))
-	D := Cipher2PMul(C, len(L), len(W2), ptW2, true, true, Box)
+	D := Cipher2PMul(C, len(L), len(W2), len(W2[0]), ptW2, true, true, Box)
 	resPt := dec.DecryptNew(D)
 	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
 	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W2Dim[1]]
 	var tmp mat.Dense
 	tmp.Mul(Lmat, W0mat)
+	PrintDebug(B, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp))), Box)
 	var tmp2 mat.Dense
 	tmp2.Mul(&tmp, W1mat)
+	PrintDebug(C, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp2))), Box)
 	var res mat.Dense
 	res.Mul(&tmp2, W2mat)
+	PrintDebug(D, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&res))), Box)
 	//fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
 	//fmt.Println("test:", resReal)
 	//fmt.Println("________________-")
@@ -332,15 +331,9 @@ func TestEvalPoly(t *testing.T) {
 	//Evaluates a polynomial on ciphertext
 	LDim := []int{64, 64}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
-
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         14,
-		LogQ:         []int{60, 40, 40, 40, 40, 40, 40, 40, 40, 40}, //6 x 43 + 3 x 60 --> Log(Q) <= 438 for LogN 14
-		LogP:         []int{41, 41, 41},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     13,
-		DefaultScale: float64(1 << 40),
-	})
+	L.Set(0, 0, 32.0)
+	ckksParams := ckks.DefaultParams[2]
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
 	}
@@ -361,30 +354,64 @@ func TestEvalPoly(t *testing.T) {
 		Encryptor: enc,
 	}
 	//relu approx
-	coeffs := []float64{1.1155, 5.0, 4.4003} //degree 2
-	interval := 10.0                         //--> incorporate this in weight matrix to spare a level
-	poly := ckks.NewPoly(plainUtils.RealToComplex(coeffs))
-
-	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(plainUtils.MulByConst(L, 1.0/interval)), Box)
+	f := func(x float64) float64 {
+		return math.Log(1 + math.Exp(x))
+	}
+	a, b := -35.0, 35.0
+	deg := 31
+	approxF := ckks.Approximate(f, a, b, deg)
+	fmt.Println(approxF.Coeffs)
+	/*
+		MatLab := []float64{-1.0040897579718860e-53, 6.2085331754358028e-40, 9.4522902777573076e-50, -5.7963804324148821e-36, -4.0131279328625271e-46, 2.4410642683332394e-32, 1.0153477706512291e-42, -6.1290204181405624e-29, -1.7039434123075587e-39, 1.0216863193793685e-25, 1.9976235851829888e-36, -1.1917424918638167e-22, -1.6781853595392470e-33, 9.9891167268766684e-20, 1.0196230261578948e-30, -6.0833342283869143e-17, -4.4658877204790776e-28, 2.6909707871865122e-14, 1.3889468322950614e-25, -8.5600457797298628e-12, -2.9800845828620543e-23, 1.9200743786780711e-09, 4.2045289670858245e-21, -2.9487406547016763e-07, -3.6043867162675355e-19, 2.9886906932909647e-05, 1.6307741516672765e-17, -1.9601130409477464e-03, -2.8618809778714450e-16, 1.0678923596705732e-01, 5.0000000000000022e-01, 7.1225856852636027e-01}
+		coeffs := make([]float64, len(MatLab))
+		j := len(MatLab) - 1
+		for i := 0; i < len(coeffs); i++ {
+			coeffs[i] = MatLab[j-i]
+			//fmt.Printf("%.4e * x^%d ", relu.Coeffs[i], i)
+		}
+		interval := 1.0 //--> incorporate this in weight matrix to spare a level
+		poly := ckks.NewPoly(plainUtils.RealToComplex(coeffs))
+	*/
+	slotsIndex := make(map[int][]int)
+	idx := make([]int, len(plainUtils.RowFlatten(L)))
+	for i := 0; i < len(plainUtils.RowFlatten(L)); i++ {
+		idx[i] = i
+	}
+	slotsIndex[0] = idx
+	//ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(plainUtils.MulByConst(L, 1.0/interval)), Box)
+	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(L), Box)
 	fmt.Println("Before", ctL.Level())
-	ct, err := eval.EvaluatePoly(ctL, poly, ctL.Scale)
+	// Change of variable
+	eval.MultByConst(ctL, 2/(b-a), ctL)
+	eval.AddConst(ctL, (-a-b)/(b-a), ctL)
+	if err := eval.Rescale(ctL, params.DefaultScale(), ctL); err != nil {
+		panic(err)
+	}
+	ct, err := eval.EvaluatePolyVector(ctL, []*ckks.Polynomial{approxF}, ecd, slotsIndex, ctL.Scale)
 	fmt.Println("After", ct.Level())
-	fmt.Println("Deg", poly.Degree())
+	fmt.Println("Deg", approxF.Degree())
 	fmt.Println("Done... Consumed levels:", params.MaxLevel()-ct.Level())
 
-	func(X *mat.Dense, interval float64, degree int, coeffs []float64) {
-		rows, cols := X.Dims()
-		for r := 0; r < rows; r++ {
-			for c := 0; c < cols; c++ {
-				v := X.At(r, c) / float64(interval)
-				res := 0.0
-				for deg := 0; deg < degree; deg++ {
-					res += (math.Pow(v, float64(deg)) * coeffs[deg])
+	/*
+		func(X *mat.Dense, interval float64, degree int, coeffs []float64) {
+			rows, cols := X.Dims()
+			for r := 0; r < rows; r++ {
+				for c := 0; c < cols; c++ {
+					v := X.At(r, c) / float64(interval)
+					res := 0.0
+					for deg := 0; deg < degree; deg++ {
+						res += (math.Pow(v, float64(deg)) * coeffs[deg])
+					}
+					X.Set(r, c, res)
 				}
-				X.Set(r, c, res)
 			}
+		}(L, interval, 32, coeffs)
+	*/
+	for i := 0; i < LDim[0]; i++ {
+		for j := 0; j < LDim[1]; j++ {
+			L.Set(i, j, f(L.At(i, j)))
 		}
-	}(L, interval, 3, coeffs)
+	}
 
 	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
@@ -445,4 +472,57 @@ func TestBootstrap(t *testing.T) {
 	fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
 	CompareMatrices(ct2, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct2, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
+}
+
+/*
+
+ */
+func TestEncodingForSmallCoeffs(t *testing.T) {
+	exp := 21.0 //31 broken, 30 fine
+	base := 2.0
+	v := 1.0 * math.Pow(base, exp)
+	//vinv := 1.0 * math.Pow(base, -exp)
+	L := make([][]float64, 2)
+	for i := 0; i < len(L); i++ {
+		L[i] = make([]float64, 2)
+		for j := 0; j < len(L[i]); j++ {
+			L[i][j] = v
+		}
+	}
+	ckksParams := ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{40, 30},
+		LogP:         []int{33},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 30),
+	}
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	utils.ThrowErr(err)
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk})
+	Box := CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+	ctL := EncryptInput(params.MaxLevel(), L, Box)
+	//eval.MultByConst(ctL, vinv, ctL)
+	//eval.Rescale(ctL, params.DefaultScale(), ctL)
+	eval.DropLevel(ctL, 1)
+	PrintDebug(ctL, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.MulByConst(plainUtils.NewDense(L), 1.0))), Box)
+	Lflat := plainUtils.RowFlatten(plainUtils.NewDense(L))
+	ecdL := ecd.EncodeNew(Lflat, params.MaxLevel(), params.DefaultScale(), params.LogSlots())
+	decdL := plainUtils.ComplexToReal(ecd.Decode(ecdL, params.LogSlots()))[:len(Lflat)]
+	for i := 0; i < len(Lflat); i++ {
+		fmt.Printf("test:%.32f\n", decdL[i])
+		fmt.Printf("want:%.32f\n", Lflat[i])
+	}
 }

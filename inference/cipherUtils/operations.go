@@ -1,13 +1,16 @@
 package cipherUtils
 
-import "github.com/tuneinsight/lattigo/v3/ckks"
+import (
+	"github.com/tuneinsight/lattigo/v3/ckks"
+)
 
-/*
 // |
 // | version with optimized dimentions
 // v
-func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Plaintext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+
+/*
 //Multiplies 1 ciphertexts to 1 plaintext, each representing a matrix
+func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Plaintext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -29,11 +32,11 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 
 	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.Scale)
 
-	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().PoolDecompQP)
+	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 
 	for i := 1; i < len(weights); i++ {
 
-		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimIn*i, inputRot.Value[0], inputRot.Value[1])
+		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().BuffDecompQP, 2*dimIn*i, inputRot.Value[0], inputRot.Value[1])
 
 		eval.MulAndAdd(inputRot, weights[i], res)
 
@@ -50,8 +53,8 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 	return
 }
 
-func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 //Multiplies 2 ciphertexts, each representing a matrix
+func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -75,11 +78,11 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 
 	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.Scale)
 
-	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().PoolDecompQP)
+	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 
 	for i := 1; i < len(weights); i++ {
 
-		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().PoolDecompQP, 2*dimIn*i, inputRot.Value[0], inputRot.Value[1])
+		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().BuffDecompQP, 2*dimIn*i, inputRot.Value[0], inputRot.Value[1])
 
 		eval.MulAndAdd(inputRot, weights[i], res)
 
@@ -96,12 +99,10 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 
 	return
 }
-*/
 
+*/
+//Multiplies 1 ciphertexts to 1 plaintext, each representing a matrix
 func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Plaintext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
-	/*
-		Multiplies 1 ciphertexts to 1 plaintext, each representing a matrix
-	*/
 	params := Box.Params
 	eval := Box.Evaluator
 
@@ -141,10 +142,8 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Plai
 	return
 }
 
+//Multiplies 2 ciphertexts, each representing a matrix
 func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
-	/*
-		Multiplies 2 ciphertexts, each representing a matrix
-	*/
 	params := Box.Params
 	eval := Box.Evaluator
 

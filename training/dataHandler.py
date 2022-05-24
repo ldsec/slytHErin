@@ -87,7 +87,8 @@ if __name__=="__main__":
       if args.model == "simplenet":
         data = F.pad(data, (1,0,1,0)).numpy().flatten()
       else:
-        data = F.pad(data, (1,1,1,1)).numpy().flatten()
+        #data = F.pad(data, (1,1,1,1)).numpy().flatten()
+        data = data.numpy().flatten() #no pad if go training
       sample = [x.item() for x in data] 
       dataset['X'].append(sample)
       dataset['Y'].append(label)

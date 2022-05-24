@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 	"math"
 )
@@ -28,23 +29,24 @@ type Layer struct {
 	Weight Kernel `json:"weight"`
 	Bias   Bias   `json:"bias"`
 }
+type PolyApprox interface {
+	LevelsOfAct() int
+}
 
-type PolyApprox struct {
+type MinMaxPolyApprox struct {
 	Interval float64
 	Degree   int
 	Coeffs   []float64
 }
 
-func InitActivation(degree int, interval float64, coeffs []float64) PolyApprox {
-	var activation PolyApprox
-	activation.Degree = degree
-	activation.Interval = interval
-	activation.Coeffs = coeffs
-	return activation
+type ChebyPolyApprox struct {
+	A, B   float64
+	Degree int
+	Poly   *ckks.Polynomial
 }
 
-func InitReLU(deg int) PolyApprox {
-	var relu PolyApprox
+func InitReLU(deg int) MinMaxPolyApprox {
+	var relu MinMaxPolyApprox
 	if deg == 3 {
 		relu.Degree = 3
 		relu.Interval = 10.0
@@ -64,6 +66,21 @@ func InitReLU(deg int) PolyApprox {
 		}
 	}
 	return relu
+}
+
+func InitActivationCheby(act string, a, b float64, deg int) *ChebyPolyApprox {
+	approx := new(ChebyPolyApprox)
+	approx.A = a
+	approx.B = b
+	approx.Degree = deg
+	var f interface{}
+	if act == "soft relu" {
+		f = func(x float64) float64 {
+			return math.Log(1 + math.Exp(x))
+		}
+	}
+	approx.Poly = ckks.Approximate(f, a, b, deg)
+	return approx
 }
 
 func BuildKernelMatrix(k Kernel) *mat.Dense {
@@ -89,7 +106,7 @@ func BuildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
 }
 
 // applies the activation function elementwise
-func ActivatePlain(X *mat.Dense, activation PolyApprox) {
+func ActivatePlain(X *mat.Dense, activation MinMaxPolyApprox) {
 	rows, cols := X.Dims()
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
@@ -104,6 +121,11 @@ func ActivatePlain(X *mat.Dense, activation PolyApprox) {
 }
 
 //computes how many levels are consumed by activation func
-func (pa *PolyApprox) LevelsOfAct() int {
-	return int(math.Ceil(math.Log2(float64(pa.Degree))))
+func (approx *MinMaxPolyApprox) LevelsOfAct() int {
+	return int(math.Ceil(math.Log2(float64(approx.Degree))))
+}
+
+//computes how many levels are consumed by activation func
+func (approx *ChebyPolyApprox) LevelsOfAct() int {
+	return int(math.Ceil(math.Log2(float64(approx.Degree + 1))))
 }

@@ -4,7 +4,6 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
@@ -16,6 +15,7 @@ OPERATIONS ON BLOCK MATRIXES (ENCRYPTED OR PLAIN) DEFINED IN cipherUtils.encBloc
 For reference about the algorithms, check the plaintext equivalent in plainUtils.blocks.go
 */
 
+//Multiplication between encrypted input and plaintext weight
 func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, error) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	var err error
@@ -70,6 +70,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	return E, err
 }
 
+//Multiplication between encrypted input and weight
 func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error) {
 	//multiplies 2 block matrices, both encrypted
 	var err error
@@ -125,6 +126,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	return E, err
 }
 
+//Addition between encrypted input and weight
 func AddBlocksC2C(A *EncInput, B *EncInput, Box CkksBox) (*EncInput, error) {
 	var err error
 	if A.RowP != B.RowP || A.ColP != B.ColP {
@@ -149,6 +151,7 @@ func AddBlocksC2C(A *EncInput, B *EncInput, Box CkksBox) (*EncInput, error) {
 	return E, err
 }
 
+//Addition between encrypted input and plaintext weight
 func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 	var err error
 	if A.RowP != B.RowP || A.ColP != B.ColP {
@@ -173,8 +176,8 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 	return E, err
 }
 
-func EvalPolyBlocks(X *EncInput, coeffs []float64, Box CkksBox) {
-	poly := ckks.NewPoly(plainUtils.RealToComplex(coeffs))
+//Evaluates a polynomial on the ciphertext
+func EvalPolyBlocks(X *EncInput, poly *ckks.Polynomial, Box CkksBox) {
 	//fmt.Println("Deg", poly.Degree())
 	//fmt.Println("Level before:", X.Blocks[0][0].Level())
 
@@ -216,6 +219,15 @@ func BootStrapBlocks(X *EncInput, Box CkksBox) {
 	fmt.Println("Level after bootstrapping: ", X.Blocks[0][0].Level())
 }
 
+//Dummy Bootstrap where cipher is freshly encrypted
+func DummyBootStrapBlocks(X *EncInput, Box CkksBox) *EncInput {
+	pt := DecInput(X, Box)
+	Xnew, err := NewEncInput(pt, X.RowP, X.ColP, Box.Params.MaxLevel(), Box)
+	utils.ThrowErr(err)
+	return Xnew
+}
+
+//Deprecated
 func RescaleBlocks(X *EncInput, Box CkksBox) {
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
@@ -224,6 +236,7 @@ func RescaleBlocks(X *EncInput, Box CkksBox) {
 	}
 }
 
+//Deprecated
 func RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {

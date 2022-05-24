@@ -82,13 +82,15 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	batchSize := 128
 	//for input block
 	rowP := 1
-	colP := 30 //inputs are 30x30
+	//colP := 30 //inputs are 30x30
+	colP := 28 //if go training
 	inputInnerRows := batchSize / rowP
 	nnb, _ := nn.NewBlockNN(batchSize, rowP, colP)
 
 	// CRYPTO
 	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
 	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
+	btpCapacity := 2 //param dependent
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
@@ -136,7 +138,8 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	}
 
 	//encrypt weights
-	nne, _ := nnb.NewEncNN(batchSize, rowP, 2, Box, -1) //-1 means not distributed
+
+	nne, _ := nnb.NewEncNN(batchSize, rowP, btpCapacity, Box, -1) //-1 means not distributed
 
 	corrects := 0
 	tot := 0
@@ -196,7 +199,15 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	params, _ := ckks.NewParametersFromLiteral(ckks.DefaultParams[2])
+	ckksParams := ckks.DefaultParams[2]
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogQ:         []int{37, 30, 30, 30, 30, 30, 30, 30, 30, 30},
+	//	Sigma:        rlwe.DefaultSigma,
+	//	LogSlots:     13,
+	//	DefaultScale: float64(2 << 30),
+	//}
+	params, _ := ckks.NewParametersFromLiteral(ckksParams)
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
 	skQ := kgenQ.GenSecretKey()
@@ -306,15 +317,17 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 
 			This test uses TCP sockets for communication, on localhost
 		Runtime:
-			Latency (avg ms per batch 64): 194782.8
-			Latency (avg ms per sample): 3042.15
+			Latency (avg ms per batch 64): 5m12s
+			Latency (avg ms per sample): ~5s
+
+			Latency 128 batch = 7m18s -> 3.42s
 	*/
 	layers := 20
 
 	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
 
-	batchSize := 64
+	batchSize := 128
 	//for input block
 	InRowP := 1
 	//InColP := 30 //inputs are 30x30
@@ -323,8 +336,19 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// CRYPTO =========================================================================================================
-	pl := ckks.DefaultParams[2]
-	params, _ := ckks.NewParametersFromLiteral(pl)
+	//<128 bit security params
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogSlots:     13,
+	//	LogQ:         []int{41, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34},
+	//	LogP:         []int{43, 43},
+	//	DefaultScale: 1 << 34,
+	//	Sigma:        rlwe.DefaultSigma,
+	//	RingType:     ring.Standard,
+	//}
+	ckksParams := ckks.PN15QP880
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	utils.ThrowErr(err)
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
 	skQ := kgenQ.GenSecretKey()
@@ -378,6 +402,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel+1 > params.MaxLevel() {
 		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 	}
+	fmt.Printf("MaxLevel: %d\nMinLevel: %d\n", params.MaxLevel(), minLevel)
 	//Encrypt weights in block form
 	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box, minLevel)
 

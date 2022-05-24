@@ -8,6 +8,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"os"
@@ -19,7 +20,7 @@ type SimpleNet struct {
 	Pool1 utils.Layer `json:"pool1"`
 	Pool2 utils.Layer `json:"pool2"`
 
-	ReLUApprox utils.PolyApprox //this will store the coefficients of the poly approximating ReLU
+	ReLUApprox utils.MinMaxPolyApprox //this will store the coefficients of the poly approximating ReLU
 }
 type SimpleNetPipeLine struct {
 	//stores intermediate results of SimpleNetPipeline --> useful to be compared in encrypted pipeline
@@ -240,7 +241,7 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 	utils.ThrowErr(err)
 	Bb, err := cipherUtils.AddBlocksC2P(B, biasBlock[1], Box)
 	fmt.Println("Activation")
-	cipherUtils.EvalPolyBlocks(Bb, sn.ReLUApprox.Coeffs, Box)
+	cipherUtils.EvalPolyBlocks(Bb, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
 	exp, err = plainUtils.PartitionMatrix(plainResults.OutPool1, Bb.RowP, Bb.ColP)
 	utils.ThrowErr(err)
 	cipherUtils.CompareBlocks(Bb, exp, Box)
@@ -277,8 +278,8 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 	cipherUtils.CompareBlocks(CbF, C3b, Box)
 
 	fmt.Println("Activation")
-	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
-	cipherUtils.EvalPolyBlocks(CbF, sn.ReLUApprox.Coeffs, Box)
+	cipherUtils.EvalPolyBlocks(Cb, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
+	cipherUtils.EvalPolyBlocks(CbF, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
 	plainUtils.MultiplyBlocksByConst(C3b, 10.0) //it gets divided in activation
 	for i := range C3b.Blocks {
 		for j := range C3b.Blocks[i] {
@@ -330,7 +331,7 @@ func (sn *SimpleNet) EvalBatchEncrypted(XBatchClear [][]float64, Y []int, Xbatch
 	}
 }
 
-func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []int, XbatchEnc *cipherUtils.EncInput, weightsBlock []*cipherUtils.PlainWeightDiag, biasBlock []*cipherUtils.PlainInput, Box cipherUtils.CkksBox, labels int) *SimpleNetPipeLine {
+func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []int, XbatchEnc *cipherUtils.EncInput, weightsBlock []*cipherUtils.PlainWeightDiag, biasBlock []*cipherUtils.PlainInput, Box cipherUtils.CkksBox, labels int, debug bool) *SimpleNetPipeLine {
 	plainResults := sn.EvalBatchPlainBlocks(XBatchClear, Y, 10)
 	fmt.Println("Loaded plaintext results")
 	//pipeline
@@ -338,20 +339,22 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	//fmt.Println("Compressed conv + pool", weightsBlock[0].Blocks[0][0].Diags[0].Level())
 	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
 	utils.ThrowErr(err)
+
 	fmt.Println("Adding bias")
 	Ab, err := cipherUtils.AddBlocksC2P(A, biasBlock[0], Box)
+
 	utils.ThrowErr(err)
 	fmt.Println("Activation")
-	cipherUtils.EvalPolyBlocks(Ab, sn.ReLUApprox.Coeffs, Box)
-	//exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
-	//utils.ThrowErr(err)
-	//cipherUtils.PrintDebugBlocks(Ab, exp, Box)
-	//cipherUtils.CompareBlocks(Ab, exp, Box)
-	//cipherUtils.CompareBlocks(Ab, exp, Box)
-	//cipherUtils.PrintDebugBlocks(Ab, exp, Box)
-
+	cipherUtils.EvalPolyBlocks(Ab, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
+	exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+	utils.ThrowErr(err)
+	if debug {
+		cipherUtils.PrintDebugBlocks(Ab, exp, Box)
+		cipherUtils.CompareBlocks(Ab, exp, Box)
+	}
 	fmt.Println("Pool2")
 	CC, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[1], Box)
+	utils.ThrowErr(err)
 	if err != nil {
 		panic(err)
 	}
@@ -360,14 +363,16 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	Cb, err := cipherUtils.AddBlocksC2P(CC, biasBlock[1], Box)
 	utils.ThrowErr(err)
 	fmt.Println("Activation")
-	cipherUtils.EvalPolyBlocks(Cb, sn.ReLUApprox.Coeffs, Box)
+	cipherUtils.EvalPolyBlocks(Cb, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
 	fmt.Println("______________________")
 	elapsed := time.Since(now)
 	fmt.Println("Done", elapsed)
 
-	//exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
-	//cipherUtils.CompareBlocks(Cb, exp, Box)
-	//cipherUtils.PrintDebugBlocks(Cb, exp, Box)
+	if debug {
+		exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
+		cipherUtils.CompareBlocks(Cb, exp, Box)
+		cipherUtils.PrintDebugBlocks(Cb, exp, Box)
+	}
 	batchSize := len(XBatchClear)
 	res := cipherUtils.DecInput(Cb, Box)
 	predictions := make([]int, batchSize)

@@ -43,9 +43,9 @@ class NN(nn.Module):
 
     self.max = 0 #records max interval of x
     
-    self.activation = nn.ReLU() ##lr = 0.001, Adam, CSE --> max value recorded is 1080
+    #self.activation = nn.ReLU() ##lr = 0.001, Adam, CSE --> max value recorded is 1080
     #self.activation = nn.Sigmoid()
-    #self.activation = ReLUApprox()
+    self.activation = ReLUApprox()
     #self.activation = SigmoidApprox()
     #self.activation = SILUApprox()
     #self.activation = nn.SiLU() ##lr=0.003 --> max value 389
@@ -80,7 +80,7 @@ class NN(nn.Module):
     for m in self.children():
         if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
             #nn.init.kaiming_normal_(m.weight, nonlinearity='relu', mode='fan_in')
-            nn.init.xavier_normal_(m.weight, gain=math.sqrt(2))
+            nn.init.xavier_normal_(m.weight, gain=math.sqrt(2)*0.01)
             #pass
             ## normal
             #if isinstance(m, nn.Conv2d):
@@ -103,12 +103,12 @@ def train_nn_from_scratch():
     elif args.model == "nn100":
         layers = 100
 
-    dataHandler = DataHandler(dataset="MNIST", batch_size=64)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=32)
     model = NN(layers, verbose=False)
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
     start = time.time()
-    train(logger, model, dataHandler, num_epochs=20, lr=1e-1, momentum=0.9, optim_algo='SGD', loss='MSE', regularizer='Elastic')
+    train(logger, model, dataHandler, num_epochs=20, lr=3e-5, momentum=1e-3, l1l2_penalty=0.01, optim_algo='Adam', loss='CSE', regularizer='Elastic')
     end = time.time()
     print("--- %s seconds for train---" % (end - start))
     print(f"Max value recorded in training: {model.max}")

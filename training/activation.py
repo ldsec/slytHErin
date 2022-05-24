@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 """ Approximated polynomial activation functions """
 
-degree = 31
+degree = 5
 interval = 20
 
 '''

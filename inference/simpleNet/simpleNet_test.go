@@ -62,8 +62,6 @@ func TestEvalDataEncModelClear(t *testing.T) {
 
 	//local run
 	sn := LoadSimpleNet("simpleNet.json")
-	//cluster run
-	//sn := LoadSimpleNet("/root/simpleNet.json")
 	sn.Init()
 
 	batchSize := 64
@@ -188,6 +186,7 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	/*
 		data encrypted - model in clear
 		model is optimized by compressing conv and pool1 in 1 layer
+		~8.14s/64 batch
 	*/
 	sn := LoadSimpleNet("simpleNet.json")
 	sn.Init()
@@ -217,14 +216,16 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
 
 	//crypto
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	ckksParams := ckks.ParametersLiteral{
 		LogN:         14,
-		LogQ:         []int{42, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
-		LogP:         []int{43, 43, 43},
+		LogQ:         []int{45, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{38, 38, 38, 38},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     13,
 		DefaultScale: float64(1 << 40),
-	})
+	}
+	//ckksParams = ckks.PN14QP438
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
 
 	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)
@@ -266,25 +267,29 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	biasCompressed.Mul(bias1M, pool1M)
 	biasCompressed.Add(&biasCompressed, bias2M)
 
+	w0 := plainUtils.MulByConst(&compressed, 1.0/sn.ReLUApprox.Interval)
 	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(
-		plainUtils.MatToArray(plainUtils.MulByConst(&compressed, 1.0/sn.ReLUApprox.Interval)),
-		29, 10, batchSize, params.MaxLevel(), Box)
+		plainUtils.MatToArray(w0),
+		colP, 10, batchSize, params.MaxLevel(), Box)
+
+	w1 := plainUtils.MulByConst(weightMatrices[2], 1.0/sn.ReLUApprox.Interval)
 	weightsBlock[1], err = cipherUtils.NewPlainWeightDiag(
-		plainUtils.MatToArray(plainUtils.MulByConst(weightMatrices[2], 1.0/sn.ReLUApprox.Interval)),
+		plainUtils.MatToArray(w1),
 		10, 1, batchSize, params.MaxLevel()-1-2, Box)
 	utils.ThrowErr(err)
 
+	b0 := plainUtils.MulByConst(&biasCompressed, 1.0/sn.ReLUApprox.Interval)
 	biasBlock[0], _ = cipherUtils.NewPlainInput(
-		plainUtils.MatToArray(plainUtils.MulByConst(&biasCompressed, 1.0/sn.ReLUApprox.Interval)),
+		plainUtils.MatToArray(b0),
 		rowP, 10, params.MaxLevel()-1, Box)
+	b1 := plainUtils.MulByConst(biasMatrices[2], 1.0/sn.ReLUApprox.Interval)
 	biasBlock[1], err = cipherUtils.NewPlainInput(
-		plainUtils.MatToArray(plainUtils.MulByConst(biasMatrices[2], 1.0/sn.ReLUApprox.Interval)),
+		plainUtils.MatToArray(b1),
 		rowP, 1, params.MaxLevel()-1-2-1, Box)
 	utils.ThrowErr(err)
 	fmt.Println("Created block matrixes...")
 
 	dataSn := data.LoadData("simpleNet_data.json")
-	//dataSn := data.LoadSimpleNetData("/root/simpleNet_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
 		fmt.Println(err)
@@ -303,7 +308,7 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		}
 		Xenc, err := cipherUtils.NewEncInput(Xbatch, rowP, colP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10)
+		res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, true)
 		fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 		corrects += res.Corrects
 		tot += batchSize
@@ -311,5 +316,5 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 		iters++
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
-	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters)) //~8.14s/64 batch
+	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
 }
