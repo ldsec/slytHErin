@@ -1,7 +1,7 @@
-./new_poseidon
-/.idea
+new_poseidon
+.idea
 *.pt
-.pyc
+*.pyc
 *.json
 *.xml
 *.npz
