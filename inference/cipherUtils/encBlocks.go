@@ -1,9 +1,11 @@
 package cipherUtils
 
 import (
+	"errors"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"math"
 )
 
 type EncInput struct {
@@ -80,6 +82,9 @@ func NewEncInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*EncInp
 	XEnc.ColP = colP
 	XEnc.InnerRows = Xb.InnerRows
 	XEnc.InnerCols = Xb.InnerCols
+	if float64(XEnc.InnerRows*XEnc.InnerCols*2) > math.Pow(2, float64(Box.Params.LogSlots())) {
+		utils.ThrowErr(errors.New("Input submatrixes elements must be less than 2^(LogSlots-1)"))
+	}
 	XEnc.Blocks = make([][]*ckks.Ciphertext, rowP)
 	for i := 0; i < rowP; i++ {
 		XEnc.Blocks[i] = make([]*ckks.Ciphertext, colP)
@@ -142,4 +147,9 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, 
 	}
 	utils.ThrowErr(err)
 	return Wp, nil
+}
+
+func GetOptimalInnerRows(inputInnerCols int, params ckks.Parameters) int {
+	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots()-1)))
+	return int(math.Floor(slotsAvailable / float64(inputInnerCols)))
 }

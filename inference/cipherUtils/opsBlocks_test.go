@@ -82,8 +82,8 @@ func TestDecInput(t *testing.T) {
 func TestBlocksC2PMul__Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	rowP := []int{1, 2, 4}
-	ADim := []int{64, 676}
+	rowP := []int{1}
+	ADim := []int{156, 676}
 	BDim := []int{676, 92}
 
 	rd := rand.New(rand.NewSource(0))
@@ -113,14 +113,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 
 		Bb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(B), rowPB, colPB)
 
-		params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-			LogN:         14,
-			LogQ:         []int{50, 40, 40},
-			LogP:         []int{43, 43, 43},
-			Sigma:        rlwe.DefaultSigma,
-			LogSlots:     13,
-			DefaultScale: float64(1 << 40),
-		})
+		params, err := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 		if err != nil {
 			panic(err)
 		}
@@ -177,11 +170,17 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 				for k := 0; k < s; k++ {
 					//cipher
 					wg.Add(1)
-					x := X.Blocks[i][k]
-					w := W.Blocks[k][j].Diags
+					//copy the values
+					x := X.Blocks[i][k].CopyNew()
+					w := make([]*ckks.Plaintext, len(W.Blocks[k][j].Diags))
+					for i := range w {
+						w[i] = ckks.NewPlaintext(Box.Params, W.Blocks[k][j].Diags[i].Level(), W.Blocks[k][j].Diags[i].Scale)
+						w[i].Value.Copy(W.Blocks[k][j].Diags[i].Value)
+					}
 					dimIn := X.InnerRows
 					dimMid := W.InnerRows
-					//dimOut := W.InnerCols
+					dimOut := W.InnerCols
+					//fmt.Println("Dims:", dimIn, " ", dimMid, " ", dimOut)
 					//ckks.stuff are not thread safe -> recreate on the flight
 					box := CkksBox{
 						Params:    Box.Params,
@@ -190,10 +189,10 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 						Decryptor: nil,
 						Encryptor: nil,
 					}
-					go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
+					go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
 						defer wg.Done()
-						res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
-					}(x, w, dimIn, dimMid, k, partials, box)
+						res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+					}(x, w, dimIn, dimMid, dimOut, k, partials, box)
 					//plain
 					wg.Add(1)
 					innerRows := Ab.InnerRows
@@ -208,14 +207,19 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 				wg.Wait()
 				Cij := partials[0]
 				bij := partialsPlain[0]
-
+				fmt.Println("k: ", 0)
+				PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
 				for k := 1; k < s; k++ {
+					fmt.Println("k: ", k)
+					PrintDebug(partials[k], plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(partialsPlain[k]))), Box)
 					Cij = Box.Evaluator.AddNew(Cij, partials[k])
 					bij.Add(bij, partialsPlain[k])
 				}
 				C.Blocks[i][j] = Cij
 				Blocks[i][j] = bij
-				//CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
+				fmt.Println(i, "  ", j, "__________________________________")
+				CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
+				PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
 			}
 		}
 		Cpb := &plainUtils.BMatrix{Blocks: Blocks, RowP: q, ColP: r, InnerRows: Ab.InnerRows, InnerCols: Bb.InnerCols}
@@ -229,7 +233,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	rowP := []int{1, 2, 4}
+	rowP := []int{1}
 	ADim := []int{64, 676}
 	BDim := []int{676, 92}
 
@@ -260,14 +264,7 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 
 		Bb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(B), rowPB, colPB)
 
-		params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-			LogN:         14,
-			LogQ:         []int{50, 40, 40},
-			LogP:         []int{43, 43, 43},
-			Sigma:        rlwe.DefaultSigma,
-			LogSlots:     13,
-			DefaultScale: float64(1 << 40),
-		})
+		params, err := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 		if err != nil {
 			panic(err)
 		}
@@ -336,7 +333,7 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 							w := W.Blocks[k][j].Diags
 							dimIn := X.InnerRows
 							dimMid := W.InnerRows
-							//dimOut := W.InnerCols
+							dimOut := W.InnerCols
 							//ckks.stuff are not thread safe -> recreate on the flight
 							box := CkksBox{
 								Params:    Box.Params,
@@ -345,10 +342,10 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 								Decryptor: nil,
 								Encryptor: nil,
 							}
-							go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
+							go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
 								defer wgk.Done()
-								res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
-							}(x, w, dimIn, dimMid, k, partials, box)
+								res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+							}(x, w, dimIn, dimMid, dimOut, k, partials, box)
 							//plain
 							wgk.Add(1)
 							innerRows := Ab.InnerRows

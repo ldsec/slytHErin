@@ -191,7 +191,20 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	sn := LoadSimpleNet("simpleNet.json")
 	sn.Init()
 
-	batchSize := 64
+	//crypto
+	ckksParams := ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{45, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{38, 38, 38, 38},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 40),
+	}
+	//ckksParams = ckks.PN14QP438
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
+
+	batchSize := cipherUtils.GetOptimalInnerRows(29, params)
+	fmt.Println("Batch: ", batchSize)
 	//for input block
 	rowP := 1
 	colP := 29
@@ -214,18 +227,6 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 
 	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
 	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
-
-	//crypto
-	ckksParams := ckks.ParametersLiteral{
-		LogN:         14,
-		LogQ:         []int{45, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
-		LogP:         []int{38, 38, 38, 38},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     13,
-		DefaultScale: float64(1 << 40),
-	}
-	//ckksParams = ckks.PN14QP438
-	params, err := ckks.NewParametersFromLiteral(ckksParams)
 
 	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)

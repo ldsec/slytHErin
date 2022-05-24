@@ -40,11 +40,16 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 			partials := make([]*ckks.Ciphertext, s)
 			for k := 0; k < s; k++ {
 				wg.Add(1)
-				x := X.Blocks[i][k]
-				w := W.Blocks[k][j].Diags
+				//copy values cause they get rotated
+				x := X.Blocks[i][k].CopyNew()
+				w := make([]*ckks.Plaintext, len(W.Blocks[k][j].Diags))
+				for i := range w {
+					w[i] = ckks.NewPlaintext(Box.Params, W.Blocks[k][j].Diags[i].Level(), W.Blocks[k][j].Diags[i].Scale)
+					w[i].Value.Copy(W.Blocks[k][j].Diags[i].Value)
+				}
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
-				//dimOut := W.InnerCols
+				dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -53,10 +58,10 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 					Decryptor: nil,
 					Encryptor: nil,
 				}
-				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
+				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					res[k] = Cipher2PMul(x, dimIn, dimMid, w, true, true, Box)
-				}(x, w, dimIn, dimMid, k, partials, box)
+					res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+				}(x, w, dimIn, dimMid, dimOut, k, partials, box)
 			}
 			wg.Wait()
 			Cij := partials[0]
@@ -76,6 +81,11 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	var err error
 	if X.ColP != W.RowP {
 		err = errors.New("Block partitions not compatible for multiplication")
+		utils.ThrowErr(err)
+	}
+	if X.InnerCols < W.InnerCols {
+		err = errors.New("Dim Mid must be > Dim Out in sub-matrices")
+		utils.ThrowErr(err)
 	}
 	q := X.RowP
 	r := W.ColP
@@ -95,11 +105,15 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 			partials := make([]*ckks.Ciphertext, s)
 			for k := 0; k < s; k++ {
 				wg.Add(1)
-				x := X.Blocks[i][k]
-				w := W.Blocks[k][j].Diags
+
+				x := X.Blocks[i][k].CopyNew()
+				w := make([]*ckks.Ciphertext, len(W.Blocks[k][j].Diags))
+				for i := range w {
+					w[i] = W.Blocks[k][j].Diags[i].CopyNew()
+				}
 				dimIn := X.InnerRows
 				dimMid := W.InnerRows
-				//dimOut := W.InnerCols
+				dimOut := W.InnerCols
 				//ckks.stuff not thread-safe -> recreate on flight
 				box := CkksBox{
 					Params:    Box.Params,
@@ -108,11 +122,11 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 					Decryptor: nil,
 					Encryptor: nil,
 				}
-				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, k int, res []*ckks.Ciphertext, Box CkksBox) {
+				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
 					defer wg.Done()
-					cij := Cipher2CMul(x, dimIn, dimMid, w, true, true, Box)
+					cij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
 					res[k] = cij
-				}(x, w, dimIn, dimMid, k, partials, box)
+				}(x, w, dimIn, dimMid, dimOut, k, partials, box)
 			}
 			wg.Wait()
 			Cij := partials[0]
