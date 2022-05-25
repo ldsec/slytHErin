@@ -93,9 +93,9 @@ class NN(nn.Module):
   def __init__(self, layers, verbose = False):
     super().__init__()
     self.verbose = verbose
-    self.conv = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=(10,11), stride=1)
+    self.conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3,3), stride=1)
     dense = []
-    dense.append(nn.Linear(840,92,True))
+    dense.append(nn.Linear(676,92,True))
     for _ in range(layers-2):
         dense.append(nn.Linear(92,92,True))
     dense.append(nn.Linear(92,10,True))
@@ -104,7 +104,7 @@ class NN(nn.Module):
     for layer in self.dense:
         assert(layer.weight.requires_grad == True)
 
-    self.max = 0 #records max interval of x
+    self.max = 0 #records max interval of x (useful when approximating activation)
     
     self.activation = nn.ReLU() ##lr = 0.001, Adam, CSE --> max value recorded is 1080
     #self.activation = nn.Sigmoid()
@@ -144,7 +144,7 @@ class NN(nn.Module):
         
 def train_nn():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="simplenet, nn20, nn50, nn100",type=str)
+    parser.add_argument("--model", help=" nn20, nn50, nn100",type=str)
     args = parser.parse_args()
     
     if args.model == "nn20":
@@ -154,12 +154,12 @@ def train_nn():
     elif args.model == "nn100":
         layers = 100
 
-    dataHandler = DataHandler(dataset="MNIST", batch_size=32)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=64)
     model = NN(layers, verbose=False)
     logger = Logger("./logs/",f"nn{layers}")
     model.apply(model.weights_init)
     start = time.time()
-    train(logger, model, dataHandler, num_epochs=20, lr=1e-3, momentum=0.9, l1l2_penalty=1e-5, optim_algo='Adam', loss='CSE', regularizer='Elastic')
+    train(logger, model, dataHandler, num_epochs=20, lr=1e-3, momentum=0.9, l2_penalty=1e-5, optim_algo='Adam', loss='CSE', regularizer='L2')
     end = time.time()
     print("--- %s seconds for train---" % (end - start))
     print(f"Max value recorded in training: {model.max}")

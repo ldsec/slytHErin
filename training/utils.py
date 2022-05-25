@@ -67,6 +67,7 @@ def plot_history(key, train, history):
 
 ## TRAIN
 def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_ratio=0.5, l1l2_penalty=0.0000001, l1_penalty=0.01, l2_penalty=0.01, optim_algo='SGD', loss='MSE', regularizer='None'):
+  print("Using: ", device)
   if regularizer == 'None':
     l2_penalty = 0
     l1_penalty = 0

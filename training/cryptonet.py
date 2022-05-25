@@ -128,7 +128,7 @@ class SimpleNet(nn.Module):
     x = x.reshape([self.batch_size,1,100,1]) #batch_size tensors in 1 channel, 100x1
     x = self.activation(self.pool2(x))
     #print(x[0])
-    x = self.sigmoid(x) ##needed for the probabilities --> i.e smaller loss, but ~ accuracy
+    #x = self.sigmoid(x) ##needed for the probabilities --> i.e smaller loss, but ~ accuracy
     x = x.reshape(x.shape[0], -1)
     return x
  
@@ -145,7 +145,7 @@ class SimpleNet(nn.Module):
         #  nn.init.normal_(m.weight, 0.0, 1.0)
 
 if __name__ == "__main__":
-    dataHandler = DataHandler(dataset="MNIST", batch_size=256)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=64)
 
     ##############################
     #                            #

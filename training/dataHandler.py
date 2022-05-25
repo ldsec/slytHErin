@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import json
 
 class DataHandler():
-  def __init__(self, dataset : str, batch_size : int, shuffle=True):
+  def __init__(self, dataset : str, batch_size : int, shuffle=True, scale=True):
     if dataset == "MNIST":
       self.batch_size = batch_size
       if batch_size == None:
@@ -18,7 +18,10 @@ class DataHandler():
       
       ## images are PIL in range [0,1]
       ## make mean = 0 and std = 1
-      transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+      if scale:
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+      else:
+        transform = transforms.Compose([transforms.ToTensor()])
       train_ds = MNIST("data/", train=True, download=True, transform=transform)
       test_ds = MNIST("data/", train=False, download=True, transform=transform)
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
@@ -81,14 +84,16 @@ if __name__=="__main__":
   
   args = parser.parse_args()
   if args.model == "simplenet" or args.model == "nn":
-    dataHandler = DataHandler("MNIST", None, shuffle = False)
+    scale = True
+    if args.model == "nn":
+      scale = False
+    dataHandler = DataHandler("MNIST", None, shuffle = False, scale=scale)
     dataset = {'X':[], 'Y':[]}
     for data,label in dataHandler.test_dl:
       if args.model == "simplenet":
         data = F.pad(data, (1,0,1,0)).numpy().flatten()
       else:
-        #data = F.pad(data, (1,1,1,1)).numpy().flatten()
-        data = data.numpy().flatten() #no pad if go training
+        data = data.numpy().flatten()
       sample = [x.item() for x in data] 
       dataset['X'].append(sample)
       dataset['Y'].append(label)
