@@ -12,6 +12,7 @@ from dataHandler import *
 from utils import *
 from conv_transform import *
 from activation import *
+
 """
     Script for testing nn with approximations for homomorphic encryption
 """
@@ -52,8 +53,7 @@ def soft_relu_approx_np(X):
 
 def linear_eval(X,Y, serialized):
     """
-        Linear pipeline without normalization and regular relu works fine
-        Problem is when introducing relu_approx which need normalization to stay within interval
+        Evaluates the HE friendly pipeline
     """
     #conv = np.array(serialized['conv']['weight']['w'])
     #bias_conv = np.array(serialized['conv']['bias']['b'])
@@ -74,7 +74,7 @@ def linear_eval(X,Y, serialized):
         dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
         bias.append(np.array(d['bias']['b']))
 
-    act = soft_relu_np
+    act = soft_relu_approx_np
 
     X = X @ conv
     for i in range(len(X)):

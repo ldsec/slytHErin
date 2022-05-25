@@ -346,9 +346,9 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	utils.ThrowErr(err)
 	fmt.Println("Activation")
 	cipherUtils.EvalPolyBlocks(Ab, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
-	exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
-	utils.ThrowErr(err)
 	if debug {
+		exp, err := plainUtils.PartitionMatrix(plainResults.OutPool1, Ab.RowP, Ab.ColP)
+		utils.ThrowErr(err)
 		cipherUtils.PrintDebugBlocks(Ab, exp, Box)
 		cipherUtils.CompareBlocks(Ab, exp, Box)
 	}
@@ -367,9 +367,8 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 	fmt.Println("______________________")
 	elapsed := time.Since(now)
 	fmt.Println("Done", elapsed)
-
 	if debug {
-		exp, _ = plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
+		exp, _ := plainUtils.PartitionMatrix(plainResults.OutPool2, Cb.RowP, Cb.ColP)
 		cipherUtils.CompareBlocks(Cb, exp, Box)
 		cipherUtils.PrintDebugBlocks(Cb, exp, Box)
 	}

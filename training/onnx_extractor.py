@@ -3,7 +3,7 @@ import onnx.numpy_helper as nph
 import argparse
 import json
 
-from training.conv_transform import serialize_nn
+from conv_transform import serialize_nn
 
 """to be used in docker container from ZAMA"""
 

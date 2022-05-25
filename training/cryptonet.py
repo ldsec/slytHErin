@@ -1,18 +1,93 @@
-# %% [markdown]
-# # Implementation of (simplified) CryptoNet for inference under homomorphic encryption
-
-# %%
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
+import json
+from conv_transform import *
 from activation import *
 from logger import Logger
 from dataHandler import DataHandler
 from utils import *
 
-# %%
+"""
+  Implementation of 5-layer CryptoNets
+"""
+
+## HELPERS FOR JSON SERIALIZATION
+
+def format_SimpleNet(serialized):
+    ## changes the keys name in the serialized representation (dict)
+    formatted = {}
+    ## get all layers name
+    layers = [k.split(".")[0] for k in serialized.keys()]
+    for l in layers:
+        formatted[l] = {}
+        l_dict = {}
+        for t in types:
+            l_dict[t] = serialized[l+"."+t]
+        formatted[l] = l_dict
+    return formatted
+
+def extract_param(param_name, param):
+    '''
+        Params are extracted in row-major order:
+        suppose you have a CONV layer with (k,C,W,H), 
+        i.e k kernels wich are tensors of dim C x W x H
+        each kernel is flattened such that every W x H matrix
+        is flattened by row, for C matrixes. This for every k kernel 
+    '''
+    if 'weight' in param_name:
+        weights = []
+        data = param.data.cpu().numpy()            
+        ## for each kernel filter
+        for k in data:
+            ## back to 2D
+            k = k.flatten()
+            for x in k:
+                weights.append(x.item()) ##convert to json-serializable
+    if 'bias' in param_name:
+        weights = []
+        data = param.data.cpu().numpy().flatten()
+        for k in data:
+            weights.append(k.item())
+    return weights
+
+def serialize_simpleNet(model, format):
+    '''
+    Serialize the model. Returns a dictionary which maps layer name to a flattened
+    representation of the underlying weight in a json-serializable format
+    '''
+    serialized = {}
+    for name, p in model.named_parameters():
+        serialized[name] = extract_param(name,p)
+    serialized = format(serialized)
+    return serialized
+
+def pack_simpleNet(model):
+    serialized = serialize_simpleNet(model, format_SimpleNet)
+    
+    conv1 = np.array(serialized['conv1']['weight']).reshape(5,1,5,5)
+    pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,13,13)
+    pool2 = np.array(serialized['pool2']['weight']).reshape(10,1,100,1)
+    b1 = np.array(serialized['conv1']['bias'])
+    b2 = np.array(serialized['pool1']['bias'])
+    b3 = np.array(serialized['pool2']['bias'])
+
+    conv1M,_ = pack_conv(conv1,5,2,29)
+    bias1 = pack_bias(b1, 5, 13*13)
+
+    pool1M,_ = pack_pool(pool1)
+    bias2 = pack_bias(b2, 100, 1)
+
+    pool2M,_ = pack_pool(pool2)
+    bias3 = pack_bias(b3, 10, 1)
+
+    packed = {}
+    packed['conv1'] = {'weight':conv1M, 'bias': bias1}
+    packed['pool1'] = {'weight':pool1M, 'bias': bias2}
+    packed['pool2'] = {'weight':pool2M, 'bias': bias3}
+    return packed
+
 class SimpleNet(nn.Module):
   '''
     Simpliefied network used in paper for inference https://www.microsoft.com/en-us/research/publication/cryptonets-applying-neural-networks-to-encrypted-data-with-high-throughput-and-accuracy/
@@ -69,17 +144,9 @@ class SimpleNet(nn.Module):
         #elif self.init_method == "norm":
         #  nn.init.normal_(m.weight, 0.0, 1.0)
 
-# %% [markdown]
-# Load Datasets
-
-# %%
 if __name__ == "__main__":
     dataHandler = DataHandler(dataset="MNIST", batch_size=256)
 
-    # %% [markdown]
-    # Train and test pipeline
-
-    # %%
     ##############################
     #                            #
     # TRAINING AND EVAL PIPELINE #
@@ -135,8 +202,15 @@ if __name__ == "__main__":
       model.apply(model.weights_init)
       train(logger, model, dataHandler, num_epochs=400, lr=0.001, regularizer='None')
       loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
+      
       scores[key] = {"loss":loss, "accuracy":accuracy}
+      
+      ## save
       torch.save(model, f"./models/SimpleNet_{key}.pt")
+      packed = pack_simpleNet(model)
+      with open(f'./models/SimpleNet_{key}_packed.json', 'w') as f:
+        json.dump(packed, f)
+
     
     
     for key, metrics in scores.items():

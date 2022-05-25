@@ -7,11 +7,9 @@ import time
 ## interactive off
 plt.ioff()
 ## setup torch enviro
-
 torch.manual_seed(42)
 torch.cuda.manual_seed_all(42)
 torch.autograd.set_detect_anomaly(True)
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class ScaledAvgPool2d(nn.Module):
@@ -98,7 +96,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
     print("Loss is CrossEntropy or MSE")
     exit
   
-  print(f"Train summary:\n lr={lr}\n epochs={num_epochs}\n optim={optim_algo}\n loss={loss}\n regularizer={regularizer}")
+  print(f"Training summary:\n lr={lr}\n epochs={num_epochs}\n optim={optim_algo}\n loss={loss}\n regularizer={regularizer}")
 
   trainHistory = {}
   trainHistory['loss'] = []

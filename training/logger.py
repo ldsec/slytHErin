@@ -1,3 +1,7 @@
+"""
+  Used to log the training of a model
+"""
+
 class Logger():
   def __init__(self, path="./logs", name="SimpleNet"):
     self.path = path

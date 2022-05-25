@@ -52,28 +52,6 @@ import json
 
 types = ['weight', 'bias']
 
-## JP function
-#def gen_kernel_matrix_JP(kernel, stride_h, stride_v, dim):
-#    m = [[0 for i in range(dim*dim)] for j in range(dim*dim)]
-#
-#    kernel_flattened = [0 for i in range(len(kernel) * dim - (dim-len(kernel)))]
-#
-#    for i in range(len(kernel)):
-#        for j in range(len(kernel)):
-#            kernel_flattened[i*dim + j] = kernel[i][j]
-#    a = (dim - len(kernel) + stride_v)//stride_v
-#    b = (dim - len(kernel) + stride_h)//stride_h
-#
-#    for i in range(a):
-#        for j in range(b):
-#            idx_j = j * stride_h + i * stride_v * dim
-#            for k in range(len(kernel_flattened)):
-#                m[i*b+j][idx_j+k] = kernel_flattened[k]
-#    #for i in m:
-#    #    print(i)
-#    return m
-#
-
 def rotR(a,k):
     """
         rot right a k positions
@@ -83,6 +61,9 @@ def rotR(a,k):
     return list(rot_a)
 
 def flat_tensor(X):
+    """
+        Given a tensor of dimention CxHxDxD returns 2D np array of dim Cx(HxDxD)
+    """
     rows, chans, dim = X.shape[0], X.shape[1], X.shape[2]
     X_flat = np.zeros((rows, ((dim)**2)*chans))
     for i in range(rows):
@@ -190,77 +171,6 @@ def gen_kernel_matrix_rect(kernel, kernel_rows, kernel_cols, stride, input_rows,
 
     return m
 
-#to be used for SimpleNet
-def extract_param(param_name, param):
-    '''
-        Params are extracted in row-major order:
-        suppose you have a CONV layer with (k,C,W,H), 
-        i.e k kernels wich are tensors of dim C x W x H
-        each kernel is flattened such that every W x H matrix
-        is flattened by row, for C matrixes. This for every k kernel 
-    '''
-    if 'weight' in param_name:
-        weights = []
-        data = param.data.cpu().numpy()            
-        if 'classifier' in param_name:
-            ## for linear layer in AlexNet, transpose first
-            data = data.transpose() 
-        ## for each kernel filter
-        for k in data:
-            ## back to 2D
-            k = k.flatten()
-            for x in k:
-                weights.append(x.item()) ##convert to json-serializable
-    if 'bias' in param_name:
-        weights = []
-        data = param.data.cpu().numpy().flatten()
-        for k in data:
-            weights.append(k.item())
-    return weights
-
-def serialize_model(model, format):
-    '''
-    Serialize the model. Returns a dictionary which maps layer name to a flattened
-    representation of the underlying weight in a json-serializable format
-    '''
-    serialized = {}
-    for name, p in model.named_parameters():
-        serialized[name] = extract_param(name,p)
-    serialized = format(serialized)
-    return serialized
-
-'''
-Format methods just rearrange the serialized representation of models
-'''
-def format_AlexNet(serialized):
-    formatted = {}
-    ## get all layers name
-    layers = []
-    for k in serialized.keys():
-        l = k.split(".")
-        if l[0] == 'classifier': ##this is the nn.Sequential layer
-            layers.append((".").join(l[0:2]))
-        else:
-            layers.append(l[0])
-    for l in layers:
-        formatted[l] = {}
-        l_dict = {}
-        for t in types:
-            l_dict[t] = serialized[l+"."+t]
-        formatted[l] = l_dict
-    return formatted
-
-def format_SimpleNet(serialized):
-    formatted = {}
-    ## get all layers name
-    layers = [k.split(".")[0] for k in serialized.keys()]
-    for l in layers:
-        formatted[l] = {}
-        l_dict = {}
-        for t in types:
-            l_dict[t] = serialized[l+"."+t]
-        formatted[l] = l_dict
-    return formatted
 
 #####################################
 #                                   #
@@ -326,7 +236,7 @@ def pack_conv_parallel(conv, kernel_size, stride, input_dim):
         Example if this is pool1 of SimpleNet, it has 5 input and 100 output channels.
         Each list will be:
         [m(ch_1),...,m(ch_5)] for i = 1,...,100 (# kernels)
-        where m(ch_1) @ X.T is X * ch_1
+        where m(ch_1) @ X.T is X * ch_1 where * is convolution
     """
     kernels = []
     for kernel in conv: #output_chan
@@ -353,7 +263,10 @@ def pack_pool(pool):
     rows, cols = poolM.T.shape
     return {'w': [x.item() for x in poolM.T.flatten()], 'rows': rows, 'cols': cols}, poolM.T
 
-def pack_linear(dense, transpose=False):
+def pack_linear(dense):
+    """
+        Packs a linear layer
+    """
     rows, cols = dense.shape
     return {'w': [x.item() for x in dense.flatten()], 'rows': rows, 'cols': cols}
 
@@ -402,36 +315,6 @@ def pack_bias_parallel(b, size):
     """
     return [np.array([b[i] for _ in range(size)]).T for i in range(len(b))]
     
-
-'''
-Pack methods: return model in json form ready to be shipped to Go implementation
-in an HE friendly format
-'''
-def pack_simpleNet(model):
-    serialized = serialize_model(model, format_SimpleNet)
-    
-    conv1 = np.array(serialized['conv1']['weight']).reshape(5,1,5,5)
-    pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,13,13)
-    pool2 = np.array(serialized['pool2']['weight']).reshape(10,1,100,1)
-    b1 = np.array(serialized['conv1']['bias'])
-    b2 = np.array(serialized['pool1']['bias'])
-    b3 = np.array(serialized['pool2']['bias'])
-
-    conv1M,_ = pack_conv(conv1,5,2,29)
-    bias1 = pack_bias(b1, 5, 13*13)
-
-    pool1M,_ = pack_pool(pool1)
-    bias2 = pack_bias(b2, 100, 1)
-
-    pool2M,_ = pack_pool(pool2)
-    bias3 = pack_bias(b3, 10, 1)
-
-    packed = {}
-    packed['conv1'] = {'weight':conv1M, 'bias': bias1}
-    packed['pool1'] = {'weight':pool1M, 'bias': bias2}
-    packed['pool2'] = {'weight':pool2M, 'bias': bias3}
-    return packed
-
 def compress_layers(A, biasA, B, biasB):
     """
     Compress two linear layers back to back:
@@ -549,159 +432,5 @@ def pad_parallel(P, layer):
             layer[i][j] = P @ layer[i][j]
     return layer
 
-"""
-##Alexnet is currently too complex (big) to be linearized for FHE
-def pack_alexNet(model):
-    serialized = serialize_model(model, format_AlexNet)
 
-    # reshape(chan_out, chan_in, k_size,k_size)
-    conv1 = np.array(serialized['conv1']['weight']).reshape(64,3,11,11)
-    conv2 = np.array(serialized['conv2']['weight']).reshape(192,64,5,5)
-    conv3 = np.array(serialized['conv3']['weight']).reshape(384,192,3,3)
-    conv4 = np.array(serialized['conv4']['weight']).reshape(256,284,3,3)
-    conv5 = np.array(serialized['conv5']['weight']).reshape(256,256,3,3)
-    #pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,13,13)
-    #pool2 = np.array(serialized['pool2']['weight']).reshape(10,1,100,1)
-    pool1 = np.ones((256,256,3,3))*(1.0/(3**2))
-    pool2 = np.ones((256,256,3,3))*(1.0/(3**2))
-    dense1 = np.array(serialized['classifier.1']['weight']).reshape(1,1,9216,4096)
-    dense2 = np.array(serialized['classifier.4']['weight']).reshape(1,1,4096,4096)
-    dense3 = np.array(serialized['classifier.6']['weight']).reshape(1,1,4096,10)
-
-
-    bias_conv1 = np.array(serialized['conv1']['bias'])
-    bias_conv2 = np.array(serialized['conv2']['bias'])
-    bias_conv3 = np.array(serialized['conv3']['bias'])
-    bias_conv4 = np.array(serialized['conv4']['bias'])
-    bias_conv5 = np.array(serialized['conv5']['bias'])
-    bias_dense1 = np.array(serialized['classifier.1']['bias'])
-    bias_dense2 = np.array(serialized['classifier.4']['bias'])
-    bias_dense3 = np.array(serialized['classifier.6']['bias'])
-
-    #linearize layers
-    #conv1MD, conv1MT = pack_conv(conv1,11,4,229)
-    conv1M = pack_conv_parallel(conv1, 11, 4, 227+2*2)
-    bias_conv1M = pack_bias_parallel(bias_conv1, 56*56)
-
-    pool1AM = pack_conv_parallel(pool1,3,2,56)
-
-    conv2M= pack_conv_parallel(conv2,5,1,27+2*2)
-    bias_conv2M = pack_bias_parallel(bias_conv2,  27*27)
-
-    pool1BM = pack_conv_parallel(pool1,3,2,27)
-
-    conv3M = pack_conv_parallel(conv3,3,1,13+1*2)
-    bias_conv3M = pack_bias_parallel(bias_conv3, 13*13)
     
-    conv4M = pack_conv_parallel(conv4,3,1,13+1*2)
-    bias_conv4M = pack_bias_parallel(bias_conv4, 13*13)
-
-    conv5M = pack_conv_parallel(conv5,3,1,13+1*2)
-    bias_conv5M = pack_bias_parallel(bias_conv5, 13*13)
-
-    pool1CM = pack_conv_parallel(pool1,3,2,13)
-
-    pool2M = pack_conv_parallel(pool2,3,1,6+1*2)
-
-    #compress layers
-    P = gen_padding_matrix(25,1,2)
-    pool1AM = pad_parallel(P, pool1AM)
-    pool1_conv2M, bias_pool1_conv2 = compress_layers(pool1AM, None, conv2M, bias_conv2M)
-
-    P = gen_padding_matrix(13,1,1)
-    pool1BM = pad_parallel(P, pool1BM)
-    pool1_conv3M, bias_pool1_conv3 = compress_layers(pool1BM, None, conv3M, bias_conv3M)
-    
-    P = gen_padding_matrix(13,1,1)
-    conv4M = pad_parallel(P, conv4M)
-    conv5M = pad_parallel(P, conv5M)
-
-    P = gen_padding_matrix(6,1,1)
-    pool1CM = pad_parallel(P, pool1CM)
-    pool1_pool2M, bias_pool1_pool2 = compress_layers(pool1CM, None , pool2M, None)
-
-    packed = {}
-    packed['conv1'] = {'weight':conv1M, 'bias': bias_conv1M}
-    packed['conv2'] = {'weight':pool1_conv2M, 'bias': bias_pool1_conv2}
-    packed['conv3'] = {'weight':pool1_conv3M, 'bias': bias_pool1_conv3}
-    packed['conv4'] = {'weight':conv4M, 'bias': bias_conv4M}
-    packed['conv5'] = {'weight':conv5M, 'bias': bias_conv5M}
-    packed['pool'] = {'weight':pool1_pool2M, 'bias': bias_pool1_pool2}
-    packed['dense1'] = {'weight':pack_linear(dense1), 'bias':{'b': [x.item() for x in bias_dense1], 'len':len(bias_dense1)}}
-    packed['dense2'] = {'weight':pack_linear(dense2), 'bias':{'b': [x.item() for x in bias_dense2], 'len':len(bias_dense2)}}
-    packed['dense3'] = {'weight':pack_linear(dense3), 'bias':{'b': [x.item() for x in bias_dense3], 'len':len(bias_dense3)}}
-
-    return packed
-"""
-## takes model from pytorch
-def extract_nn(model):
-    dense = []
-    bias = []
-    for name, param in model.named_parameters():
-        if 'conv' in name:
-            if 'weight' in name:
-                conv = param.data.cpu().numpy()
-            else:
-                bias_conv = param.data.cpu().numpy()
-        else:
-            if 'weight' in name:
-                dense.append(param.data.cpu().numpy())
-            else:
-                bias.append(param.data.cpu().numpy())
-    return conv, bias_conv, dense, bias
-    
-## reads models from json format from Go training
-def read_nn(json_data, layers=20):
-    serialized = {}
-    serialized['conv'] = json_data['conv']
-    w = np.array(json_data['conv']['weight']['w']).reshape(json_data['conv']['weight']['kernels'],json_data['conv']['weight']['filters'],json_data['conv']['weight']['rows'],json_data['conv']['weight']['cols'])
-    serialized['conv']['weight']['w'] = w.tolist()
-    for i in range(layers):
-        serialized['dense_'+str(i+1)]=json_data["D"]['dense_'+str(i+1)]
-        serialized['dense_'+str(i+1)]['weight']['w'] = np.array(serialized['dense_'+str(i+1)]['weight']['w']).reshape(serialized['dense_'+str(i+1)]['weight']['rows'],serialized['dense_'+str(i+1)]['weight']['cols']).tolist()
-   
-    return serialized
-
-
-## takes nn 
-def serialize_nn(conv, bias_conv, dense, bias, layers):
-    #layers is expected to be layers + 1, e.g 21 for nn20
-    serialized = {}
-    serialized['conv'] = {}
-    serialized['conv']['weight'] = {'w': conv.tolist(),
-    'kernels': conv.shape[0],
-    'filters': conv.shape[1],
-    'rows': conv.shape[2],
-    'cols': conv.shape[3]}
-    serialized['conv']['bias'] = {'b': bias_conv.tolist(), 'rows': 1, 'cols': bias_conv.shape[0]}
-    for i in range(layers-1):
-        serialized['dense_'+str(i+1)] = {}
-        serialized['dense_'+str(i+1)]['weight'] = {'w': dense[i].tolist(), 'rows': dense[i].shape[0], 'cols': dense[i].shape[1]}
-        serialized['dense_'+str(i+1)]['bias'] = {'b': bias[i].tolist(), 'rows': 1, 'cols': bias[i].shape[0]}
-    return serialized
-
-def pack_nn(serialized, layers, transpose_dense=True):
-    packed = {}
-    num_chans = serialized['conv']['weight']['kernels']
-    conv_matrix,_ = pack_conv_rect(np.array(serialized['conv']['weight']['w']),
-        serialized['conv']['weight']['rows'],
-        serialized['conv']['weight']['cols'],
-        1,
-        28,28)
-
-    #assert(conv_matrix['cols'] == 840)
-    
-    packed['conv'] = {
-        'weight': conv_matrix,
-        'bias': pack_bias(np.array(serialized['conv']['bias']['b']), num_chans, conv_matrix['cols']//num_chans)}
-    packed['dense'] = []
-    for i in range(layers):
-        w = np.array(serialized['dense_'+str(i+1)]['weight']['w'])
-        if transpose_dense:
-            w = w.T
-        packed['dense'].append({
-            'weight': pack_linear(w),
-            'bias': {'b':serialized['dense_'+str(i+1)]['bias']['b'], 'len':serialized['dense_'+str(i+1)]['bias']['cols']}})
-    
-    packed['layers'] = layers
-    return packed
