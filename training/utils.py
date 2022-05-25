@@ -79,7 +79,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
     l1_penalty = l1_ratio*l1l2_penalty
     l2_penalty = l1l2_penalty*(1-l1_ratio)
   else:
-    print("regularizer is None, L1, L2 or Elastic")
+    print("regularizer has to be None, L1, L2 or Elastic")
     exit()
 
   if optim_algo == 'Adam':
@@ -128,8 +128,11 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
         #predictions, labels = predictions.type('torch.FloatTensor'), labels.type('torch.FloatTensor')
         loss_value = criterion(predictions, labels)
       
-      if regularizer != 'L2' or regularizer != 'None':
-        l1_norm = sum(torch.linalg.norm(p) for p in model.parameters())
+      if regularizer == 'L1':
+        parameters = []
+        for parameter in model.parameters():
+          parameters.append(parameter.view(-1))
+        l1_norm = torch.abs(torch.cat(parameters)).sum()
         loss_value = loss_value + l1_penalty*l1_norm
       
       loss_value.backward()
@@ -150,6 +153,18 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
     trainHistory['loss'].append(loss_value.item())
     trainHistory['accuracy'].append(num_correct/num_samples)
+
+    ## look if the avg loss decrease over last window losses is negligeble and is so stop
+    window = 10
+    eps = 1e-5
+    if len(trainHistory['loss']) > 1+window:
+      recent_losses = trainHistory['loss'][-window:]
+      delta = 0
+      for i in range(0, window-1):
+        delta += recent_losses[i+1] - recent_losses[i]
+      delta = delta/(window-1)
+      if delta <= eps:
+        break
     
   plot_history(logger.name, True, trainHistory)
 

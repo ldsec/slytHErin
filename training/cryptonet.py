@@ -200,7 +200,7 @@ if __name__ == "__main__":
     for key, model in models.items():
       logger = Logger("./logs/",f"SimpleNet_{key}")
       model.apply(model.weights_init)
-      train(logger, model, dataHandler, num_epochs=400, lr=0.001, regularizer='None')
+      train(logger, model, dataHandler, num_epochs=100, lr=0.1, regularizer='None')
       loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
       
       scores[key] = {"loss":loss, "accuracy":accuracy}
