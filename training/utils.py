@@ -4,6 +4,8 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import time
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 ## interactive off
 plt.ioff()
 ## setup torch enviro
@@ -11,16 +13,6 @@ torch.manual_seed(42)
 torch.cuda.manual_seed_all(42)
 torch.autograd.set_detect_anomaly(True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-class ScaledAvgPool2d(nn.Module):
-    """Define the ScaledAvgPool layer, a.k.a the Sum Pool"""
-    def __init__(self, kernel_size, stride, padding=0):
-      super().__init__()
-      self.kernel_size = kernel_size
-      self.AvgPool = nn.AvgPool2d(kernel_size=self.kernel_size, stride=stride, padding=padding)
-
-    def forward(self,x):
-      return (self.kernel_size**2)*self.AvgPool(x)
 
 def single_to_multi_label(y):
   """
@@ -97,6 +89,10 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
     print("Loss is CrossEntropy or MSE")
     exit
   
+  scheduler = ReduceLROnPlateau(optimizer, 'min'
+                                  ,patience=3,factor=0.9817
+                                 ,verbose=True,threshold=1e-2)
+  
   print(f"Training summary:\n lr={lr}\n epochs={num_epochs}\n optim={optim_algo}\n loss={loss}\n regularizer={regularizer}")
 
   trainHistory = {}
@@ -106,6 +102,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
   model.to(device)
   model.train()
   for epoch in range(num_epochs):
+    
     start = time.time()
     epoch_loss = 0
     num_correct = 0.0
@@ -138,6 +135,7 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
       loss_value.backward()
       optimizer.step()
 
+
       epoch_loss += loss_value.item()
       _, predicted_labels = predictions.max(1)
       correct = (predicted_labels == labels).sum().item()
@@ -151,20 +149,10 @@ def train(logger, model, dataHandler, num_epochs, lr=0.001, momentum=0.9, l1_rat
     end = time.time()
     print(f"[?] {logger.name} Epoch {epoch+1}/{num_epochs} Loss {epoch_loss/(i+1):.4f} Accuracy {num_correct/num_samples:.4f} Time: {end-start:.4f}s")
     logger.log_step(epoch, i, epoch_loss/(i+1), num_correct/num_samples)  
-    trainHistory['loss'].append(loss_value.item())
+    trainHistory['loss'].append(epoch_loss/(i+1))
     trainHistory['accuracy'].append(num_correct/num_samples)
-
-    ## look if the avg loss decrease over last window losses is negligeble and is so stop
-    window = 10
-    eps = 1e-5
-    if len(trainHistory['loss']) > 1+window:
-      recent_losses = trainHistory['loss'][-window:]
-      delta = 0
-      for i in range(0, window-1):
-        delta += recent_losses[i+1] - recent_losses[i]
-      delta = delta/(window-1)
-      if delta <= eps:
-        break
+    
+    scheduler.step(epoch_loss/(i+1))
     
   plot_history(logger.name, True, trainHistory)
 

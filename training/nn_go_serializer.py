@@ -32,18 +32,15 @@ if __name__ == '__main__':
     if "nn" in args.model:
 
         if args.model == "nn20":
-            model = torch.load("nn20.pt")
             layers = 20
         elif args.model == "nn50":
-            model = torch.load("nn50.pt")
             layers = 50
         elif args.model == "nn100":
-            model = torch.load("nn100.pt")
             layers = 100
         j_name = f"nn{layers}_packed.json"
         
         ##go stuff
-        with open(f'nn_{layers}_go.json', 'r') as f:
+        with open(f'../go_training/nn_{layers}_go.json', 'r') as f:
             json_data = json.load(f)
         serialized = read_nn(json_data, layers)
         packed = pack_nn(serialized, layers, transpose_dense=False) #if read_nn set False

@@ -10,7 +10,7 @@ from dataHandler import DataHandler
 from utils import *
 
 """
-  Implementation of 5-layer CryptoNets
+  Implementation of 5-layer CryptoNets on MNIST
 """
 
 ## HELPERS FOR JSON SERIALIZATION
@@ -145,7 +145,7 @@ class SimpleNet(nn.Module):
         #  nn.init.normal_(m.weight, 0.0, 1.0)
 
 if __name__ == "__main__":
-    dataHandler = DataHandler(dataset="MNIST", batch_size=64)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=32)
 
     ##############################
     #                            #
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     for key, model in models.items():
       logger = Logger("./logs/",f"SimpleNet_{key}")
       model.apply(model.weights_init)
-      train(logger, model, dataHandler, num_epochs=100, lr=0.1, regularizer='None')
+      train(logger, model, dataHandler, num_epochs=500, lr=3e-5, regularizer='None')
       loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
       
       scores[key] = {"loss":loss, "accuracy":accuracy}
