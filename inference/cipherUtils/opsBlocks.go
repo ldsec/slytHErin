@@ -30,47 +30,55 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	E.ColP = W.ColP
 	E.InnerRows = X.InnerRows
 	E.InnerCols = W.InnerCols
-
-	var wg sync.WaitGroup
-
 	E.Blocks = make([][]*ckks.Ciphertext, q)
+
+	var wgi sync.WaitGroup
+
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
-		for j := 0; j < r; j++ {
-			partials := make([]*ckks.Ciphertext, s)
-			for k := 0; k < s; k++ {
-				wg.Add(1)
-				//copy values cause they get rotated
-				x := X.Blocks[i][k].CopyNew()
-				w := make([]*ckks.Plaintext, len(W.Blocks[k][j].Diags))
-				for i := range w {
-					w[i] = ckks.NewPlaintext(Box.Params, W.Blocks[k][j].Diags[i].Level(), W.Blocks[k][j].Diags[i].Scale)
-					w[i].Value.Copy(W.Blocks[k][j].Diags[i].Value)
-				}
-				dimIn := X.InnerRows
-				dimMid := W.InnerRows
-				dimOut := W.InnerCols
-				//ckks.stuff not thread-safe -> recreate on flight
-				box := CkksBox{
-					Params:    Box.Params,
-					Encoder:   Box.Encoder.ShallowCopy(),
-					Evaluator: Box.Evaluator.ShallowCopy(),
-					Decryptor: nil,
-					Encryptor: nil,
-				}
-				go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
-					defer wg.Done()
-					res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-				}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+		wgi.Add(1)
+		go func(i int) {
+			defer wgi.Done()
+			var wgj sync.WaitGroup
+			for j := 0; j < r; j++ {
+				partials := make([]*ckks.Ciphertext, s)
+				wgj.Add(1)
+				go func(i, j int) {
+					defer wgj.Done()
+					var wgk sync.WaitGroup
+					for k := 0; k < s; k++ {
+						//cipher
+						wgk.Add(1)
+						x := X.Blocks[i][k].CopyNew()
+						w := W.Blocks[k][j].Diags
+						dimIn := X.InnerRows
+						dimMid := W.InnerRows
+						dimOut := W.InnerCols
+						//ckks.stuff are not thread safe -> recreate on the flight
+						box := CkksBox{
+							Params:    Box.Params,
+							Encoder:   Box.Encoder.ShallowCopy(),
+							Evaluator: Box.Evaluator.ShallowCopy(),
+							Decryptor: nil,
+							Encryptor: nil,
+						}
+						go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
+							defer wgk.Done()
+							res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+						}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+					}
+					wgk.Wait()
+					Eij := partials[0]
+					for k := 1; k < s; k++ {
+						Box.Evaluator.Add(Eij, partials[k], Eij)
+					}
+					E.Blocks[i][j] = Eij
+				}(i, j)
 			}
-			wg.Wait()
-			Cij := partials[0]
-			for k := 1; k < s; k++ {
-				Cij = Box.Evaluator.AddNew(Cij, partials[k])
-			}
-			E.Blocks[i][j] = Cij
-		}
+			wgj.Wait()
+		}(i)
 	}
+	wgi.Wait()
 	utils.ThrowErr(err)
 	return E, err
 }
@@ -84,7 +92,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 		utils.ThrowErr(err)
 	}
 	if X.InnerCols < W.InnerCols {
-		err = errors.New("Dim Mid must be > Dim Out in sub-matrices")
+		err = errors.New("Dim Mid must be >= Dim Out in sub-matrices")
 		utils.ThrowErr(err)
 	}
 	q := X.RowP
@@ -95,47 +103,55 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	E.ColP = W.ColP
 	E.InnerRows = X.InnerRows
 	E.InnerCols = W.InnerCols
-
-	var wg sync.WaitGroup
-
 	E.Blocks = make([][]*ckks.Ciphertext, q)
+
+	var wgi sync.WaitGroup
+
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
-		for j := 0; j < r; j++ {
-			partials := make([]*ckks.Ciphertext, s)
-			for k := 0; k < s; k++ {
-				wg.Add(1)
-
-				x := X.Blocks[i][k].CopyNew()
-				w := make([]*ckks.Ciphertext, len(W.Blocks[k][j].Diags))
-				for i := range w {
-					w[i] = W.Blocks[k][j].Diags[i].CopyNew()
-				}
-				dimIn := X.InnerRows
-				dimMid := W.InnerRows
-				dimOut := W.InnerCols
-				//ckks.stuff not thread-safe -> recreate on flight
-				box := CkksBox{
-					Params:    Box.Params,
-					Encoder:   Box.Encoder.ShallowCopy(),
-					Evaluator: Box.Evaluator.ShallowCopy(),
-					Decryptor: nil,
-					Encryptor: nil,
-				}
-				go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
-					defer wg.Done()
-					cij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-					res[k] = cij
-				}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+		wgi.Add(1)
+		go func(i int) {
+			defer wgi.Done()
+			var wgj sync.WaitGroup
+			for j := 0; j < r; j++ {
+				partials := make([]*ckks.Ciphertext, s)
+				wgj.Add(1)
+				go func(i, j int) {
+					defer wgj.Done()
+					var wgk sync.WaitGroup
+					for k := 0; k < s; k++ {
+						//cipher
+						wgk.Add(1)
+						x := X.Blocks[i][k].CopyNew()
+						w := W.Blocks[k][j].Diags
+						dimIn := X.InnerRows
+						dimMid := W.InnerRows
+						dimOut := W.InnerCols
+						//ckks.stuff are not thread safe -> recreate on the flight
+						box := CkksBox{
+							Params:    Box.Params,
+							Encoder:   Box.Encoder.ShallowCopy(),
+							Evaluator: Box.Evaluator.ShallowCopy(),
+							Decryptor: nil,
+							Encryptor: nil,
+						}
+						go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
+							defer wgk.Done()
+							res[k] = Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+						}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+					}
+					wgk.Wait()
+					Eij := partials[0]
+					for k := 1; k < s; k++ {
+						Box.Evaluator.Add(Eij, partials[k], Eij)
+					}
+					E.Blocks[i][j] = Eij
+				}(i, j)
 			}
-			wg.Wait()
-			Cij := partials[0]
-			for k := 1; k < s; k++ {
-				Cij = Box.Evaluator.AddNew(Cij, partials[k])
-			}
-			E.Blocks[i][j] = Cij
-		}
+			wgj.Wait()
+		}(i)
 	}
+	wgi.Wait()
 	utils.ThrowErr(err)
 	return E, err
 }
@@ -157,9 +173,15 @@ func AddBlocksC2C(A *EncInput, B *EncInput, Box CkksBox) (*EncInput, error) {
 	E.Blocks = make([][]*ckks.Ciphertext, E.RowP)
 	for i := range E.Blocks {
 		E.Blocks[i] = make([]*ckks.Ciphertext, E.ColP)
+		wg := sync.WaitGroup{}
 		for j := range E.Blocks[0] {
-			E.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
+			wg.Add(1)
+			go func(i, j int) {
+				defer wg.Done()
+				E.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
+			}(i, j)
 		}
+		wg.Wait()
 	}
 	utils.ThrowErr(err)
 	return E, err
@@ -182,9 +204,15 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 	E.Blocks = make([][]*ckks.Ciphertext, E.RowP)
 	for i := range E.Blocks {
 		E.Blocks[i] = make([]*ckks.Ciphertext, E.ColP)
+		wg := sync.WaitGroup{}
 		for j := range E.Blocks[0] {
-			E.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
+			wg.Add(1)
+			go func(i, j int) {
+				defer wg.Done()
+				E.Blocks[i][j] = Box.Evaluator.AddNew(A.Blocks[i][j], B.Blocks[i][j])
+			}(i, j)
 		}
+		wg.Wait()
 	}
 	utils.ThrowErr(err)
 	return E, err

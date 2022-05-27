@@ -172,11 +172,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 					wg.Add(1)
 					//copy the values
 					x := X.Blocks[i][k].CopyNew()
-					w := make([]*ckks.Plaintext, len(W.Blocks[k][j].Diags))
-					for i := range w {
-						w[i] = ckks.NewPlaintext(Box.Params, W.Blocks[k][j].Diags[i].Level(), W.Blocks[k][j].Diags[i].Scale)
-						w[i].Value.Copy(W.Blocks[k][j].Diags[i].Value)
-					}
+					w := W.Blocks[k][j].Diags
 					dimIn := X.InnerRows
 					dimMid := W.InnerRows
 					dimOut := W.InnerCols
@@ -207,19 +203,19 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 				wg.Wait()
 				Cij := partials[0]
 				bij := partialsPlain[0]
-				fmt.Println("k: ", 0)
-				PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
+				//fmt.Println("k: ", 0)
+				//PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
 				for k := 1; k < s; k++ {
-					fmt.Println("k: ", k)
-					PrintDebug(partials[k], plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(partialsPlain[k]))), Box)
+					//fmt.Println("k: ", k)
+					//PrintDebug(partials[k], plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(partialsPlain[k]))), Box)
 					Cij = Box.Evaluator.AddNew(Cij, partials[k])
 					bij.Add(bij, partialsPlain[k])
 				}
 				C.Blocks[i][j] = Cij
 				Blocks[i][j] = bij
-				fmt.Println(i, "  ", j, "__________________________________")
-				CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
-				PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
+				//fmt.Println(i, "  ", j, "__________________________________")
+				//CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
+				//PrintDebug(Cij, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(bij))), Box)
 			}
 		}
 		Cpb := &plainUtils.BMatrix{Blocks: Blocks, RowP: q, ColP: r, InnerRows: Ab.InnerRows, InnerCols: Bb.InnerCols}
@@ -233,6 +229,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
+	//code following kinda the DNS multiplicaton algo
 	rowP := []int{1}
 	ADim := []int{64, 676}
 	BDim := []int{676, 92}
@@ -329,7 +326,7 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 						for k := 0; k < s; k++ {
 							//cipher
 							wgk.Add(1)
-							x := X.Blocks[i][k]
+							x := X.Blocks[i][k].CopyNew()
 							w := W.Blocks[k][j].Diags
 							dimIn := X.InnerRows
 							dimMid := W.InnerRows

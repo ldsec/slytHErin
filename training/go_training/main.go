@@ -186,44 +186,33 @@ func main() {
 	imgSize := 28
 	classes := 10
 	batchSize := 32
-	epochs := 20
+	epochs := 30
 	Y1HTrain := til.OneHotEncode(YTrain, classes)
 
 	dataSetTrain := til.NewDataSet(XTrain, Y1HTrain)
 
 	heNormal := til.NewNormalInitializer(8)
-	//loss := &til.MeanSquared{}
-	loss := &til.CategoricalCrossEntropy{}
-	lr := 1e-6
-	momentum := 0.9
-	penalty := 1e-3
-	optimizer := til.NewADAM(0.001, 0.9, 0.999, 1e-8)
-	//optimizer := til.NewNAD(lr, momentum)
-	regularizerL1L2 := &til.L1L2Regularizer{Value: penalty, L1Ratio: 0.5}
-	//regularizerL1L2 := &til.VoidRegularizer{}
-	activation := &ReLUApprox{}
-	fmt.Println("Optimizer = Adam, Regularizer = l1l2,  Act=Relu approx")
-	fmt.Printf("lr %f, momentum %f, penalty %f\n", lr, momentum, penalty)
-	layerSize := 92
-	layerNumber := 20 - 1
+	loss := &til.MeanSquared{}
+	//loss := &til.CategoricalCrossEntropy{}
+	optimizer := til.NewADAM(3e-5, 0.9, 0.999, 1e-8)
+	regularizerL1L2 := &til.L1L2Regularizer{Value: 0.0000001, L1Ratio: 0.5}
 
-	model := til.NewModel(threads, optimizer, loss)
+	layerSize := 92
+	layerNumber := 50 - 1
+
+	model := til.NewModel(threads, til.Shape{imgSize, imgSize, 1}, optimizer, loss)
 
 	filterN, filterD, pad, stride := 1, 3, 0, 1
-	conv := til.NewConvolution(imgSize, imgSize, filterN, filterD, pad, stride, activation, heNormal, regularizerL1L2)
-	outSize := conv.OutputSize()
-	fmt.Println(outSize)
-	model.Add(conv)
-	model.Add(til.NewDense(outSize, layerSize, activation, heNormal, regularizerL1L2))
+	model.Add(til.NewConvolution(filterN, filterD, pad, stride, &til.ReLU{}, regularizerL1L2, heNormal))
 
-	//model.Add(til.NewDense(imgSize*imgSize, layerSize, &til.til.ReLU{}, heNormal))
-	//model.Add(til.NewDense(layerSize, layerSize, &til.til.ReLU{}, heNormal))
+	model.Add(til.NewDense(layerSize, &til.ReLU{}, regularizerL1L2, heNormal))
+
 	for i := 1; i < layerNumber; i++ {
-		model.Add(til.NewDense(layerSize, layerSize, activation, heNormal, regularizerL1L2))
+		model.Add(til.NewDense(layerSize, &til.ReLU{}, regularizerL1L2, heNormal))
 	}
 
-	model.Add(til.NewDense(layerSize, classes, &til.Identity{}, heNormal, regularizerL1L2))
-	fmt.Println(len(model.Layers))
+	model.Add(til.NewDense(classes, &til.Identity{}, regularizerL1L2, heNormal))
+
 	model.SetVerbose(1)
 	model.Train(dataSetTrain, batchSize, epochs, validationsplit)
 
@@ -231,13 +220,15 @@ func main() {
 
 	//json dump
 	serialized := &Model{D: make(map[string]Dense)}
-	for i, layer := range model.Layers {
+	for i, l := range model.Layers {
 		if i == 0 {
+			layer, _ := l.(*til.Convolution)
 			serialized.C = Conv{}
-			serialized.C.Weight = WeightConv{W: layer.Weights().M, Rows: filterD, Cols: filterD, Filters: filterN, Kernels: 1}
+			serialized.C.Weight = WeightConv{W: layer.Weights()[0].M, Rows: filterD, Cols: filterD, Filters: filterN, Kernels: 1}
 			serialized.C.Bias = Bias{B: layer.Bias().M, Rows: layer.Bias().Rows(), Cols: layer.Bias().Cols()}
 		} else {
 			key := fmt.Sprintf("dense_%d", i)
+			layer := l.(*til.Dense)
 			d := Dense{}
 			d.Weight = WeightDense{W: layer.Weights().M, Rows: layer.Weights().Rows(), Cols: layer.Weights().Cols()}
 			d.Bias = Bias{B: layer.Bias().M, Rows: layer.Bias().Rows(), Cols: layer.Bias().Cols()}

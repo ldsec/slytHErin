@@ -2,7 +2,7 @@ package cipherUtils
 
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 	/*
-		Format weights in diagonal form for Halevi-Shoup multiplication algorithm
+		Format weights in diagonal form for multiplication algorithm
 		Additionally use the complex trick to effectively divide by half the
 		size of the matrix to be multiplied
 		refer to page 3: https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true

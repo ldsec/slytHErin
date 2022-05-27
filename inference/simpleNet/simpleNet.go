@@ -406,3 +406,68 @@ func (sn *SimpleNet) EvalBatchEncryptedCompressed(XBatchClear [][]float64, Y []i
 		Time:        elapsed,
 	}
 }
+
+func (sn *SimpleNet) EvalBatchEncryptedCompressed_Light(Y []int, XbatchEnc *cipherUtils.EncInput, weightsBlock []*cipherUtils.PlainWeightDiag, biasBlock []*cipherUtils.PlainInput, Box cipherUtils.CkksBox, labels int) *SimpleNetPipeLine {
+	fmt.Println("Starting...")
+	//pipeline
+	now := time.Now()
+	//fmt.Println("Compressed conv + pool", weightsBlock[0].Blocks[0][0].Diags[0].Level())
+	A, err := cipherUtils.BlocksC2PMul(XbatchEnc, weightsBlock[0], Box)
+	utils.ThrowErr(err)
+
+	fmt.Println("Adding bias")
+	Ab, err := cipherUtils.AddBlocksC2P(A, biasBlock[0], Box)
+
+	utils.ThrowErr(err)
+	fmt.Println("Activation")
+	cipherUtils.EvalPolyBlocks(Ab, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
+
+	fmt.Println("Pool2")
+	CC, err := cipherUtils.BlocksC2PMul(Ab, weightsBlock[1], Box)
+	utils.ThrowErr(err)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Adding bias")
+	utils.ThrowErr(err)
+	Cb, err := cipherUtils.AddBlocksC2P(CC, biasBlock[1], Box)
+	utils.ThrowErr(err)
+	fmt.Println("Activation")
+	cipherUtils.EvalPolyBlocks(Cb, ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs)), Box)
+	fmt.Println("______________________")
+	elapsed := time.Since(now)
+	fmt.Println("Done", elapsed)
+
+	batchSize := len(Y)
+	res := cipherUtils.DecInput(Cb, Box)
+	predictions := make([]int, batchSize)
+	corrects := 0
+	for i := 0; i < batchSize; i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < labels; j++ {
+			confidence := res[i][j]
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	fmt.Println("Corrects :", corrects)
+
+	outConv1 := cipherUtils.DecInput(Ab, Box)
+	outPool2 := cipherUtils.DecInput(Cb, Box)
+
+	return &SimpleNetPipeLine{
+		OutConv1:    plainUtils.NewDense(outConv1),
+		OutPool1:    nil,
+		OutPool2:    plainUtils.NewDense(outPool2),
+		Predictions: predictions,
+		Corrects:    corrects,
+		Time:        elapsed,
+	}
+}

@@ -4,6 +4,9 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 )
 
+/*
+	Operations between encrypted matrices of data
+*/
 // |
 // | version with optimized dimentions
 // v

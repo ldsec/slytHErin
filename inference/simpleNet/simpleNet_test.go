@@ -61,7 +61,7 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	//data encrypted - model in clear
 
 	//local run
-	sn := LoadSimpleNet("simpleNet.json")
+	sn := LoadSimpleNet("simpleNet_packed.json")
 	sn.Init()
 
 	batchSize := 64
@@ -186,21 +186,38 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	/*
 		data encrypted - model in clear
 		model is optimized by compressing conv and pool1 in 1 layer
-		~8.14s/64 batch
+		~4.8s per 70 batch ==> 14,58 im/s
 	*/
-	sn := LoadSimpleNet("simpleNet.json")
+	sn := LoadSimpleNet("/francesco/simpleNet_packed.json")
 	sn.Init()
-
 	//crypto
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         15,
+	//	LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 438 for LogN 14
+	//	LogP:         []int{38, 38, 38, 38},
+	//	Sigma:        rlwe.DefaultSigma,
+	//	LogSlots:     14,
+	//	DefaultScale: float64(1 << 26),
+	//}
+
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogQ:         []int{30, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 438 for LogN 14
+	//	LogP:         []int{38, 38, 38, 38},
+	//	Sigma:        rlwe.DefaultSigma,
+	//	LogSlots:     13,
+	//	DefaultScale: float64(1 << 26),
+	//}
+
 	ckksParams := ckks.ParametersLiteral{
-		LogN:         14,
-		LogQ:         []int{45, 40, 40, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
-		LogP:         []int{38, 38, 38, 38},
+		LogN:         13,
+		LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 3
+		LogP:         []int{33},
 		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     13,
-		DefaultScale: float64(1 << 40),
+		LogSlots:     12,
+		DefaultScale: float64(1 << 26),
 	}
-	//ckksParams = ckks.PN14QP438
+
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 
 	batchSize := cipherUtils.GetOptimalInnerRows(29, params)
@@ -300,16 +317,18 @@ func TestEvalDataEncModelClearCompressed(t *testing.T) {
 	corrects := 0
 	tot := 0
 	iters := 0
+	maxIters := 10
 	var elapsed int64
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
-		if err != nil {
+		if err != nil || iters >= maxIters {
 			//dataset completed
 			break
 		}
 		Xenc, err := cipherUtils.NewEncInput(Xbatch, rowP, colP, params.MaxLevel(), Box)
 		utils.ThrowErr(err)
-		res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, true)
+		//res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, false)
+		res := sn.EvalBatchEncryptedCompressed_Light(Y, Xenc, weightsBlock, biasBlock, Box, 10)
 		fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 		corrects += res.Corrects
 		tot += batchSize
