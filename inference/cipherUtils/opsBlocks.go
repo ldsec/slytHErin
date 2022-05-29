@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
+	"gonum.org/v1/gonum/mat"
 	"sync"
 )
 
@@ -25,6 +26,11 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	q := X.RowP
 	r := W.ColP
 	s := W.RowP
+
+	dimIn := X.InnerRows
+	dimMid := W.InnerRows
+	dimOut := W.InnerCols
+
 	E := new(EncInput)
 	E.RowP = X.RowP
 	E.ColP = W.ColP
@@ -37,23 +43,24 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
 		wgi.Add(1)
+
 		go func(i int) {
 			defer wgi.Done()
 			var wgj sync.WaitGroup
 			for j := 0; j < r; j++ {
-				partials := make([]*ckks.Ciphertext, s)
+
+				accumulatorChan := make(chan *ckks.Ciphertext)
+				accumulatorPlainChan := make(chan *mat.Dense)
+				done := make(chan struct{})
+				donePlain := make(chan struct{})
 				wgj.Add(1)
-				go func(i, j int) {
+
+				go func(j int, accumulatorChan chan *ckks.Ciphertext, accumulatorChanPlain chan *mat.Dense, done, donePlain chan struct{}) {
 					defer wgj.Done()
-					var wgk sync.WaitGroup
 					for k := 0; k < s; k++ {
-						//cipher
-						wgk.Add(1)
 						x := X.Blocks[i][k].CopyNew()
 						w := W.Blocks[k][j].Diags
-						dimIn := X.InnerRows
-						dimMid := W.InnerRows
-						dimOut := W.InnerCols
+
 						//ckks.stuff are not thread safe -> recreate on the flight
 						box := CkksBox{
 							Params:    Box.Params,
@@ -62,18 +69,26 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 							Decryptor: nil,
 							Encryptor: nil,
 						}
-						go func(x *ckks.Ciphertext, w []*ckks.Plaintext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
-							defer wgk.Done()
-							res[k] = Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-						}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+
+						go func(x *ckks.Ciphertext, w []*ckks.Plaintext, k int, Box CkksBox) {
+							eij := Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+							if k == 0 {
+								defer close(accumulatorChan)
+								accumulator := 1
+								for accumulator < s {
+									op := <-accumulatorChan
+									Box.Evaluator.Add(eij, op, eij)
+									accumulator++
+								}
+								E.Blocks[i][j] = eij
+								done <- struct{}{}
+							} else {
+								accumulatorChan <- eij
+							}
+						}(x, w, k, box)
 					}
-					wgk.Wait()
-					Eij := partials[0]
-					for k := 1; k < s; k++ {
-						Box.Evaluator.Add(Eij, partials[k], Eij)
-					}
-					E.Blocks[i][j] = Eij
-				}(i, j)
+					<-done
+				}(j, accumulatorChan, accumulatorPlainChan, done, donePlain)
 			}
 			wgj.Wait()
 		}(i)
@@ -98,6 +113,11 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	q := X.RowP
 	r := W.ColP
 	s := W.RowP
+
+	dimIn := X.InnerRows
+	dimMid := W.InnerRows
+	dimOut := W.InnerCols
+
 	E := new(EncInput)
 	E.RowP = X.RowP
 	E.ColP = W.ColP
@@ -110,23 +130,24 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
 		wgi.Add(1)
+
 		go func(i int) {
 			defer wgi.Done()
 			var wgj sync.WaitGroup
 			for j := 0; j < r; j++ {
-				partials := make([]*ckks.Ciphertext, s)
+
+				accumulatorChan := make(chan *ckks.Ciphertext)
+				accumulatorPlainChan := make(chan *mat.Dense)
+				done := make(chan struct{})
+				donePlain := make(chan struct{})
 				wgj.Add(1)
-				go func(i, j int) {
+
+				go func(j int, accumulatorChan chan *ckks.Ciphertext, accumulatorChanPlain chan *mat.Dense, done, donePlain chan struct{}) {
 					defer wgj.Done()
-					var wgk sync.WaitGroup
 					for k := 0; k < s; k++ {
-						//cipher
-						wgk.Add(1)
 						x := X.Blocks[i][k].CopyNew()
 						w := W.Blocks[k][j].Diags
-						dimIn := X.InnerRows
-						dimMid := W.InnerRows
-						dimOut := W.InnerCols
+
 						//ckks.stuff are not thread safe -> recreate on the flight
 						box := CkksBox{
 							Params:    Box.Params,
@@ -135,18 +156,26 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 							Decryptor: nil,
 							Encryptor: nil,
 						}
-						go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, dimIn, dimMid, dimOut, k int, res []*ckks.Ciphertext, Box CkksBox) {
-							defer wgk.Done()
-							res[k] = Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-						}(x, w, dimIn, dimMid, dimOut, k, partials, box)
+
+						go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, k int, Box CkksBox) {
+							eij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+							if k == 0 {
+								defer close(accumulatorChan)
+								accumulator := 1
+								for accumulator < s {
+									op := <-accumulatorChan
+									Box.Evaluator.Add(eij, op, eij)
+									accumulator++
+								}
+								E.Blocks[i][j] = eij
+								done <- struct{}{}
+							} else {
+								accumulatorChan <- eij
+							}
+						}(x, w, k, box)
 					}
-					wgk.Wait()
-					Eij := partials[0]
-					for k := 1; k < s; k++ {
-						Box.Evaluator.Add(Eij, partials[k], Eij)
-					}
-					E.Blocks[i][j] = Eij
-				}(i, j)
+					<-done
+				}(j, accumulatorChan, accumulatorPlainChan, done, donePlain)
 			}
 			wgj.Wait()
 		}(i)

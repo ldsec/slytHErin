@@ -229,7 +229,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	//Each step is compared with the plaintext pipeline of block matrix operations
-	//code following kinda the DNS multiplicaton algo
+	//This code uses NxLxM threads if blocks are NxL X LxM
 	rowP := []int{1}
 	ADim := []int{64, 676}
 	BDim := []int{676, 92}
@@ -374,7 +374,185 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 		fmt.Println("Done: ", time.Since(now))
 		CompareBlocks(C, Cpb, Box)
 		PrintDebugBlocks(C, Cpb, Box)
+	}
+}
 
+func TestBlocksC2PMul_Parallel_Accumulator_Debug(t *testing.T) {
+	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
+	//Each step is compared with the plaintext pipeline of block matrix operations
+	//Adds accumulator to threads
+	rowP := []int{1}
+	ADim := []int{64, 676}
+	BDim := []int{676, 92}
+
+	rd := rand.New(rand.NewSource(0))
+
+	A := make([][]float64, ADim[0])
+	for i := range A {
+		A[i] = make([]float64, ADim[1])
+		for j := range A[i] {
+			A[i][j] = rd.NormFloat64()
+		}
+	}
+	B := make([][]float64, BDim[0])
+	for i := range B {
+		B[i] = make([]float64, BDim[1])
+		for j := range B[i] {
+			B[i][j] = rd.NormFloat64()
+		}
+	}
+	for _, rp := range rowP {
+
+		rowPA := rp
+		colPA := 26
+		rowPB := 26
+		colPB := 4
+
+		Ab, err := plainUtils.PartitionMatrix(plainUtils.NewDense(A), rowPA, colPA)
+
+		Bb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(B), rowPB, colPB)
+
+		params, err := ckks.NewParametersFromLiteral(ckks.PN14QP438)
+		if err != nil {
+			panic(err)
+		}
+
+		kgen := ckks.NewKeyGenerator(params)
+		sk := kgen.GenSecretKey()
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		rotations := GenRotations(Ab.InnerRows, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
+
+		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+
+		enc := ckks.NewEncryptor(params, sk)
+		dec := ckks.NewDecryptor(params, sk)
+		ecd := ckks.NewEncoder(params)
+		eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+		Box := CkksBox{
+			Params:    params,
+			Encoder:   ecd,
+			Evaluator: eval,
+			Decryptor: dec,
+			Encryptor: enc,
+		}
+		X, err := NewEncInput(A, rowPA, colPA, params.MaxLevel(), Box)
+		utils.ThrowErr(err)
+		W, err := NewPlainWeightDiag(B, rowPB, colPB, X.InnerRows, params.MaxLevel(), Box)
+		utils.ThrowErr(err)
+
+		//BlOCK MULT ROUTINE
+		now := time.Now()
+
+		if X.ColP != W.RowP {
+			err = errors.New("Block partitions not compatible for multiplication")
+		}
+		q := X.RowP
+		r := W.ColP
+		s := W.RowP
+		C := new(EncInput)
+		Blocks := make([][]*mat.Dense, q)
+		C.RowP = X.RowP
+		C.ColP = W.ColP
+		C.InnerRows = X.InnerRows
+		C.InnerCols = W.InnerCols
+
+		dimIn := X.InnerRows
+		dimMid := W.InnerRows
+		dimOut := W.InnerCols
+
+		innerRows := Ab.InnerRows
+		innerCols := Bb.InnerCols
+
+		var wgi sync.WaitGroup
+
+		C.Blocks = make([][]*ckks.Ciphertext, q)
+		for i := 0; i < q; i++ {
+			C.Blocks[i] = make([]*ckks.Ciphertext, r)
+			Blocks[i] = make([]*mat.Dense, r)
+			wgi.Add(1)
+			go func(i int) {
+				defer wgi.Done()
+				var wgj sync.WaitGroup
+				for j := 0; j < r; j++ {
+
+					accumulatorChan := make(chan *ckks.Ciphertext)
+					accumulatorPlainChan := make(chan *mat.Dense)
+					done := make(chan struct{})
+					donePlain := make(chan struct{})
+					wgj.Add(1)
+
+					go func(j int, accumulatorChan chan *ckks.Ciphertext, accumulatorChanPlain chan *mat.Dense, done, donePlain chan struct{}) {
+						defer wgj.Done()
+						for k := 0; k < s; k++ {
+							//cipher
+							x := X.Blocks[i][k].CopyNew()
+							w := W.Blocks[k][j].Diags
+
+							//ckks.stuff are not thread safe -> recreate on the flight
+							box := CkksBox{
+								Params:    Box.Params,
+								Encoder:   Box.Encoder.ShallowCopy(),
+								Evaluator: Box.Evaluator.ShallowCopy(),
+								Decryptor: nil,
+								Encryptor: nil,
+							}
+
+							go func(x *ckks.Ciphertext, w []*ckks.Plaintext, k int, Box CkksBox) {
+								cij := Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+								if k == 0 {
+									defer close(accumulatorChan)
+									accumulator := 1
+
+									for accumulator < s {
+										op := <-accumulatorChan
+
+										Box.Evaluator.Add(cij, op, cij)
+										accumulator++
+
+									}
+
+									C.Blocks[i][j] = cij
+									done <- struct{}{}
+
+								} else {
+
+									accumulatorChan <- cij
+								}
+							}(x, w, k, box)
+
+							//plain
+							go func(a, b *mat.Dense, k int) {
+								cij := mat.NewDense(innerRows, innerCols, nil)
+								cij.Mul(a, b)
+								if k == 0 {
+									defer close(accumulatorPlainChan)
+									accumulator := 1
+									for accumulator < s {
+										op := <-accumulatorPlainChan
+										cij.Add(cij, op)
+										accumulator++
+									}
+									Blocks[i][j] = cij
+									donePlain <- struct{}{}
+								} else {
+									accumulatorPlainChan <- cij
+								}
+							}(Ab.Blocks[i][k], Bb.Blocks[k][j], k)
+						}
+						<-done
+						<-donePlain
+						//CompareMatrices(Cij, plainUtils.NumRows(bij), plainUtils.NumCols(bij), bij, Box)
+					}(j, accumulatorChan, accumulatorPlainChan, done, donePlain)
+				}
+				wgj.Wait()
+			}(i)
+		}
+		wgi.Wait()
+		Cpb := &plainUtils.BMatrix{Blocks: Blocks, RowP: q, ColP: r, InnerRows: Ab.InnerRows, InnerCols: Bb.InnerCols}
+		fmt.Println("Done: ", time.Since(now))
+		CompareBlocks(C, Cpb, Box)
+		PrintDebugBlocks(C, Cpb, Box)
 	}
 }
 
