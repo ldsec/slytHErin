@@ -324,7 +324,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	*/
 	layers := 20
 
-	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
 
 	batchSize := 128

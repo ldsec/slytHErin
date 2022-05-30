@@ -54,6 +54,15 @@ type NNEnc struct {
 	Layers     int
 }
 
+//Approximation parameters for Chebychev approximated activations. Depends on the number of layers
+type ApproxParams struct {
+	a, b float64
+	deg  int
+}
+
+var NN20Params = ApproxParams{a: -7, b: 7, deg: 3}
+var NN50Params = ApproxParams{a: -7, b: 7, deg: 3}
+
 // loads json file with weights
 func LoadNN(path string) *NN {
 
@@ -170,7 +179,11 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 	nne.Weights = make([]*cipherUtils.EncWeightDiag, layers+1)
 	nne.Bias = make([]*cipherUtils.EncInput, layers+1)
 	nne.Layers = nnb.Layers
-	nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, -35.0, 35.0, 63)
+	if layers == 20 {
+		nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params.a, NN20Params.b, NN20Params.deg)
+	} else if layers == 50 {
+		nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN50Params.a, NN50Params.b, NN50Params.deg)
+	}
 	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel
 	fmt.Println("Creating weights encrypted block matrices...")

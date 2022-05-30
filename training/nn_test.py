@@ -16,6 +16,8 @@ from activation import *
 """
     Script for testing nn with approximations for homomorphic encryption
 """
+#Max value in NN50 = 7
+
 os.chdir(".")
 
 # explicit function to normalize array
@@ -74,7 +76,7 @@ def linear_eval(X,Y, serialized):
         dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
         bias.append(np.array(d['bias']['b']))
 
-    act = soft_relu_approx_np
+    act = relu_np
 
     X = X @ conv
     for i in range(len(X)):
@@ -114,28 +116,25 @@ if __name__=="__main__":
         serialized = json.load(f)
     if args.model == "nn20":
         layers = 20
-        model = torch.load("./models/nn20.pt")
+
     elif args.model == "nn50":
         layers = 50
-        model = torch.load("./models/nn50.pt")
+
     elif args.model == "nn100":
         layers = 100
-        model = torch.load("./models/nn100.pt")
 
-    model = model.to(device)
+
+
 
     batchsize = 512
-    dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
     corrects = 0
-    corrects_torch = 0
+
     tot = 0.0
     for X,Y in dataHandler.test_dl:
         corrects += linear_eval(X.double(),Y.double(),serialized)
         tot += batchsize
-        #predictions = model(X)
-        #_,predicted_labels = predictions.max(1)
-        #corrects_torch += (predicted_labels == Y).sum().item()
+
     print("Accuracy:")
     print(corrects/tot)
-    print("Expected (from torch model):")
-    print(corrects_torch/tot)
+
