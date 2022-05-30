@@ -10,6 +10,17 @@ func NewDense(X [][]float64) *mat.Dense {
 	return mat.NewDense(len(X), len(X[0]), Vectorize(X, true))
 }
 
+func DenseToMatrix(m *mat.Dense) [][]float64 {
+	M := make([][]float64, NumRows(m))
+	for i := 0; i < NumRows(m); i++ {
+		M[i] = make([]float64, NumCols(m))
+		for j := 0; j < NumCols(m); j++ {
+			M[i][j] = m.At(i, j)
+		}
+	}
+	return M
+}
+
 func TransposeDense(m *mat.Dense) (mt *mat.Dense) {
 	mt = mat.NewDense(NumCols(m), NumRows(m), nil)
 	for i := 0; i < NumRows(m); i++ {

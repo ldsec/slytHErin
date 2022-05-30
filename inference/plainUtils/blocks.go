@@ -13,6 +13,20 @@ type BMatrix struct {
 	InnerRows, InnerCols int //size of sub-matrixes
 }
 
+func TransposeBlocks(Bm *BMatrix) *BMatrix {
+	Tm := new(BMatrix)
+	Tm.RowP = Bm.ColP
+	Tm.ColP = Bm.RowP
+	Tm.InnerRows, Tm.InnerCols = Bm.InnerRows, Bm.InnerCols
+	Tm.Blocks = make([][]*mat.Dense, Tm.RowP)
+	for i := 0; i < Tm.RowP; i++ {
+		Tm.Blocks[i] = make([]*mat.Dense, Tm.ColP)
+		for j := 0; j < Tm.ColP; j++ {
+			Tm.Blocks[i][j] = Bm.Blocks[j][i]
+		}
+	}
+	return Tm
+}
 func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 	/*
 		Partitions m into a rowPxcolP Block Matrix
@@ -128,4 +142,15 @@ func MultiplyBlocksByConst(A *BMatrix, c float64) *BMatrix {
 	}
 	A.Blocks = newBlocks
 	return A
+}
+
+func ApplyFunc(Bm *BMatrix, f func(x float64) float64) {
+	for i := 0; i < Bm.RowP; i++ {
+		for j := 0; j < Bm.ColP; j++ {
+			fn := func(i, j int, v float64) float64 {
+				return f(v)
+			}
+			Bm.Blocks[i][j].Apply(fn, Bm.Blocks[i][j])
+		}
+	}
 }

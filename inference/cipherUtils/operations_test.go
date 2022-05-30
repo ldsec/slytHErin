@@ -332,7 +332,7 @@ func TestEvalPoly(t *testing.T) {
 	LDim := []int{64, 64}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
 	L.Set(0, 0, 32.0)
-	ckksParams := ckks.DefaultParams[2]
+	ckksParams := ckks.DefaultParams[3]
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
@@ -387,26 +387,13 @@ func TestEvalPoly(t *testing.T) {
 	if err := eval.Rescale(ctL, params.DefaultScale(), ctL); err != nil {
 		panic(err)
 	}
+	start := time.Now()
 	ct, err := eval.EvaluatePolyVector(ctL, []*ckks.Polynomial{approxF}, ecd, slotsIndex, ctL.Scale)
+	fmt.Println("Done...", time.Since(start))
 	fmt.Println("After", ct.Level())
 	fmt.Println("Deg", approxF.Degree())
 	fmt.Println("Done... Consumed levels:", params.MaxLevel()-ct.Level())
 
-	/*
-		func(X *mat.Dense, interval float64, degree int, coeffs []float64) {
-			rows, cols := X.Dims()
-			for r := 0; r < rows; r++ {
-				for c := 0; c < cols; c++ {
-					v := X.At(r, c) / float64(interval)
-					res := 0.0
-					for deg := 0; deg < degree; deg++ {
-						res += (math.Pow(v, float64(deg)) * coeffs[deg])
-					}
-					X.Set(r, c, res)
-				}
-			}
-		}(L, interval, 32, coeffs)
-	*/
 	for i := 0; i < LDim[0]; i++ {
 		for j := 0; j < LDim[1]; j++ {
 			L.Set(i, j, f(L.At(i, j)))
@@ -415,6 +402,76 @@ func TestEvalPoly(t *testing.T) {
 
 	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
 	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
+}
+
+func TestEvalPoly_Optimized(t *testing.T) {
+	//Evaluates a polynomial on ciphertext
+	LDim := []int{64, 64}
+	L := plainUtils.RandMatrix(LDim[0], LDim[1])
+	L.Set(0, 0, 32.0)
+	ckksParams := ckks.DefaultParams[3]
+	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	if err != nil {
+		panic(err)
+	}
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil})
+	Box := CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+	//relu approx
+	f := func(x float64) float64 {
+		return math.Log(1 + math.Exp(x))
+	}
+	a, b := -35.0, 35.0
+	deg := 31
+	approxF := ckks.Approximate(f, a, b, deg)
+	fmt.Println(approxF.Coeffs)
+	term0 := approxF.Coeffs[0]
+	approxF.Coeffs[0] = complex(0, 0)
+
+	ctL := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(L), Box)
+	fmt.Println("Before", ctL.Level())
+	// Change of variable
+	eval.MultByConst(ctL, 2/(b-a), ctL)
+	eval.AddConst(ctL, (-a-b)/(b-a), ctL)
+	if err := eval.Rescale(ctL, params.DefaultScale(), ctL); err != nil {
+		panic(err)
+	}
+
+	start := time.Now()
+	ct, err := eval.EvaluatePoly(ctL, approxF, ctL.Scale)
+	eval.AddConst(ct, term0, ct)
+	fmt.Println("Done...", time.Since(start))
+
+	fmt.Println("After", ct.Level())
+	fmt.Println("Deg", approxF.Degree())
+	fmt.Println("Done... Consumed levels:", params.MaxLevel()-ct.Level())
+
+	for i := 0; i < LDim[0]; i++ {
+		for j := 0; j < LDim[1]; j++ {
+			L.Set(i, j, f(L.At(i, j)))
+		}
+	}
+
+	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
+	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
+}
+
+func TestActivationVersions(t *testing.T) {
+	t.Run("TestEvalPoly", TestEvalPoly)
+	t.Run("TestEvalPoly_Optimized", TestEvalPoly_Optimized)
 }
 
 func TestBootstrap(t *testing.T) {
