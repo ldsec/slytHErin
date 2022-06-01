@@ -33,7 +33,6 @@ func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*
 	enc := Box.Encryptor
 
 	wF := FormatWeights(w, leftdim)
-
 	ctW = make([]*ckks.Ciphertext, len(wF))
 
 	//for i := range ctW {

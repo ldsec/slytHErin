@@ -127,8 +127,10 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 	master.PartiesAddr = make([]*net.TCPAddr, parties)
 	master.Addr, _ = net.ResolveTCPAddr("tcp", partiesAddr[0])
+	var err error
 	for i := 1; i < parties; i++ {
-		master.PartiesAddr[i], _ = net.ResolveTCPAddr("tcp", partiesAddr[i])
+		master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i])
+		utils.ThrowErr(err)
 	}
 	return master, nil
 }
@@ -205,9 +207,9 @@ func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
 	switch resp.Type {
 	case TYPES[0]:
 		//key switch
-		go lmst.DispatchPCKS(resp)
+		lmst.DispatchPCKS(resp)
 	case TYPES[1]:
-		go lmst.DispatchRef(resp)
+		lmst.DispatchRef(resp)
 	default:
 		utils.ThrowErr(errors.New("resp for unknown protocol"))
 	}
@@ -240,7 +242,6 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
 		fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
-		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
 		utils.ThrowErr(err)
@@ -285,7 +286,6 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	// belonging to the same instance at application level
 	for i := 1; i < lmst.Parties; i++ {
 		fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
-		//c := lmst.PartiesConn[i]
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
 		utils.ThrowErr(err)

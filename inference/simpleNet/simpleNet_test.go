@@ -346,7 +346,6 @@ func TestEvalDataEncModelClearCompressed_withActivators(t *testing.T) {
 	*/
 	sn := LoadSimpleNet("/francesco/simpleNet_packed.json")
 	sn.Init()
-	poly := ckks.NewPoly(plainUtils.RealToComplex(sn.ReLUApprox.Coeffs))
 	//crypto
 	//ckksParams := ckks.ParametersLiteral{
 	//	LogN:         15,
@@ -446,13 +445,13 @@ func TestEvalDataEncModelClearCompressed_withActivators(t *testing.T) {
 	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(
 		plainUtils.MatToArray(w0),
 		colP, 10, batchSize, params.MaxLevel(), Box)
-	activators[0], err = cipherUtils.NewActivator(poly, params.MaxLevel()-1, params.DefaultScale(), batchSize/rowP, weightsBlock[0].InnerCols, rowP, weightsBlock[0].ColP, Box)
+	activators[0], err = cipherUtils.NewActivator(sn.ReLUApprox, params.MaxLevel()-1, params.DefaultScale(), batchSize/rowP, weightsBlock[0].InnerCols, rowP, weightsBlock[0].ColP, Box)
 	utils.ThrowErr(err)
 	w1 := plainUtils.MulByConst(weightMatrices[2], 1.0/sn.ReLUApprox.Interval)
 	weightsBlock[1], err = cipherUtils.NewPlainWeightDiag(
 		plainUtils.MatToArray(w1),
 		10, 1, batchSize, params.MaxLevel()-1-2, Box)
-	activators[1], err = cipherUtils.NewActivator(poly, params.MaxLevel()-1-2-1, params.DefaultScale(), batchSize/rowP, weightsBlock[1].InnerCols, rowP, weightsBlock[1].ColP, Box)
+	activators[1], err = cipherUtils.NewActivator(sn.ReLUApprox, params.MaxLevel()-1-2-1, params.DefaultScale(), batchSize/rowP, weightsBlock[1].InnerCols, rowP, weightsBlock[1].ColP, Box)
 	utils.ThrowErr(err)
 	utils.ThrowErr(err)
 

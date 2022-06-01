@@ -406,10 +406,9 @@ func TestEvalPoly(t *testing.T) {
 
 func TestEvalPoly_Optimized(t *testing.T) {
 	//Evaluates a polynomial on ciphertext
-	LDim := []int{64, 64}
+	LDim := []int{64, 28}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
-	L.Set(0, 0, 32.0)
-	ckksParams := ckks.DefaultParams[3]
+	ckksParams := ckks.DefaultParams[2]
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {
 		panic(err)
@@ -434,8 +433,8 @@ func TestEvalPoly_Optimized(t *testing.T) {
 	f := func(x float64) float64 {
 		return math.Log(1 + math.Exp(x))
 	}
-	a, b := -35.0, 35.0
-	deg := 31
+	a, b := -30.0, 30.0
+	deg := 63
 	approxF := ckks.Approximate(f, a, b, deg)
 	fmt.Println(approxF.Coeffs)
 	term0 := approxF.Coeffs[0]
@@ -466,7 +465,7 @@ func TestEvalPoly_Optimized(t *testing.T) {
 	}
 
 	CompareMatrices(ct, LDim[0], LDim[1], L, Box)
-	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), true)), Box)
+	PrintDebug(ct, plainUtils.RealToComplex(plainUtils.Vectorize(plainUtils.MatToArray(L), false)), Box)
 }
 
 func TestActivationVersions(t *testing.T) {

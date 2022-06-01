@@ -140,8 +140,10 @@ func MultiplyBlocksByConst(A *BMatrix, c float64) *BMatrix {
 			newBlocks[i][j] = MulByConst(A.Blocks[i][j], c)
 		}
 	}
-	A.Blocks = newBlocks
-	return A
+	B := new(BMatrix)
+	*B = *A
+	B.Blocks = newBlocks
+	return B
 }
 
 func ApplyFunc(Bm *BMatrix, f func(x float64) float64) {

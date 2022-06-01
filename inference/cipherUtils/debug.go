@@ -55,7 +55,7 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
-			//because the plaintext in X.Blocks is the matrix transposed and flattened, so transpose the plaintext
+			//because the plaintext in X.Blocks is the matrix transposed and flattened (if after a multiplication), so transpose the plaintext
 			pt := plainUtils.MatToArray(plainUtils.TransposeDense(Pt.Blocks[i][j]))
 			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), Box)
 			return //only first

@@ -46,8 +46,9 @@ type NNBlock struct {
 	Wrapper for Encrypted layers in Block Matrix form
 */
 type NNEnc struct {
-	Weights []*cipherUtils.EncWeightDiag
-	Bias    []*cipherUtils.EncInput
+	Weights    []*cipherUtils.EncWeightDiag
+	Bias       []*cipherUtils.EncInput
+	Activators []*cipherUtils.Activator
 
 	ReLUApprox *utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
 	Box        cipherUtils.CkksBox
@@ -60,8 +61,26 @@ type ApproxParams struct {
 	deg  int
 }
 
-var NN20Params = ApproxParams{a: -7, b: 7, deg: 3}
-var NN50Params = ApproxParams{a: -7, b: 7, deg: 3}
+var NN20Params = ApproxParams{a: -30, b: 30, deg: 63}
+var NN20Params_CentralizedBtp = ApproxParams{a: -30, b: 30, deg: 15} //deg needs to be < residual capacity
+var NN50Params = ApproxParams{a: -55, b: 55, deg: 63}
+
+//computes how many levels are needed to complete the pipeline
+func (nne NNEnc) LevelsToComplete(currLayer int, afterMul bool) int {
+	levelsNeeded := 0
+	for i := currLayer; i < nne.Layers+1; i++ {
+		levelsNeeded += 1 //mul
+		if i != nne.Layers {
+			//last layer with no act
+			levelsNeeded += nne.ReLUApprox.LevelsOfAct()
+		}
+	}
+	if afterMul {
+		levelsNeeded--
+	}
+	//fmt.Printf("Levels needed from layer %d to complete: %d\n\n", currLayer+1, levelsNeeded)
+	return levelsNeeded
+}
 
 // loads json file with weights
 func LoadNN(path string) *NN {
@@ -110,7 +129,7 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 		if i == 0 {
 			//840x92 --> 30x23
 			//denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 28, 4)
-			//if go training
+			//if go training 676x92 --> 26x23
 			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 26, 4)
 		} else if i == layers-1 {
 			//92x10 --> 23x10
@@ -175,20 +194,29 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 //Forms an encrypted NN from the plaintext representation
 func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils.CkksBox, minLevel int) (*NNEnc, error) {
 	layers := nnb.Layers
+	innerRows := batchSize / InRowP
 	nne := new(NNEnc)
 	nne.Weights = make([]*cipherUtils.EncWeightDiag, layers+1)
 	nne.Bias = make([]*cipherUtils.EncInput, layers+1)
+	nne.Activators = make([]*cipherUtils.Activator, layers)
 	nne.Layers = nnb.Layers
 	if layers == 20 {
-		nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params.a, NN20Params.b, NN20Params.deg)
+		if minLevel != -1 {
+			//distributed
+			nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params.a, NN20Params.b, NN20Params.deg)
+		} else {
+			nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+		}
 	} else if layers == 50 {
 		nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN50Params.a, NN50Params.b, NN50Params.deg)
 	}
 	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel
+
 	fmt.Println("Creating weights encrypted block matrices...")
+
 	for i := 0; i < layers+1; i++ {
-		if (level <= minLevel && minLevel != -1) || level == 0 {
+		if ((level <= minLevel && minLevel != -1) || level == 0) && level < nne.LevelsToComplete(i, false) {
 			//bootstrap
 			if minLevel != -1 {
 				//distributed
@@ -216,12 +244,21 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 			plainUtils.MatToArray(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Weights[i]),
 				mulC)),
 			nnb.RowsP[i], nnb.ColsP[i], batchSize, level, Box)
+
 		level-- //mul
+		if (level < minLevel && level < nne.LevelsToComplete(i, true)) || level < 0 {
+			if minLevel > 0 {
+				panic(errors.New(fmt.Sprintf("Level below minimum level at layer %d\n", i+1)))
+			} else {
+				panic(errors.New(fmt.Sprintf("Level below 0 at layer %d\n", i+1)))
+			}
+		}
+
 		nne.Bias[i], _ = cipherUtils.NewEncInput(
 			plainUtils.MatToArray(plainUtils.AddConst(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Bias[i]),
 				mulC), addC)),
 			InRowP, nnb.ColsP[i], level, Box)
-		if level < nne.ReLUApprox.LevelsOfAct() || (minLevel != -1 && (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel)) {
+		if (level < nne.ReLUApprox.LevelsOfAct() || (minLevel != -1 && (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel))) && level < nne.LevelsToComplete(i, true) {
 			if minLevel != -1 {
 				//distributed
 				if level < minLevel {
@@ -234,7 +271,19 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 				level = btpCapacity
 			}
 		}
-		level -= nne.ReLUApprox.LevelsOfAct() //activation
+		if i != layers {
+			var err error
+			nne.Activators[i], err = cipherUtils.NewActivator(nne.ReLUApprox, level, Box.Params.DefaultScale(), innerRows, nne.Weights[i].InnerCols, InRowP, nne.Weights[i].ColP, Box)
+			utils.ThrowErr(err)
+			level -= nne.ReLUApprox.LevelsOfAct() //activation
+			if (level < minLevel && level < nne.LevelsToComplete(i+1, true)) || level < 0 {
+				if minLevel > 0 {
+					panic(errors.New(fmt.Sprintf("Level below minimum level at layer %d\n", i+1)))
+				} else {
+					panic(errors.New(fmt.Sprintf("Level below 0 at layer %d\n", i+1)))
+				}
+			}
+		}
 	}
 	fmt.Println("Done...")
 	return nne, nil
@@ -289,10 +338,10 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 		if level == 0 {
 			fmt.Println("Level 0, Bootstrapping...")
 			fmt.Println("pre boot")
-			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			cipherUtils.DummyBootStrapBlocks(Xint, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			cipherUtils.BootStrapBlocks(Xint, Box)
 			fmt.Println("after boot")
-			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 		Xint, err = cipherUtils.BlocksC2CMul(Xint, nne.Weights[i], Box)
 		utils.ThrowErr(err)
@@ -301,7 +350,7 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 			utils.ThrowErr(err)
 			fmt.Printf("Mul ")
 			//cipherUtils.CompareBlocks(Xint, plainUtils.MultiplyBlocksByConst(XintPlain, 1/nnb.ReLUApprox.Interval), Box)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 
 		//bias
@@ -317,13 +366,14 @@ func (nne *NNEnc) EvalBatchEncrypted(nnb *NNBlock, XBatchClear *plainUtils.BMatr
 			if level < nne.ReLUApprox.LevelsOfAct() {
 				fmt.Println("Bootstrapping for Activation")
 				fmt.Println("pre boot")
-				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-				cipherUtils.DummyBootStrapBlocks(Xint, Box)
+				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+				cipherUtils.BootStrapBlocks(Xint, Box)
 				fmt.Println("after boot")
-				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 			}
 			fmt.Printf("Activation ")
-			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
+			//cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
+			nne.Activators[i].ActivateBlocks(Xint)
 			if debug {
 				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
@@ -478,6 +528,7 @@ func EvalBatchEncryptedDistributedDummy(nne *NNEnc, nnb *NNBlock,
 
 			fmt.Println("Activation")
 			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
+			//nne.Activators[i].ActivateBlocks(Xint)
 			if debug {
 				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
@@ -570,7 +621,7 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 
 		level := Xint.Blocks[0][0].Level()
 		fmt.Println("Ct level: ", level)
-		if level <= minLevel { //minLevel for Bootstrapping
+		if level <= minLevel && level < nne.LevelsToComplete(i, false) { //minLevel for Bootstrapping
 			if level < minLevel {
 				utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
 			}
@@ -590,6 +641,10 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 			}
 			wg.Wait()
 			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
+			if debug {
+				fmt.Println("After bootstrapping")
+				cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			}
 		}
 
 		Xint, err = cipherUtils.BlocksC2CMul(Xint, nne.Weights[i], Box)
@@ -599,7 +654,7 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 			utils.ThrowErr(err)
 			fmt.Println("Multiplication")
 			//cipherUtils.CompareBlocks(Xint, plainUtils.MultiplyBlocksByConst(XintPlain, 1/nnb.ReLUApprox.Interval), Box)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+			cipherUtils.PrintDebugBlocks(Xint, plainUtils.MultiplyBlocksByConst(XintPlain, 2/(nne.ReLUApprox.B-nne.ReLUApprox.A)), Box)
 		}
 		level = Xint.Blocks[0][0].Level()
 		fmt.Println("Ct level: ", level)
@@ -616,7 +671,7 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 		//skip act
 
 		if i != len(nne.Weights)-1 {
-			if level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel {
+			if (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
 				if level < minLevel {
 					utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
 				}
@@ -647,10 +702,16 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 				wg.Wait()
 
 				fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
+				if debug {
+					fmt.Println("After bootstrapping")
+					cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
+				}
 			}
 
 			fmt.Println("Activation")
-			cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
+
+			//cipherUtils.EvalPolyBlocks(Xint, nne.ReLUApprox.Poly, Box)
+			nne.Activators[i].ActivateBlocks(Xint)
 			if debug {
 				XintPlain = nnb.Activation(XintPlain)
 				//cipherUtils.CompareBlocks(Xint, XintPlain, Box)
@@ -721,5 +782,3 @@ func EvalBatchEncryptedDistributedTCP(nne *NNEnc, nnb *NNBlock,
 	fmt.Println("Corrects enc:", corrects)
 	return correctsPlain, corrects, elapsed
 }
-
-//TO DO : check how you construct the weigths

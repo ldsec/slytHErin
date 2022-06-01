@@ -249,45 +249,22 @@ func AddBlocksC2P(A *EncInput, B *PlainInput, Box CkksBox) (*EncInput, error) {
 //Evaluates a polynomial on the ciphertext
 func EvalPolyBlocks(X *EncInput, poly *ckks.Polynomial, Box CkksBox) {
 	//build map of all slots with legit values
-	/*
-		slotsIndex := make(map[int][]int)
-		idx := make([]int, X.InnerRows*X.InnerCols)
-		for i := 0; i < X.InnerRows*X.InnerCols; i++ {
-			idx[i] = i
-		}
-		slotsIndex[0] = idx
-		var wg sync.WaitGroup
-		for i := 0; i < X.RowP; i++ {
-			for j := 0; j < X.ColP; j++ {
-				wg.Add(1)
-				go func(eval ckks.Evaluator, ecd ckks.Encoder, i, j int) {
-					defer wg.Done()
-					ct, _ := eval.EvaluatePolyVector(X.Blocks[i][j], []*ckks.Polynomial{poly}, ecd, slotsIndex, X.Blocks[i][j].Scale)
-					X.Blocks[i][j] = ct
-				}(Box.Evaluator.ShallowCopy(), Box.Encoder.ShallowCopy(), i, j)
-			}
-		}
-		wg.Wait()
-	*/
-	term0 := poly.Coeffs[0]
-	term0vec := make([]complex128, X.InnerRows*X.InnerCols)
-	for i := range term0vec {
-		term0vec[i] = term0
-	}
-	term0vecEcd := ckks.NewPlaintext(Box.Params, X.Blocks[0][0].Level()-poly.Depth(), Box.Params.DefaultScale())
-	Box.Encoder.EncodeSlots(term0vec, term0vecEcd, Box.Params.LogSlots())
 
-	poly.Coeffs[0] = complex(0, 0)
+	slotsIndex := make(map[int][]int)
+	idx := make([]int, X.InnerRows*X.InnerCols)
+	for i := 0; i < X.InnerRows*X.InnerCols; i++ {
+		idx[i] = i
+	}
+	slotsIndex[0] = idx
 	var wg sync.WaitGroup
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
 			wg.Add(1)
-			go func(eval ckks.Evaluator, poly *ckks.Polynomial, term0VecEcd *ckks.Plaintext, i, j int) {
+			go func(eval ckks.Evaluator, ecd ckks.Encoder, i, j int) {
 				defer wg.Done()
-				ct, _ := eval.EvaluatePoly(X.Blocks[i][j], poly, X.Blocks[i][j].Scale)
-				eval.Add(ct, term0vecEcd, ct)
+				ct, _ := eval.EvaluatePolyVector(X.Blocks[i][j], []*ckks.Polynomial{poly}, ecd, slotsIndex, X.Blocks[i][j].Scale)
 				X.Blocks[i][j] = ct
-			}(Box.Evaluator.ShallowCopy(), poly, term0vecEcd, i, j)
+			}(Box.Evaluator.ShallowCopy(), Box.Encoder.ShallowCopy(), i, j)
 		}
 	}
 	wg.Wait()
