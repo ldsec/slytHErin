@@ -52,15 +52,9 @@ type Model struct {
 
 func softrelu(x float64) float64 {
 	// beta = 20
-	if x > -20 && x < 20 {
-		return math.Log(1 + math.Exp(x))
-	} else {
-		if x > 0 {
-			return x
-		} else {
-			return 0
-		}
-	}
+
+	return math.Log(1 + math.Exp(x))
+
 }
 
 func sigmoid(x float64) float64 {
@@ -195,20 +189,20 @@ func main() {
 	loss := &til.MeanSquared{}
 	//loss := &til.CategoricalCrossEntropy{}
 	optimizer := til.NewADAM(3e-5, 0.9, 0.999, 1e-8)
-	regularizerL1L2 := &til.L1L2Regularizer{Value: 0.0000001, L1Ratio: 0.5}
+	regularizerL1L2 := &til.L1L2Regularizer{Value: 1e-6, L1Ratio: 0.5}
 
 	layerSize := 92
-	layerNumber := 50 - 1
+	layerNumber := 20 - 1
 
 	model := til.NewModel(threads, til.Shape{imgSize, imgSize, 1}, optimizer, loss)
 
 	filterN, filterD, pad, stride := 1, 3, 0, 1
-	model.Add(til.NewConvolution(filterN, filterD, pad, stride, &til.ReLU{}, regularizerL1L2, heNormal))
+	model.Add(til.NewConvolution(filterN, filterD, pad, stride, &SoftRelu{}, regularizerL1L2, heNormal))
 
-	model.Add(til.NewDense(layerSize, &til.ReLU{}, regularizerL1L2, heNormal))
+	model.Add(til.NewDense(layerSize, &SoftRelu{}, regularizerL1L2, heNormal))
 
 	for i := 1; i < layerNumber; i++ {
-		model.Add(til.NewDense(layerSize, &til.ReLU{}, regularizerL1L2, heNormal))
+		model.Add(til.NewDense(layerSize, &SoftRelu{}, regularizerL1L2, heNormal))
 	}
 
 	model.Add(til.NewDense(classes, &til.Identity{}, regularizerL1L2, heNormal))

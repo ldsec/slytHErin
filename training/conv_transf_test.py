@@ -73,6 +73,7 @@ def activate_parallel(X, activation):
         for channel in sample:
             channel = activation(torch.from_numpy(channel)).numpy()
     return X
+    
 """
 Various tests for the linearization of the models
 """

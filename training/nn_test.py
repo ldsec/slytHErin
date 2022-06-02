@@ -76,7 +76,7 @@ def linear_eval(X,Y, serialized):
         dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
         bias.append(np.array(d['bias']['b']))
 
-    act = relu_np
+    act = soft_relu_np
 
     X = X @ conv
     for i in range(len(X)):
@@ -126,7 +126,7 @@ if __name__=="__main__":
 
 
 
-    batchsize = 512
+    batchsize = 32
     dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
     corrects = 0
 

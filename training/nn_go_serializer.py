@@ -9,6 +9,7 @@ from cryptonet import SimpleNet
 
 """
     Script to serialize nn models from go training in a json format ready to be deserialized in Go implementation 
+    Place the json file to be serialized under go training
 """
 
 os.chdir("./models")

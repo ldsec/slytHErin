@@ -24,8 +24,10 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 		eval.Rotate(img, dimIn, img)
 		eval.Add(input, img, input)
 		if dimMid < dimOut {
+			//3 x space needed
 			eval.ReplicateLog(input, dimIn*dimMid, 3, input)
 		} else {
+			// 2 x space needed
 			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
 		}
 	}
@@ -53,6 +55,7 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 	}
 
 	return
+
 }
 
 //Multiplies 2 ciphertexts, each representing a matrix
@@ -69,8 +72,10 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 		eval.Rotate(img, dimIn, img)
 		eval.Add(input, img, input)
 		if dimMid < dimOut {
+			//3 x space needed
 			eval.ReplicateLog(input, dimIn*dimMid, 3, input)
 		} else {
+			// 2 x space needed
 			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
 		}
 	}

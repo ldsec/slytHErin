@@ -11,6 +11,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/dckks"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
 	"os"
@@ -76,26 +77,28 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	*/
 	layers := 20
 
-	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 
 	nn.Init(layers)
-	batchSize := 128
-	//for input block
-	rowP := 1
-	//colP := 30 //inputs are 30x30
-	colP := 28 //if go training
-	inputInnerRows := batchSize / rowP
-	nnb, _ := nn.NewBlockNN(batchSize, rowP, colP)
 
 	// CRYPTO
 	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
 	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
-	btpCapacity := 2 //param dependent
+	btpCapacity := 4 //param dependent
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
+	//for input block
+	rowP := 1
+	//colP := 30 //inputs are 30x30
+	colP := 28   //if go training
+	InColP := 28 //if go training --> 28x28
+	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	inputInnerRows := batchSize / rowP
+	nnb, _ := nn.NewBlockNN(batchSize, rowP, colP)
+
 	// read or generate secret keys
-	keyPath := fmt.Sprintf("/root/nn%d__paramSlots%d__batch%d", layers, params.LogSlots(), batchSize)
+	keyPath := fmt.Sprintf("/francesco/nn%d__paramSlots%d__batch%d", layers, params.LogSlots(), batchSize)
 	_, err = os.OpenFile(keyPath+"_sk", os.O_RDONLY, 0755)
 	sk := new(rlwe.SecretKey)
 	rtks := new(rlwe.RotationKeySet)
@@ -130,7 +133,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	}
 
 	//load dataset
-	dataSn := data.LoadData("/root/nn_data.json")
+	dataSn := data.LoadData("/francesco/nn_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
 		fmt.Println(err)
@@ -163,7 +166,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		tot += batchSize
 		iters++
 	}
-	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
+	fmt.Println("Accuracy:", 100*float64(corrects)/float64(tot))
 	avg := float64(elapsed) / float64(iters)
 	fmt.Println("Latency (avg ms per batch):", avg)
 	fmt.Println("Latency (avg ms per sample):", avg/float64(batchSize))
@@ -188,17 +191,8 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	*/
 	layers := 20
 
-	nn := LoadNN("/root/nn" + strconv.Itoa(layers) + "_packed.json")
-	nn.Init(layers)
-
-	batchSize := 64
-	//for input block
-	InRowP := 1
-	InColP := 30 //inputs are 30x30
-	inputInnerRows := batchSize / InRowP
-	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
-
 	// CRYPTO =========================================================================================================
+	fmt.Println("Generating keys...")
 	ckksParams := ckks.DefaultParams[2]
 	//ckksParams := ckks.ParametersLiteral{
 	//	LogN:         14,
@@ -208,6 +202,7 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	//	DefaultScale: float64(2 << 30),
 	//}
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
+
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
 	skQ := kgenQ.GenSecretKey()
@@ -218,7 +213,16 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
-	parties := 3
+	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn.Init(layers)
+	//for input block
+	InRowP := 1
+	InColP := 28 //if go training --> 28x28
+	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	inputInnerRows := batchSize / InRowP
+	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
+
+	parties := 5
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
@@ -260,7 +264,7 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box, minLevel)
 
 	//Load Dataset
-	dataSn := data.LoadData("/root/nn_data.json")
+	dataSn := data.LoadData("/francesco/nn_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
 		fmt.Println(err)
@@ -317,36 +321,24 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 
 			This test uses TCP sockets for communication, on localhost
 		Runtime:
-			Latency (avg ms per batch 64): 5m12s
-			Latency (avg ms per sample): ~5s
-
-			Latency 128 batch = 7m18s -> 3.42s
+			NN20
+				Latency 146 batch = 4m59s --> 2,06s/im - 0,49 im/s
+				Latency 292 batch = 5m42s --> 1,17s/im - 0,85 im/s
+			NN50
+				Latency 146 batch = 12m39s --> - 5,20s/im - 0,19 im/s
 	*/
-	layers := 20
-
-	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
-	nn.Init(layers)
-
-	batchSize := 128
-	//for input block
-	InRowP := 1
-	//InColP := 30 //inputs are 30x30
-	InColP := 28 //if go training --> 28x28
-	inputInnerRows := batchSize / InRowP
-	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
-
 	// CRYPTO =========================================================================================================
-	//<128 bit security params
-	//ckksParams := ckks.ParametersLiteral{
-	//	LogN:         14,
-	//	LogSlots:     13,
-	//	LogQ:         []int{41, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34},
-	//	LogP:         []int{43, 43},
-	//	DefaultScale: 1 << 34,
-	//	Sigma:        rlwe.DefaultSigma,
-	//	RingType:     ring.Standard,
-	//}
-	ckksParams := ckks.PN15QP880
+
+	ckksParams := ckks.ParametersLiteral{
+		LogN:         14,
+		LogSlots:     13,
+		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
+		LogP:         []int{43, 43},
+		DefaultScale: 1 << 31,
+		Sigma:        rlwe.DefaultSigma,
+		RingType:     ring.Standard,
+	}
+	//ckksParams := ckks.PN15QP880
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 	// QUERIER
@@ -354,12 +346,24 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	skQ := kgenQ.GenSecretKey()
 	pkQ := kgenQ.GenPublicKey(skQ)
 	decQ := ckks.NewDecryptor(params, skQ)
+	layers := 50
+
+	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
+	nn.Init(layers)
+
+	//for input block
+	InRowP := 1
+	//InColP := 30 //inputs are 30x30
+	InColP := 28 //if go training --> 28x28
+	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	inputInnerRows := batchSize / InRowP
+	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
-	parties := 3
+	parties := 10
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
@@ -399,7 +403,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	// info for bootstrapping
 	var minLevel int
 	var ok bool
-	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel+1 > params.MaxLevel() {
+	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel > params.MaxLevel() {
 		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 	}
 	fmt.Printf("MaxLevel: %d\nMinLevel: %d\n", params.MaxLevel(), minLevel)
@@ -407,7 +411,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	nne, _ := nnb.NewEncNN(batchSize, InRowP, params.MaxLevel(), Box, minLevel)
 
 	//Load Dataset
-	dataSn := data.LoadData("/root/nn_data.json")
+	dataSn := data.LoadData("/francesco/nn_data.json")
 	err = dataSn.Init(batchSize)
 	if err != nil {
 		fmt.Println(err)

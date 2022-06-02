@@ -21,7 +21,7 @@ REGULAR MATRICES OPS
 v
 *********************************************/
 func TestEncMult(t *testing.T) {
-	//make sure that input dim*4 < 2^logSlots
+	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
 	LDim := []int{64, 26}
 	W0Dim := []int{26, 23}
@@ -101,25 +101,7 @@ func TestEncMult(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := []int{}
-	/*
-		for i := 1; i < len(W0); i++ {
-			rotations = append(rotations, 2*i*LDim[0])
-		}
-
-		for i := 1; i < len(W1); i++ {
-			rotations = append(rotations, 2*i*LDim[0])
-		}
-
-		rotations = append(rotations, len(L))
-		rotations = append(rotations, len(W0))
-		rotations = append(rotations, len(W1))
-		rotations = append(rotations, -len(W0)*len(L))
-		rotations = append(rotations, -2*len(W0)*len(L))
-		rotations = append(rotations, -len(W1)*len(L))
-		rotations = append(rotations, -2*len(W1)*len(L))
-	*/
-	rotations = GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
+	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 	enc := ckks.NewEncryptor(params, sk)
