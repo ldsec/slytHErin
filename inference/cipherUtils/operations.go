@@ -95,7 +95,7 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 
 	}
 
-	// Rescale and relinearize
+	// Rescale
 	eval.Relinearize(res, res)
 	eval.Rescale(res, params.DefaultScale(), res)
 

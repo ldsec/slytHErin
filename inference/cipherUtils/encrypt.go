@@ -27,6 +27,7 @@ func EncodeInput(level int, w [][]float64, Box CkksBox) *ckks.Plaintext {
 	return pt
 }
 
+//takes level, weight matrix, rows of input matrix to be multiplied, and box. Returns encrypted weight in diagonal form
 func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*ckks.Ciphertext) {
 	params := Box.Params
 	ecd := Box.Encoder
@@ -54,6 +55,7 @@ func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*
 	return
 }
 
+//takes level, weight matrix, rows of input matrix to be multiplied, and box. Returns plaintext weight in diagonal form
 func EncodeWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ptW []*ckks.Plaintext) {
 	params := Box.Params
 	ecd := Box.Encoder

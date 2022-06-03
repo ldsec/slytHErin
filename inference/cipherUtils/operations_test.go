@@ -144,7 +144,7 @@ func TestEncMult(t *testing.T) {
 }
 
 func TestEncPlainMult(t *testing.T) {
-	//make sure that input dim*4 < 2^logSlots
+	//make sure that input dim*2 < 2^logSlots
 	//ct x pt
 	LDim := []int{64, 29}
 	W0Dim := []int{29, 13}
@@ -228,16 +228,8 @@ func TestEncPlainMult(t *testing.T) {
 
 	// Schemes parameters are created from scratc
 
-	//ckksParams := ckks.PN14QP438
-	//params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral(ckksParams))
-	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN:         15,
-		LogQ:         []int{60, 60, 60, 40, 40, 40, 40, 40, 40},
-		LogP:         []int{61, 61, 61},
-		Sigma:        rlwe.DefaultSigma,
-		LogSlots:     14,
-		DefaultScale: float64(1 << 40),
-	})
+	ckksParams := ckks.PN14QP438
+	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral(ckksParams))
 
 	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)
@@ -283,14 +275,13 @@ func TestEncPlainMult(t *testing.T) {
 
 	now := time.Now()
 	B := Cipher2PMul(ctA, len(L), len(W0), len(W0[0]), ptW0, true, true, Box)
-	// -> Activate
 	fmt.Println("Done:", time.Since(now))
 
-	now = time.Now()
 	C := Cipher2PMul(B, len(L), len(W1), len(W1[0]), ptW1, true, true, Box)
-	// -> Activate
 	fmt.Println("Done:", time.Since(now))
+
 	D := Cipher2PMul(C, len(L), len(W2), len(W2[0]), ptW2, true, true, Box)
+	fmt.Println("Finish:", time.Since(now))
 	resPt := dec.DecryptNew(D)
 	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
 	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W2Dim[1]]
@@ -309,11 +300,98 @@ func TestEncPlainMult(t *testing.T) {
 	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
 }
 
+func TestC2PMul_withLinTransform(t *testing.T) {
+	//ct x pt
+	LDim := []int{64, 29}
+	W0Dim := []int{29, 13}
+	W1Dim := []int{13, 10}
+	W2Dim := []int{10, 10}
+
+	L := plainUtils.RandMatrix(LDim[0], LDim[1])
+	W0 := plainUtils.RandMatrix(W0Dim[0], W0Dim[1])
+	W1 := plainUtils.RandMatrix(W1Dim[0], W1Dim[1])
+	W2 := plainUtils.RandMatrix(W2Dim[0], W2Dim[1])
+
+	ckksParams := ckks.PN14QP438
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral(ckksParams))
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk, 2)
+
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+	ecd := ckks.NewEncoder(params)
+
+	level := params.MaxLevel()
+	W0f, nonZeroDiags := FormatWeightsAsMap(plainUtils.MatToArray(W0), LDim[0])
+	W0Lt := ckks.NewLinearTransform(params, nonZeroDiags, level, params.LogSlots(), 2)
+	W0Lt.Encode(ecd, W0f, params.QiFloat64(level))
+	level--
+	W1f, nonZeroDiags := FormatWeightsAsMap(plainUtils.MatToArray(W1), LDim[0])
+	W1Lt := ckks.NewLinearTransform(params, nonZeroDiags, level, params.LogSlots(), 2)
+	W1Lt.Encode(ecd, W1f, params.QiFloat64(level))
+	level--
+	W2f, nonZeroDiags := FormatWeightsAsMap(plainUtils.MatToArray(W2), LDim[0])
+	W2Lt := ckks.NewLinearTransform(params, nonZeroDiags, level, params.LogSlots(), 2)
+	W2Lt.Encode(ecd, W2f, params.QiFloat64(level))
+
+	rotations := W0Lt.Rotations()
+	rotations = append(rotations, W1Lt.Rotations()...)
+	rotations = append(rotations, W2Lt.Rotations()...)
+	rotations = append(rotations, LDim[0])
+	rotations = append(rotations, -LDim[0]*W0Dim[0])
+	rotations = append(rotations, -LDim[0]*W1Dim[0])
+	rotations = append(rotations, -LDim[0]*W2Dim[0])
+	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks})
+
+	Box := CkksBox{
+		Params:    params,
+		Encoder:   ecd,
+		Evaluator: eval,
+		Decryptor: dec,
+		Encryptor: enc,
+	}
+
+	ctA := EncryptInput(params.MaxLevel(), plainUtils.MatToArray(L), Box)
+
+	start := time.Now()
+
+	ctB := eval.LinearTransformNew(ctA, W0Lt)[0]
+	eval.Rescale(ctB, params.DefaultScale(), ctB)
+	fmt.Println("Done:", time.Since(start))
+
+	ctC := eval.LinearTransformNew(ctB, W1Lt)[0]
+	eval.Rescale(ctC, params.DefaultScale(), ctC)
+	fmt.Println("Done:", time.Since(start))
+
+	ctD := eval.LinearTransformNew(ctC, W2Lt)[0]
+	eval.Rescale(ctD, params.DefaultScale(), ctD)
+	fmt.Println("Finish:", time.Since(start))
+	resPt := dec.DecryptNew(ctD)
+	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
+	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W2Dim[1]]
+	var tmp mat.Dense
+	tmp.Mul(L, W0)
+	PrintDebug(ctB, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp))), Box)
+	var tmp2 mat.Dense
+	tmp2.Mul(&tmp, W1)
+	PrintDebug(ctC, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp2))), Box)
+	var res mat.Dense
+	res.Mul(&tmp2, W2)
+	PrintDebug(ctD, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&res))), Box)
+	//fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
+	//fmt.Println("test:", resReal)
+	//fmt.Println("________________-")
+	fmt.Println(plainUtils.Distance(plainUtils.RowFlatten(plainUtils.TransposeDense(&res)), resReal))
+
+}
+
 func TestEvalPoly(t *testing.T) {
 	//Evaluates a polynomial on ciphertext
 	LDim := []int{64, 64}
 	L := plainUtils.RandMatrix(LDim[0], LDim[1])
-	L.Set(0, 0, 32.0)
 	ckksParams := ckks.DefaultParams[3]
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	if err != nil {

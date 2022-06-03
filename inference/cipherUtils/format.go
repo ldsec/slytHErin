@@ -26,7 +26,7 @@ func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 			}
 		}
 	}
-
+	//odd
 	if len(w)&1 == 1 {
 
 		idx := len(m) - 1
@@ -41,6 +41,34 @@ func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 		}
 	}
 
+	return
+}
+
+func FormatWeightsAsMap(w [][]float64, leftdim int) (m map[int][]float64, nonZeroDiags []int) {
+	/*
+		Format weights in diagonal form for multiplication algorithm
+		Additionally use the complex trick to effectively divide by half the
+		size of the matrix to be multiplied
+		refer to page 3: https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
+	*/
+	m = make(map[int][]float64)
+	nonZeroDiags = make([]int, len(w))
+
+	for i := 0; i < len(w); i++ {
+
+		d := make([]float64, leftdim*len(w[0]))
+		nonZeroDiags[i] = i
+
+		for j := 0; j < len(w[0]); j++ {
+
+			cReal := w[(i+j)%len(w)][j]
+
+			for k := 0; k < leftdim; k++ {
+				d[j*leftdim+k] = cReal
+			}
+		}
+		m[i] = d
+	}
 	return
 }
 
