@@ -122,7 +122,7 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 	denseBiasMatrices := make([]*mat.Dense, layers)
 	denseMatricesBlock := make([]*plainUtils.BMatrix, layers)
 	denseBiasMatricesBlock := make([]*plainUtils.BMatrix, layers)
-
+	var err error
 	for i := 0; i < layers; i++ {
 		denseMatrices[i] = utils.BuildKernelMatrix(nn.Dense[i].Weight)
 		denseBiasMatrices[i] = utils.BuildBiasMatrix(nn.Dense[i].Bias, plainUtils.NumCols(denseMatrices[i]), batchSize)
@@ -130,18 +130,22 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 			//840x92 --> 30x23
 			//denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 28, 4)
 			//if go training 676x92 --> 26x23
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 26, 4)
+			denseMatricesBlock[i], err = plainUtils.PartitionMatrix(denseMatrices[i], 26, 4)
+			utils.ThrowErr(err)
 		} else if i == layers-1 {
 			//92x10 --> 23x10
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 4, 1)
+			denseMatricesBlock[i], err = plainUtils.PartitionMatrix(denseMatrices[i], 4, 1)
+			utils.ThrowErr(err)
 		} else {
 			//92x92 --> 23x23
-			denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 4, 4)
+			denseMatricesBlock[i], err = plainUtils.PartitionMatrix(denseMatrices[i], 4, 4)
+			utils.ThrowErr(err)
 		}
-		denseBiasMatricesBlock[i], _ = plainUtils.PartitionMatrix(
+		denseBiasMatricesBlock[i], err = plainUtils.PartitionMatrix(
 			denseBiasMatrices[i],
 			rowP,
 			denseMatricesBlock[i].ColP)
+		utils.ThrowErr(err)
 	}
 
 	weightMatrices := []*mat.Dense{convM}
@@ -214,7 +218,7 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 	level := maxLevel
 
 	fmt.Println("Creating weights encrypted block matrices...")
-
+	var err error
 	for i := 0; i < layers+1; i++ {
 		if ((level <= minLevel && minLevel != -1) || level == 0) && level < nne.LevelsToComplete(i, false) {
 			//bootstrap
@@ -240,11 +244,11 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 			mulC = 1.0
 			addC = 0.0
 		}
-		nne.Weights[i], _ = cipherUtils.NewEncWeightDiag(
+		nne.Weights[i], err = cipherUtils.NewEncWeightDiag(
 			plainUtils.MatToArray(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Weights[i]),
 				mulC)),
-			nnb.RowsP[i], nnb.ColsP[i], batchSize, level, Box)
-
+			nnb.RowsP[i], nnb.ColsP[i], innerRows, level, Box)
+		utils.ThrowErr(err)
 		level-- //mul
 		if (level < minLevel && level < nne.LevelsToComplete(i, true)) || level < 0 {
 			if minLevel > 0 {
@@ -254,10 +258,11 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 			}
 		}
 
-		nne.Bias[i], _ = cipherUtils.NewEncInput(
+		nne.Bias[i], err = cipherUtils.NewEncInput(
 			plainUtils.MatToArray(plainUtils.AddConst(plainUtils.MulByConst(plainUtils.ExpandBlocks(nnb.Bias[i]),
 				mulC), addC)),
 			InRowP, nnb.ColsP[i], level, Box)
+		utils.ThrowErr(err)
 		if (level < nne.ReLUApprox.LevelsOfAct() || (minLevel != -1 && (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel))) && level < nne.LevelsToComplete(i, true) {
 			if minLevel != -1 {
 				//distributed

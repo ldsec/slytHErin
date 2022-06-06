@@ -189,7 +189,10 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	default:
 		return nil, errors.New("Unknown protocol")
 	}
-	entry, _ := lmst.ProtoBuf.Load(ctId)
+	entry, ok := lmst.ProtoBuf.Load(ctId)
+	if !ok {
+		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
+	}
 	res := <-entry.(*DummyProtocol).FeedbackChan
 	lmst.ProtoBuf.Delete(ctId)
 	return res, nil
@@ -218,7 +221,10 @@ func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
 //Runs the PCKS protocol from master and sends messages to players
 func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) {
 	//create protocol instance
-	entry, _ := lmst.ProtoBuf.Load(ctId)
+	entry, ok := lmst.ProtoBuf.Load(ctId)
+	if !ok {
+		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
+	}
 	entry.(*DummyProtocol).muxProto.Lock()
 	//proto := entry.(*DummyProtocol).Proto.(*dckks.PCKSProtocol)
 	share := proto.AllocateShare(ct.Level())
@@ -228,8 +234,10 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	entry.(*DummyProtocol).muxProto.Unlock()
 	lmst.ProtoBuf.Store(ctId, entry.(*DummyProtocol))
 
-	dat, _ := ct.Value[1].MarshalBinary()
-	dat2, _ := pkQ.MarshalBinary()
+	dat, err := ct.Value[1].MarshalBinary()
+	utils.ThrowErr(err)
+	dat2, err := pkQ.MarshalBinary()
+	utils.ThrowErr(err)
 	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
 	msg.Extension = DummyPCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
@@ -257,15 +265,19 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 //Runs the Refresh protocol from master and sends messages to players
 func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphertext, crp drlwe.CKSCRP, minLevel int, logBound int, ctId int) {
 	//setup
-	entry, _ := lmst.ProtoBuf.Load(ctId)
+	entry, ok := lmst.ProtoBuf.Load(ctId)
+	if !ok {
+		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
+	}
 	share := proto.AllocateShare(minLevel, lmst.Params.MaxLevel())
 	proto.GenShare(lmst.sk, logBound, lmst.Params.LogSlots(), ct.Value[1], ct.Scale, crp, share)
 	entry.(*DummyProtocol).Shares[0] = share
 	entry.(*DummyProtocol).Completion++
 	lmst.ProtoBuf.Store(ctId, entry.(*DummyProtocol))
-	dat, _ := ct.Value[1].MarshalBinary()
+	dat, err := ct.Value[1].MarshalBinary()
+	utils.ThrowErr(err)
 	var dat2 []byte
-	var err error
+
 	if dat2, err = MarshalCrp(crp); err != nil {
 		utils.ThrowErr(err)
 	}
@@ -309,12 +321,13 @@ func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
 	if !ok {
 		return
 	}
+	entry.(*DummyProtocol).muxProto.Lock()
 	proto := entry.(*DummyProtocol).Protocol.(*dckks.PCKSProtocol)
 	ct := entry.(*DummyProtocol).Ct
-	entry.(*DummyProtocol).muxProto.Lock()
 
 	share := new(drlwe.PCKSShare)
-	share.UnmarshalBinary(resp.Share)
+	err := share.UnmarshalBinary(resp.Share)
+	utils.ThrowErr(err)
 	entry.(*DummyProtocol).Shares[resp.PlayerId] = share
 	entry.(*DummyProtocol).Completion++
 	if entry.(*DummyProtocol).Completion == lmst.Parties {
@@ -329,8 +342,8 @@ func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
 		proto.KeySwitch(ct, entry.(*DummyProtocol).Shares[0].(*drlwe.PCKSShare), ctSw)
 		entry.(*DummyProtocol).FeedbackChan <- ctSw
 	}
-	entry.(*DummyProtocol).muxProto.Unlock()
 	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*DummyProtocol))
+	entry.(*DummyProtocol).muxProto.Unlock()
 }
 
 //Listen for shares and Finalize
@@ -344,12 +357,14 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 	if !ok {
 		return
 	}
+	entry.(*DummyProtocol).muxProto.Lock()
 	proto := entry.(*DummyProtocol).Protocol.(*dckks.RefreshProtocol)
 	crp := entry.(*DummyProtocol).Crp
 	ct := entry.(*DummyProtocol).Ct
-	entry.(*DummyProtocol).muxProto.Lock()
+
 	share := new(dckks.RefreshShare)
-	share.UnmarshalBinary(resp.Share)
+	err := share.UnmarshalBinary(resp.Share)
+	utils.ThrowErr(err)
 	entry.(*DummyProtocol).Shares[resp.PlayerId] = share
 	entry.(*DummyProtocol).Completion++
 	if entry.(*DummyProtocol).Completion == lmst.Parties {
@@ -364,8 +379,9 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 		proto.Finalize(ct, lmst.Params.LogSlots(), crp, entry.(*DummyProtocol).Shares[0].(*dckks.RefreshShare), ctFresh)
 		entry.(*DummyProtocol).FeedbackChan <- ctFresh
 	}
-	entry.(*DummyProtocol).muxProto.Unlock()
+
 	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*DummyProtocol))
+	entry.(*DummyProtocol).muxProto.Unlock()
 }
 
 //PLAYERS PROTOCOL
@@ -396,7 +412,8 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 		//sum := md5.Sum(netData)
 		//fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
 		var msg DummyProtocolMsg
-		json.Unmarshal(netData, &msg)
+		err = json.Unmarshal(netData, &msg)
+		utils.ThrowErr(err)
 		switch msg.Type {
 		case TYPES[0]: //PubKeySwitch
 			lp.RunPubKeySwitch(c, msg)
@@ -418,9 +435,11 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	var ct ring.Poly
 	var pk rlwe.PublicKey
 	var Ext DummyPCKSExt
-	jsonString, _ := json.Marshal(msg.Extension)
-	json.Unmarshal(jsonString, &Ext)
-	err := ct.UnmarshalBinary(msg.Ct)
+	jsonString, err := json.Marshal(msg.Extension)
+	utils.ThrowErr(err)
+	err = json.Unmarshal(jsonString, &Ext)
+	utils.ThrowErr(err)
+	err = ct.UnmarshalBinary(msg.Ct)
 	utils.ThrowErr(err)
 	err = pk.UnmarshalBinary(Ext.Pk)
 	utils.ThrowErr(err)
@@ -440,10 +459,13 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	var ct ring.Poly
 	//fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)
-	ct.UnmarshalBinary(msg.Ct)
+	err := ct.UnmarshalBinary(msg.Ct)
+	utils.ThrowErr(err)
 	var Ext DummyRefreshExt
-	jsonString, _ := json.Marshal(msg.Extension)
-	json.Unmarshal(jsonString, &Ext)
+	jsonString, err := json.Marshal(msg.Extension)
+	utils.ThrowErr(err)
+	err = json.Unmarshal(jsonString, &Ext)
+	utils.ThrowErr(err)
 	crp, err := UnMarshalCrp(Ext.Crp)
 	precision := Ext.Precision
 	scale := Ext.Scale

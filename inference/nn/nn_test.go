@@ -338,7 +338,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 		Sigma:        rlwe.DefaultSigma,
 		RingType:     ring.Standard,
 	}
-	//ckksParams := ckks.PN15QP880
+	ckksParams = ckks.PN15QP880
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 	// QUERIER
@@ -346,7 +346,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	skQ := kgenQ.GenSecretKey()
 	pkQ := kgenQ.GenPublicKey(skQ)
 	decQ := ckks.NewDecryptor(params, skQ)
-	layers := 50
+	layers := 20
 
 	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
@@ -355,7 +355,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	InRowP := 1
 	//InColP := 30 //inputs are 30x30
 	InColP := 28 //if go training --> 28x28
-	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	batchSize := InRowP * cipherUtils.GetOptimalInnerRows(InColP, params)
 	inputInnerRows := batchSize / InRowP
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
@@ -363,7 +363,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
-	parties := 10
+	parties := 4
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
