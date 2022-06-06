@@ -125,23 +125,24 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
+	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
 		utils.ThrowErr(err)
 		return nil, err
 	}
 	WEnc := new(EncWeightDiag)
-	WEnc.RowP = rowP
-	WEnc.ColP = colP
+	WEnc.RowP = Wbt.RowP
+	WEnc.ColP = Wbt.ColP
 	WEnc.LeftDim = leftInnerDim
 	WEnc.InnerRows = Wb.InnerRows
 	WEnc.InnerCols = Wb.InnerCols
-	WEnc.Blocks = make([][]*EncDiagMat, rowP)
-	for i := 0; i < rowP; i++ {
-		WEnc.Blocks[i] = make([]*EncDiagMat, colP)
-		for j := 0; j < colP; j++ {
+	WEnc.Blocks = make([][]*EncDiagMat, Wbt.RowP)
+	for i := 0; i < Wbt.RowP; i++ {
+		WEnc.Blocks[i] = make([]*EncDiagMat, Wbt.ColP)
+		for j := 0; j < Wbt.ColP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
 			WEnc.Blocks[i][j] = new(EncDiagMat)
-			WEnc.Blocks[i][j].Diags = EncryptWeights(level, plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
+			WEnc.Blocks[i][j].Diags = EncryptWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftInnerDim, Box)
 			WEnc.NumDiags = len(WEnc.Blocks[i][j].Diags)
 		}
 	}
@@ -152,23 +153,24 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Bo
 func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wm := plainUtils.NewDense(W)
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
+	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
 		utils.ThrowErr(err)
 		return nil, err
 	}
 	Wp := new(PlainWeightDiag)
-	Wp.RowP = rowP
-	Wp.ColP = colP
+	Wp.RowP = Wbt.RowP
+	Wp.ColP = Wbt.ColP
 	Wp.LeftDim = leftInnerDim
-	Wp.InnerRows = Wb.InnerRows
-	Wp.InnerCols = Wb.InnerCols
-	Wp.Blocks = make([][]*PlainDiagMat, rowP)
-	for i := 0; i < rowP; i++ {
-		Wp.Blocks[i] = make([]*PlainDiagMat, colP)
-		for j := 0; j < colP; j++ {
+	Wp.InnerRows = Wbt.InnerRows
+	Wp.InnerCols = Wbt.InnerCols
+	Wp.Blocks = make([][]*PlainDiagMat, Wbt.RowP)
+	for i := 0; i < Wbt.RowP; i++ {
+		Wp.Blocks[i] = make([]*PlainDiagMat, Wbt.ColP)
+		for j := 0; j < Wbt.ColP; j++ {
 			//leftDim has to be the rows of EncInput sub matrices
 			Wp.Blocks[i][j] = new(PlainDiagMat)
-			Wp.Blocks[i][j].Diags = EncodeWeights(level, plainUtils.MatToArray(Wb.Blocks[i][j]), leftInnerDim, Box)
+			Wp.Blocks[i][j].Diags = EncodeWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftInnerDim, Box)
 			Wp.NumDiags = len(Wp.Blocks[i][j].Diags)
 		}
 	}

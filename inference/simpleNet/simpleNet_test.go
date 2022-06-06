@@ -367,7 +367,7 @@ func TestEvalDataEncModelClearCompressed_withActivators(t *testing.T) {
 
 	ckksParams := ckks.ParametersLiteral{
 		LogN:         13,
-		LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 3
+		LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 13
 		LogP:         []int{33},
 		Sigma:        rlwe.DefaultSigma,
 		LogSlots:     12,
@@ -444,13 +444,13 @@ func TestEvalDataEncModelClearCompressed_withActivators(t *testing.T) {
 	w0 := plainUtils.MulByConst(&compressed, 1.0/sn.ReLUApprox.Interval)
 	weightsBlock[0], _ = cipherUtils.NewPlainWeightDiag(
 		plainUtils.MatToArray(w0),
-		colP, 10, batchSize, params.MaxLevel(), Box)
+		colP, 10, inputInnerRows, params.MaxLevel(), Box)
 	activators[0], err = cipherUtils.NewActivator(sn.ReLUApprox, params.MaxLevel()-1, params.DefaultScale(), batchSize/rowP, weightsBlock[0].InnerCols, rowP, weightsBlock[0].ColP, Box)
 	utils.ThrowErr(err)
 	w1 := plainUtils.MulByConst(weightMatrices[2], 1.0/sn.ReLUApprox.Interval)
 	weightsBlock[1], err = cipherUtils.NewPlainWeightDiag(
 		plainUtils.MatToArray(w1),
-		10, 1, batchSize, params.MaxLevel()-1-2, Box)
+		10, 1, inputInnerRows, params.MaxLevel()-1-2, Box)
 	activators[1], err = cipherUtils.NewActivator(sn.ReLUApprox, params.MaxLevel()-1-2-1, params.DefaultScale(), batchSize/rowP, weightsBlock[1].InnerCols, rowP, weightsBlock[1].ColP, Box)
 	utils.ThrowErr(err)
 	utils.ThrowErr(err)

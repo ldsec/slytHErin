@@ -7,7 +7,6 @@ import (
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
-	"gonum.org/v1/gonum/mat"
 	"sync"
 )
 
@@ -20,12 +19,14 @@ For reference about the algorithms, check the plaintext equivalent in plainUtils
 func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, error) {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	var err error
-	if X.ColP != W.RowP {
+	//W is block-transposed
+	if X.ColP != W.ColP {
 		err = errors.New("Block partitions not compatible for multiplication")
 	}
 	q := X.RowP
-	r := W.ColP
-	s := W.RowP
+	//r and s are swapped cause W is block-transposed
+	r := W.RowP
+	s := W.ColP
 
 	dimIn := X.InnerRows
 	dimMid := W.InnerRows
@@ -33,7 +34,7 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 
 	E := new(EncInput)
 	E.RowP = X.RowP
-	E.ColP = W.ColP
+	E.ColP = W.RowP
 	E.InnerRows = X.InnerRows
 	E.InnerCols = W.InnerCols
 	E.Blocks = make([][]*ckks.Ciphertext, q)
@@ -43,23 +44,21 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
 		wgi.Add(1)
-
-		go func(i int) {
+		Xrow := X.Blocks[i]
+		go func(i int, Xrow []*ckks.Ciphertext) {
 			defer wgi.Done()
 			var wgj sync.WaitGroup
 			for j := 0; j < r; j++ {
 
-				accumulatorChan := make(chan *ckks.Ciphertext)
-				accumulatorPlainChan := make(chan *mat.Dense)
-				done := make(chan struct{})
-				donePlain := make(chan struct{})
 				wgj.Add(1)
-
-				go func(j int, accumulatorChan chan *ckks.Ciphertext, accumulatorChanPlain chan *mat.Dense, done, donePlain chan struct{}) {
+				Wcol := W.Blocks[j]
+				go func(j int, Wcol []*PlainDiagMat) {
 					defer wgj.Done()
+					accumulatorChan := make(chan *ckks.Ciphertext)
+					done := make(chan struct{}, s-1)
 					for k := 0; k < s; k++ {
-						x := X.Blocks[i][k].CopyNew()
-						w := W.Blocks[k][j].Diags
+						x := Xrow[k].CopyNew()
+						w := Wcol[k].Diags
 						//ckks.stuff are not thread safe -> recreate on the flight
 						box := CkksBox{
 							Params:    Box.Params,
@@ -87,10 +86,10 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 						}(x, w, k, box)
 					}
 					<-done
-				}(j, accumulatorChan, accumulatorPlainChan, done, donePlain)
+				}(j, Wcol)
 			}
 			wgj.Wait()
-		}(i)
+		}(i, Xrow)
 	}
 	wgi.Wait()
 	utils.ThrowErr(err)
@@ -101,7 +100,8 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error) {
 	//multiplies 2 block matrices, both encrypted
 	var err error
-	if X.ColP != W.RowP {
+	//W is block-transposed
+	if X.ColP != W.ColP {
 		err = errors.New("Block partitions not compatible for multiplication")
 		utils.ThrowErr(err)
 	}
@@ -110,8 +110,9 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 		utils.ThrowErr(err)
 	}
 	q := X.RowP
-	r := W.ColP
-	s := W.RowP
+	//r and s swapped -> W is block tranposed
+	r := W.RowP
+	s := W.ColP
 
 	dimIn := X.InnerRows
 	dimMid := W.InnerRows
@@ -119,7 +120,7 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 
 	E := new(EncInput)
 	E.RowP = X.RowP
-	E.ColP = W.ColP
+	E.ColP = W.RowP //W is block-transposed
 	E.InnerRows = X.InnerRows
 	E.InnerCols = W.InnerCols
 	E.Blocks = make([][]*ckks.Ciphertext, q)
@@ -129,24 +130,21 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
 		wgi.Add(1)
-
-		go func(i int) {
+		Xrow := X.Blocks[i]
+		go func(i int, Xrow []*ckks.Ciphertext) {
 			defer wgi.Done()
 			var wgj sync.WaitGroup
 			for j := 0; j < r; j++ {
 
-				accumulatorChan := make(chan *ckks.Ciphertext)
-				accumulatorPlainChan := make(chan *mat.Dense)
-				done := make(chan struct{})
-				donePlain := make(chan struct{})
 				wgj.Add(1)
-
-				go func(j int, accumulatorChan chan *ckks.Ciphertext, accumulatorChanPlain chan *mat.Dense, done, donePlain chan struct{}) {
+				Wcol := W.Blocks[j]
+				go func(j int, Wcol []*EncDiagMat) {
 					defer wgj.Done()
+					accumulatorChan := make(chan *ckks.Ciphertext)
+					done := make(chan struct{}, s-1)
 					for k := 0; k < s; k++ {
-						x := X.Blocks[i][k].CopyNew()
-						w := W.Blocks[k][j].Diags
-
+						x := Xrow[k].CopyNew()
+						w := Wcol[k].Diags
 						//ckks.stuff are not thread safe -> recreate on the flight
 						box := CkksBox{
 							Params:    Box.Params,
@@ -174,10 +172,10 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 						}(x, w, k, box)
 					}
 					<-done
-				}(j, accumulatorChan, accumulatorPlainChan, done, donePlain)
+				}(j, Wcol)
 			}
 			wgj.Wait()
-		}(i)
+		}(i, Xrow)
 	}
 	wgi.Wait()
 	utils.ThrowErr(err)
