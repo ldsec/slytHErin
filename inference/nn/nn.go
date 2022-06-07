@@ -61,8 +61,8 @@ type ApproxParams struct {
 	deg  int
 }
 
-var NN20Params = ApproxParams{a: -30, b: 30, deg: 63}
-var NN20Params_CentralizedBtp = ApproxParams{a: -30, b: 30, deg: 15} //deg needs to be < residual capacity
+var NN20Params = ApproxParams{a: -35, b: 35, deg: 63}
+var NN20Params_CentralizedBtp = ApproxParams{a: -35, b: 35, deg: 3} //deg needs to be < residual capacity
 var NN50Params = ApproxParams{a: -55, b: 55, deg: 63}
 
 //computes how many levels are needed to complete the pipeline
@@ -212,7 +212,12 @@ func (nnb *NNBlock) NewEncNN(batchSize, InRowP, btpCapacity int, Box cipherUtils
 			nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
 		}
 	} else if layers == 50 {
-		nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN50Params.a, NN50Params.b, NN50Params.deg)
+		if minLevel != -1 {
+			//distributed
+			nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN50Params.a, NN50Params.b, NN50Params.deg)
+		} else {
+			nne.ReLUApprox = utils.InitActivationCheby(nnb.ActName, NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+		}
 	}
 	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel

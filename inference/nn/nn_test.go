@@ -75,16 +75,16 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		_____________
 		5.009s/sample
 	*/
-	layers := 20
+	layers := 50
 
 	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 
 	nn.Init(layers)
 
 	// CRYPTO
-	ckksParams := bootstrapping.DefaultParametersSparse[3].SchemeParams
-	btpParams := bootstrapping.DefaultParametersSparse[3].BootstrappingParams
-	btpCapacity := 4 //param dependent
+	ckksParams := bootstrapping.N15QP768H192H32.SchemeParams
+	btpParams := bootstrapping.N15QP768H192H32.BootstrappingParams
+	btpCapacity := 2 //param dependent
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
@@ -329,16 +329,25 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	*/
 	// CRYPTO =========================================================================================================
 
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         14,
+	//	LogSlots:     13,
+	//	LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
+	//	LogP:         []int{43, 43},
+	//	DefaultScale: 1 << 31,
+	//	Sigma:        rlwe.DefaultSigma,
+	//	RingType:     ring.Standard,
+	//}
 	ckksParams := ckks.ParametersLiteral{
-		LogN:         14,
-		LogSlots:     13,
-		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
-		LogP:         []int{43, 43},
+		LogN:         15,
+		LogSlots:     14,
+		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
+		LogP:         []int{43, 43, 43},
 		DefaultScale: 1 << 31,
 		Sigma:        rlwe.DefaultSigma,
 		RingType:     ring.Standard,
 	}
-	ckksParams = ckks.PN15QP880
+
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 	// QUERIER
@@ -363,7 +372,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
-	parties := 4
+	parties := 3
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
@@ -422,11 +431,11 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	correctsPlain := 0
 	tot := 0
 	iters := 0
-	maxIters := 10
+	maxIters := 1
 	debug := true
 	var elapsed int64
 	//Start Inference run
-	fmt.Println("Starting inference on dataset...")
+	fmt.Printf("Starting inference on dataset...\nlayers: %d parties: %d params: %d\n\n", layers, parties, params.LogN())
 	for true {
 		Xbatch, Y, err := dataSn.Batch()
 		if err != nil || iters == maxIters {

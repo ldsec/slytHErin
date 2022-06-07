@@ -79,20 +79,26 @@ def linear_eval(X,Y, serialized):
     act = soft_relu_np
 
     X = X @ conv
+    
     for i in range(len(X)):
         X[i] += conv_bias
+    
     max_tmp = np.abs(X).max()
     if max_tmp > max:
         max = max_tmp
     X = act(X)
+    
     iter = 0
     for d,b in zip(dense, bias):
         X = X @ d
+        
         for i in range(len(X)):
             X[i] = X[i] + b
+        
         max_tmp = np.abs(X).max()
         if max_tmp > max:
             max = max_tmp
+        
         if iter != len(dense)-1:
             X = act(X)
         iter += 1

@@ -142,8 +142,11 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	player.Params = params
 	player.Id = id
 
-	player.Addr, _ = net.ResolveTCPAddr("tcp", addr)
-	player.Conn, _ = net.ListenTCP("tcp", player.Addr)
+	var err error
+	player.Addr, err = net.ResolveTCPAddr("tcp", addr)
+	utils.ThrowErr(err)
+	player.Conn, err = net.ListenTCP("tcp", player.Addr)
+	utils.ThrowErr(err)
 	return player, nil
 }
 
@@ -186,6 +189,9 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 			FeedbackChan: make(chan *ckks.Ciphertext),
 		})
 		go lmst.RunRefresh(protocol.ShallowCopy(), ct, crp, minLevel, logBound, ctId)
+	case TYPES[2]:
+		lmst.RunEnd()
+		return nil, nil
 	default:
 		return nil, errors.New("Unknown protocol")
 	}
@@ -310,6 +316,26 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	}
 }
 
+func (lmst *LocalMaster) RunEnd() {
+	msg := DummyProtocolMsg{Type: TYPES[2], Id: 0, Ct: nil}
+	msg.Extension = struct{}{}
+	buf, err := json.Marshal(msg)
+	utils.ThrowErr(err)
+
+	// send message and close
+	for i := 1; i < lmst.Parties; i++ {
+		//fmt.Printf("[*] Master -- Sending end to %d. \n\n", i)
+		addr := lmst.PartiesAddr[i]
+		c, err := net.DialTCP("tcp", nil, addr)
+		utils.ThrowErr(err)
+		go func(c *net.TCPConn, buf []byte) {
+			defer c.Close()
+			err = WriteTo(c, buf)
+			utils.ThrowErr(err)
+		}(c, buf)
+	}
+}
+
 //Listen for shares and aggregates
 func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
 	if resp.PlayerId == 0 {
@@ -392,7 +418,8 @@ func (lp *LocalPlayer) Listen() {
 	for {
 		c, err := lp.Conn.Accept()
 		if err != nil {
-			utils.ThrowErr(err)
+			//player is ending
+			return
 		}
 		//fmt.Printf("[+] Player %d accepted connection\n\n", lp.Id)
 		go lp.Dispatch(c)
@@ -408,7 +435,9 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 			c.Close()
 			break
 		}
+
 		utils.ThrowErr(err)
+
 		//sum := md5.Sum(netData)
 		//fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
 		var msg DummyProtocolMsg
@@ -420,8 +449,8 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 		case TYPES[1]: //Refresh
 			lp.RunRefresh(c, msg)
 		case TYPES[2]: //End
-			lp.End()
-			break
+			lp.End(c)
+			return
 		default:
 			panic(errors.New("Unknown Protocol from Master"))
 		}
@@ -486,6 +515,9 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	utils.ThrowErr(err)
 }
 
-func (lp *LocalPlayer) End() {
-
+func (lp *LocalPlayer) End(c net.Conn) {
+	//fmt.Printf("[+] Player %d terminating!\n\n", lp.Id)
+	c.Close()
+	lp.Conn.Close()
+	return
 }
