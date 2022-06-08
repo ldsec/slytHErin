@@ -39,59 +39,52 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	E.InnerCols = W.InnerCols
 	E.Blocks = make([][]*ckks.Ciphertext, q)
 
-	var wgi sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
-		wgi.Add(1)
 		Xrow := X.Blocks[i]
-		go func(i int, Xrow []*ckks.Ciphertext) {
-			defer wgi.Done()
-			var wgj sync.WaitGroup
-			for j := 0; j < r; j++ {
-
-				wgj.Add(1)
-				Wcol := W.Blocks[j]
-				go func(j int, Wcol []*PlainDiagMat) {
-					defer wgj.Done()
-					accumulatorChan := make(chan *ckks.Ciphertext)
-					done := make(chan struct{}, s-1)
-					for k := 0; k < s; k++ {
-						x := Xrow[k].CopyNew()
-						w := Wcol[k].Diags
-						//ckks.stuff are not thread safe -> recreate on the flight
-						box := CkksBox{
-							Params:    Box.Params,
-							Encoder:   Box.Encoder.ShallowCopy(),
-							Evaluator: Box.Evaluator.ShallowCopy(),
-							Decryptor: nil,
-							Encryptor: nil,
-						}
-
-						go func(x *ckks.Ciphertext, w []*ckks.Plaintext, k int, Box CkksBox) {
-							eij := Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-							if k == 0 {
-								defer close(accumulatorChan)
-								accumulator := 1
-								for accumulator < s {
-									op := <-accumulatorChan
-									Box.Evaluator.Add(eij, op, eij)
-									accumulator++
-								}
-								E.Blocks[i][j] = eij
-								done <- struct{}{}
-							} else {
-								accumulatorChan <- eij
-							}
-						}(x, w, k, box)
+		for j := 0; j < r; j++ {
+			Wcol := W.Blocks[j]
+			wg.Add(1)
+			go func(i, j int, Xrow []*ckks.Ciphertext, Wcol []*PlainDiagMat) {
+				defer wg.Done()
+				accumulatorChan := make(chan *ckks.Ciphertext, s-1)
+				done := make(chan struct{})
+				for k := 0; k < s; k++ {
+					x := Xrow[k].CopyNew()
+					w := Wcol[k].Diags
+					//ckks.stuff are not thread safe -> recreate on the flight
+					box := CkksBox{
+						Params:    Box.Params,
+						Encoder:   Box.Encoder.ShallowCopy(),
+						Evaluator: Box.Evaluator.ShallowCopy(),
+						Decryptor: nil,
+						Encryptor: nil,
 					}
-					<-done
-				}(j, Wcol)
-			}
-			wgj.Wait()
-		}(i, Xrow)
+
+					go func(x *ckks.Ciphertext, w []*ckks.Plaintext, k int, Box CkksBox) {
+						eij := Cipher2PMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+						if k == 0 {
+							defer close(accumulatorChan)
+							accumulator := 1
+							for accumulator < s {
+								op := <-accumulatorChan
+								Box.Evaluator.Add(eij, op, eij)
+								accumulator++
+							}
+							E.Blocks[i][j] = eij
+							done <- struct{}{}
+						} else {
+							accumulatorChan <- eij
+						}
+					}(x, w, k, box)
+				}
+				<-done
+			}(i, j, Xrow, Wcol)
+		}
 	}
-	wgi.Wait()
+	wg.Wait()
 	utils.ThrowErr(err)
 	return E, err
 }
@@ -125,59 +118,52 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	E.InnerCols = W.InnerCols
 	E.Blocks = make([][]*ckks.Ciphertext, q)
 
-	var wgi sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
-		wgi.Add(1)
 		Xrow := X.Blocks[i]
-		go func(i int, Xrow []*ckks.Ciphertext) {
-			defer wgi.Done()
-			var wgj sync.WaitGroup
-			for j := 0; j < r; j++ {
-
-				wgj.Add(1)
-				Wcol := W.Blocks[j]
-				go func(j int, Wcol []*EncDiagMat) {
-					defer wgj.Done()
-					accumulatorChan := make(chan *ckks.Ciphertext)
-					done := make(chan struct{}, s-1)
-					for k := 0; k < s; k++ {
-						x := Xrow[k].CopyNew()
-						w := Wcol[k].Diags
-						//ckks.stuff are not thread safe -> recreate on the flight
-						box := CkksBox{
-							Params:    Box.Params,
-							Encoder:   Box.Encoder.ShallowCopy(),
-							Evaluator: Box.Evaluator.ShallowCopy(),
-							Decryptor: nil,
-							Encryptor: nil,
-						}
-
-						go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, k int, Box CkksBox) {
-							eij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
-							if k == 0 {
-								defer close(accumulatorChan)
-								accumulator := 1
-								for accumulator < s {
-									op := <-accumulatorChan
-									Box.Evaluator.Add(eij, op, eij)
-									accumulator++
-								}
-								E.Blocks[i][j] = eij
-								done <- struct{}{}
-							} else {
-								accumulatorChan <- eij
-							}
-						}(x, w, k, box)
+		for j := 0; j < r; j++ {
+			Wcol := W.Blocks[j]
+			wg.Add(1)
+			go func(i, j int, Xrow []*ckks.Ciphertext, Wcol []*EncDiagMat) {
+				defer wg.Done()
+				accumulatorChan := make(chan *ckks.Ciphertext, s-1)
+				done := make(chan struct{})
+				for k := 0; k < s; k++ {
+					x := Xrow[k].CopyNew()
+					w := Wcol[k].Diags
+					//ckks.stuff are not thread safe -> recreate on the flight
+					box := CkksBox{
+						Params:    Box.Params,
+						Encoder:   Box.Encoder.ShallowCopy(),
+						Evaluator: Box.Evaluator.ShallowCopy(),
+						Decryptor: nil,
+						Encryptor: nil,
 					}
-					<-done
-				}(j, Wcol)
-			}
-			wgj.Wait()
-		}(i, Xrow)
+
+					go func(x *ckks.Ciphertext, w []*ckks.Ciphertext, k int, Box CkksBox) {
+						eij := Cipher2CMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+						if k == 0 {
+							defer close(accumulatorChan)
+							accumulator := 1
+							for accumulator < s {
+								op := <-accumulatorChan
+								Box.Evaluator.Add(eij, op, eij)
+								accumulator++
+							}
+							E.Blocks[i][j] = eij
+							done <- struct{}{}
+						} else {
+							accumulatorChan <- eij
+						}
+					}(x, w, k, box)
+				}
+				<-done
+			}(i, j, Xrow, Wcol)
+		}
 	}
-	wgi.Wait()
+	wg.Wait()
 	utils.ThrowErr(err)
 	return E, err
 }

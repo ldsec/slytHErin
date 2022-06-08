@@ -73,7 +73,7 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 		eval.Add(input, img, input)
 		if dimMid < dimOut {
 			//3 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 3, input)
+			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
 		} else {
 			// 2 x space needed
 			eval.ReplicateLog(input, dimIn*dimMid, 2, input)

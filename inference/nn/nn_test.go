@@ -338,12 +338,16 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	//	Sigma:        rlwe.DefaultSigma,
 	//	RingType:     ring.Standard,
 	//}
+	//Given a deg of approximation of 63 (so 6 level needed for evaluation) this set of params performs really good:
+	//It has 18 levels, so it invokes a bootstrap every 2 layers (1 lvl for mul + 6 lvl for activation) when the level
+	//is 4, which is the minimum level. In this case, bootstrap is called only when needed
+	//In case of NN50, cut the modulo chain at 11 levels, so to spare memory. In thic case Btp happens every layer
 	ckksParams := ckks.ParametersLiteral{
 		LogN:         15,
 		LogSlots:     14,
-		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
-		LogP:         []int{43, 43, 43},
-		DefaultScale: 1 << 31,
+		LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35}, // 35, 35, 35, 35, 35, 35, 35}, //cut at 11 for NN50
+		LogP:         []int{50, 50, 50, 50},
+		DefaultScale: 1 << 35,
 		Sigma:        rlwe.DefaultSigma,
 		RingType:     ring.Standard,
 	}
@@ -355,7 +359,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	skQ := kgenQ.GenSecretKey()
 	pkQ := kgenQ.GenPublicKey(skQ)
 	decQ := ckks.NewDecryptor(params, skQ)
-	layers := 20
+	layers := 50
 
 	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)

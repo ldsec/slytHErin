@@ -22,15 +22,13 @@ BLOCK MATRICES OPS
 v
 *********************************************/
 
-var LDim = []int{64, 841}
-var W0Dim = []int{841, 845}
-var W1Dim = []int{845, 100}
-var W2Dim = []int{100, 10}
+var LDim = []int{1, 784}
+var W0Dim = []int{784, 100}
+var W1Dim = []int{100, 10}
 
 var L = plainUtils.MatToArray(plainUtils.RandMatrix(LDim[0], LDim[1]))
 var W0 = plainUtils.MatToArray(plainUtils.RandMatrix(W0Dim[0], W0Dim[1]))
 var W1 = plainUtils.MatToArray(plainUtils.RandMatrix(W1Dim[0], W1Dim[1]))
-var W2 = plainUtils.MatToArray(plainUtils.RandMatrix(W2Dim[0], W2Dim[1]))
 
 func TestDecInput(t *testing.T) {
 	LDim := []int{64, 10}
@@ -739,19 +737,17 @@ func TestBlocksC2PMul_Parallel_Accumulator_Transposed_Debug(t *testing.T) {
 
 func TestBlockCipher2P(t *testing.T) {
 	fmt.Println("Encrypted to Plain")
-	rowP := 2
-	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), rowP, 29)
+	rowP := 1
+	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), rowP, 49)
 	utils.ThrowErr(err)
-	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 65)
+	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 49, 1)
 	utils.ThrowErr(err)
-	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 65, 10)
-	W2b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W2), 10, 1)
+	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 1, 1)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
 	C, err := plainUtils.MultiPlyBlocks(B, W1b)
 	utils.ThrowErr(err)
-	D, err := plainUtils.MultiPlyBlocks(C, W2b)
 
 	ckksParams := ckks.PN14QP438
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
@@ -761,7 +757,7 @@ func TestBlockCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 3, []int{W0b.InnerRows, W1b.InnerRows, W2b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols, W2b.InnerCols}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -777,44 +773,39 @@ func TestBlockCipher2P(t *testing.T) {
 		Encryptor: enc,
 	}
 	level := params.MaxLevel()
-	ctA, err := NewEncInput(L, rowP, 29, level, Box)
+	ctA, err := NewEncInput(L, rowP, 49, level, Box)
 	utils.ThrowErr(err)
-	W0bp, err := NewPlainWeightDiag(W0, 29, 65, ctA.InnerRows, level, Box)
+	W0bp, err := NewPlainWeightDiag(W0, 49, 1, ctA.InnerRows, level, Box)
 	utils.ThrowErr(err)
-	W1bp, err := NewPlainWeightDiag(W1, 65, 10, ctA.InnerRows, level-1, Box)
+	W1bp, err := NewPlainWeightDiag(W1, 1, 1, ctA.InnerRows, level-1, Box)
 	utils.ThrowErr(err)
-	W2bp, err := NewPlainWeightDiag(W2, 10, 1, ctA.InnerRows, level-2, Box)
+
 	utils.ThrowErr(err)
 	fmt.Println("Start multiplications")
 	now := time.Now()
 	ctB, err := BlocksC2PMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
-	fmt.Println("Mul 1", time.Since(now))
+	fmt.Println("Mul 1 ", time.Since(now))
 	PrintDebugBlocks(ctB, B, Box)
+	now = time.Now()
 	ctC, err := BlocksC2PMul(ctB, W1bp, Box)
 	utils.ThrowErr(err)
-	fmt.Println("Mul 2")
+	fmt.Println("Mul 2 ", time.Since(now))
 	PrintDebugBlocks(ctC, C, Box)
-	ctD, err := BlocksC2PMul(ctC, W2bp, Box)
 
-	utils.ThrowErr(err)
-	fmt.Println("Mul 3")
-	PrintDebugBlocks(ctD, D, Box)
 }
 
 func TestBlockCipher2C(t *testing.T) {
 	fmt.Println("Encrypted to Encrypted")
-	rowP := 2
+	rowP := 1
 	Lb, err := plainUtils.PartitionMatrix(plainUtils.NewDense(L), rowP, 29)
 	W0b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W0), 29, 65)
 	W1b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W1), 65, 10)
-	W2b, err := plainUtils.PartitionMatrix(plainUtils.NewDense(W2), 10, 1)
 
 	B, err := plainUtils.MultiPlyBlocks(Lb, W0b)
 	utils.ThrowErr(err)
 	C, err := plainUtils.MultiPlyBlocks(B, W1b)
 	utils.ThrowErr(err)
-	D, err := plainUtils.MultiPlyBlocks(C, W2b)
 	utils.ThrowErr(err)
 	ckksParams := ckks.PN14QP438
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
@@ -826,7 +817,7 @@ func TestBlockCipher2C(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 3, []int{W0b.InnerRows, W1b.InnerRows, W2b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols, W2b.InnerRows}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, 3, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -848,8 +839,6 @@ func TestBlockCipher2C(t *testing.T) {
 	utils.ThrowErr(err)
 	W1bp, err := NewEncWeightDiag(W1, 65, 10, ctA.InnerRows, level-1, Box)
 	utils.ThrowErr(err)
-	W2bp, err := NewEncWeightDiag(W2, 10, 1, ctA.InnerRows, level-2, Box)
-	utils.ThrowErr(err)
 
 	ctB, err := BlocksC2CMul(ctA, W0bp, Box)
 	utils.ThrowErr(err)
@@ -861,11 +850,7 @@ func TestBlockCipher2C(t *testing.T) {
 	fmt.Println("Mul 2")
 
 	PrintDebugBlocks(ctC, C, Box)
-	ctD, err := BlocksC2CMul(ctC, W2bp, Box)
-	utils.ThrowErr(err)
-	fmt.Println("Mul 3")
 
-	PrintDebugBlocks(ctD, D, Box)
 }
 
 func TestBlockCipherMul(t *testing.T) {

@@ -151,12 +151,9 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x pt
-	LDim := []int{64, 29}
-	W0Dim := []int{29, 13}
-	W1Dim := []int{13, 10}
-	W2Dim := []int{10, 10}
-
-	//r := rand.New(rand.NewSource(0))
+	LDim := []int{1, 16}
+	W0Dim := []int{16, 100}
+	W1Dim := []int{100, 10}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -207,15 +204,6 @@ func TestEncPlainMult(t *testing.T) {
 		}
 	}
 
-	W2 := make([][]float64, W2Dim[0])
-	for i := range W2 {
-		W2[i] = make([]float64, W2Dim[1])
-
-		for j := range W2[i] {
-			W2[i][j] = r.NormFloat64()
-		}
-	}
-
 	fmt.Printf("[\n")
 	for i := 0; i < W1Dim[0]; i++ {
 		fmt.Printf("[")
@@ -229,7 +217,6 @@ func TestEncPlainMult(t *testing.T) {
 	Lmat := mat.NewDense(LDim[0], LDim[1], plainUtils.Vectorize(L, true))
 	W0mat := mat.NewDense(W0Dim[0], W0Dim[1], plainUtils.Vectorize(W0, true))
 	W1mat := mat.NewDense(W1Dim[0], W1Dim[1], plainUtils.Vectorize(W1, true))
-	W2mat := mat.NewDense(W2Dim[0], W2Dim[1], plainUtils.Vectorize(W2, true))
 
 	// Schemes parameters are created from scratc
 
@@ -258,7 +245,7 @@ func TestEncPlainMult(t *testing.T) {
 		rotations = append(rotations, -len(W1)*len(L))
 		rotations = append(rotations, -2*len(W1)*len(L))
 	*/
-	rotations := GenRotations(len(L), 3, []int{len(W0), len(W1), len(W2)}, []int{len(W0[0]), len(W1[0]), len(W2[0])}, params, nil)
+	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -275,7 +262,6 @@ func TestEncPlainMult(t *testing.T) {
 	}
 	ptW0 := EncodeWeights(params.MaxLevel(), W0, len(L), Box)
 	ptW1 := EncodeWeights(params.MaxLevel()-1, W1, len(L), Box)
-	ptW2 := EncodeWeights(params.MaxLevel()-2, W2, len(L), Box)
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
@@ -283,22 +269,18 @@ func TestEncPlainMult(t *testing.T) {
 	fmt.Println("Done:", time.Since(now))
 
 	C := Cipher2PMul(B, len(L), len(W1), len(W1[0]), ptW1, true, true, Box)
-	fmt.Println("Done:", time.Since(now))
 
-	D := Cipher2PMul(C, len(L), len(W2), len(W2[0]), ptW2, true, true, Box)
 	fmt.Println("Finish:", time.Since(now))
-	resPt := dec.DecryptNew(D)
+	resPt := dec.DecryptNew(C)
 	resArray := ecd.DecodeSlots(resPt, params.LogSlots())
-	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W2Dim[1]]
+	resReal := plainUtils.ComplexToReal(resArray)[:LDim[0]*W1Dim[1]]
 	var tmp mat.Dense
 	tmp.Mul(Lmat, W0mat)
 	PrintDebug(B, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp))), Box)
-	var tmp2 mat.Dense
-	tmp2.Mul(&tmp, W1mat)
-	PrintDebug(C, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&tmp2))), Box)
 	var res mat.Dense
-	res.Mul(&tmp2, W2mat)
-	PrintDebug(D, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&res))), Box)
+	res.Mul(&tmp, W1mat)
+	PrintDebug(C, plainUtils.RealToComplex(plainUtils.RowFlatten(plainUtils.TransposeDense(&res))), Box)
+
 	//fmt.Println("Exp:", plainUtils.RowFlatten(plainUtils.TransposeDense(&res)))
 	//fmt.Println("test:", resReal)
 	//fmt.Println("________________-")
@@ -653,15 +635,15 @@ func TestBootstrapDistributed(t *testing.T) {
 	PARAMS := []ckks.ParametersLiteral{ckks.PN15QP880, ckks.ParametersLiteral{
 		LogN:         15,
 		LogSlots:     14,
-		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
+		LogQ:         []int{50, 37, 37, 37, 37, 37, 37, 37, 37}, //31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
 		LogP:         []int{43, 43, 43},
-		DefaultScale: 1 << 31,
+		DefaultScale: 1 << 37,
 		Sigma:        rlwe.DefaultSigma,
 		RingType:     ring.Standard,
 	}}
 	L := plainUtils.RandMatrix(64, 64)
 	L.Set(0, 0, 30)
-	for _, ckksParams := range PARAMS { //logN 14 works fine with everyone
+	for _, ckksParams := range PARAMS[1:] { //logN 14 works fine with everyone
 		for _, parties := range PARTIES { //parties = 3 is fine always
 			fmt.Printf("Test: parties %d, params %d\n\n", parties, ckksParams.LogN)
 			params, _ := ckks.NewParametersFromLiteral(ckksParams)

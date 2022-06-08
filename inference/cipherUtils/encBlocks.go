@@ -164,6 +164,7 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, 
 	Wp.LeftDim = leftInnerDim
 	Wp.InnerRows = Wbt.InnerRows
 	Wp.InnerCols = Wbt.InnerCols
+	//add safety check for dimentions (dimMid > dimOut -> 2x space o.w 3x space)
 	Wp.Blocks = make([][]*PlainDiagMat, Wbt.RowP)
 	for i := 0; i < Wbt.RowP; i++ {
 		Wp.Blocks[i] = make([]*PlainDiagMat, Wbt.ColP)
