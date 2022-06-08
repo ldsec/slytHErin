@@ -67,14 +67,14 @@ def pack_simpleNet(model):
     serialized = serialize_simpleNet(model, format_SimpleNet)
     
     conv1 = np.array(serialized['conv1']['weight']).reshape(5,1,5,5)
-    pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,13,13)
+    pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,12,12)
     pool2 = np.array(serialized['pool2']['weight']).reshape(10,1,100,1)
     b1 = np.array(serialized['conv1']['bias'])
     b2 = np.array(serialized['pool1']['bias'])
     b3 = np.array(serialized['pool2']['bias'])
 
-    conv1M,_ = pack_conv(conv1,5,2,29)
-    bias1 = pack_bias(b1, 5, 13*13)
+    conv1M,_ = pack_conv(conv1,5,2,28)
+    bias1 = pack_bias(b1, 5, 12*12)
 
     pool1M,_ = pack_pool(pool1)
     bias2 = pack_bias(b2, 100, 1)
@@ -117,18 +117,17 @@ class SimpleNet(nn.Module):
 
     self.pad = F.pad
     self.conv1 = nn.Conv2d(in_channels=1, out_channels=5, kernel_size=5, stride=2)
-    self.pool1 = nn.Conv2d(in_channels=5, out_channels=100, kernel_size=13, stride=1000)
+    self.pool1 = nn.Conv2d(in_channels=5, out_channels=100, kernel_size=12, stride=1000)
     self.pool2 = nn.Conv2d(in_channels=1, out_channels=10, kernel_size=(100,1), stride=1000)
 
   def forward(self, x):
-    x = self.pad(x, (1,0,1,0))
+    #x = self.pad(x, (1,1,1,1))
     x = self.conv1(x)
+    #print(x.shape)
     x = self.activation(self.pool1(x))
-    #print(x[0])
+    #print(x.shape)
     x = x.reshape([self.batch_size,1,100,1]) #batch_size tensors in 1 channel, 100x1
     x = self.activation(self.pool2(x))
-    #print(x[0])
-    #x = self.sigmoid(x) ##needed for the probabilities --> i.e smaller loss, but ~ accuracy
     x = x.reshape(x.shape[0], -1)
     return x
  
@@ -145,7 +144,7 @@ class SimpleNet(nn.Module):
         #  nn.init.normal_(m.weight, 0.0, 1.0)
 
 if __name__ == "__main__":
-    dataHandler = DataHandler(dataset="MNIST", batch_size=32)
+    dataHandler = DataHandler(dataset="MNIST", batch_size=16)
 
     ##############################
     #                            #
@@ -200,7 +199,7 @@ if __name__ == "__main__":
     for key, model in models.items():
       logger = Logger("./logs/",f"SimpleNet_{key}")
       model.apply(model.weights_init)
-      train(logger, model, dataHandler, num_epochs=500, lr=3e-5, regularizer='None')
+      train(logger, model, dataHandler, num_epochs=50, lr=5e-4, regularizer='None')
       loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
       
       scores[key] = {"loss":loss, "accuracy":accuracy}

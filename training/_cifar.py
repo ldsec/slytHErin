@@ -100,16 +100,16 @@ class MiniONN(nn.Module):
     self.activation = nn.ReLU()
     self.max = 0.0
 
-    self.conv1 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=5, stride=1) #1
-    self.conv2 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=5, stride=1) #3
+    self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1) #1
+    self.conv2 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1) #3
     self.avg1 = nn.AvgPool2d(kernel_size=2, stride=1) #5
-    self.conv3 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1) #6
-    self.conv4 = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1) #8
+    self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1) #6
+    self.conv4 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1) #8
     self.avg2 = nn.AvgPool2d(kernel_size=2, stride=1) #10
-    self.conv5 = nn.Conv2d(in_channels=3, out_channels=2, kernel_size=2, stride=1) #11
-    self.conv6 = nn.Conv2d(in_channels=2, out_channels=2, kernel_size=2, stride=1) #13
-    self.conv7 = nn.Conv2d(in_channels=2, out_channels=2, kernel_size=1, stride=1) #15
-    self.dense = nn.Linear(648,10)
+    self.conv5 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1) #11
+    self.conv6 = nn.Conv2d(in_channels=64, out_channels=16, kernel_size=2, stride=1) #13
+    self.conv7 = nn.Conv2d(in_channels=16, out_channels=16, kernel_size=2, stride=1) #15
+    self.dense = nn.Linear(6400,10)
 
   def forward(self, x):
     x = F.pad(x, [1,1,1,1])
@@ -238,7 +238,7 @@ if __name__ == "__main__":
     model = MiniONN("xavier", verbose=False)
     logger = Logger("./logs/",f"miniONN")
     model.apply(model.weights_init)
-    train(logger, model, dataHandler, num_epochs=15, lr=0.1, loss='CSE', optim_algo='Adam', l2_penalty=0.0005, regularizer='L2')
+    train(logger, model, dataHandler, num_epochs=25, lr=0.001, loss='CSE', optim_algo='Adam', l2_penalty=0.000001, regularizer='L2')
     loss, accuracy = eval(logger, model, dataHandler, loss='CSE')
     print("Max value: ", model.max)  
     ## save

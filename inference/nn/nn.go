@@ -112,8 +112,7 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 	layers := nn.Layers
 	//Assemble layers in block matrix form
 	convM := utils.BuildKernelMatrix(nn.Conv.Weight)
-	//convMB, _ := plainUtils.PartitionMatrix(convM, colP, 28) //900x840 --> submatrices are 30x30
-	//use if model from go training
+	//if model from go training
 	convMB, _ := plainUtils.PartitionMatrix(convM, colP, 26) //784x676 --> subm 28x26
 	biasConvM := utils.BuildBiasMatrix(nn.Conv.Bias, plainUtils.NumCols(convM), batchSize)
 	biasConvMB, _ := plainUtils.PartitionMatrix(biasConvM, rowP, convMB.ColP)
@@ -127,8 +126,6 @@ func (nn *NN) NewBlockNN(batchSize, InRowP, InColP int) (*NNBlock, error) {
 		denseMatrices[i] = utils.BuildKernelMatrix(nn.Dense[i].Weight)
 		denseBiasMatrices[i] = utils.BuildBiasMatrix(nn.Dense[i].Bias, plainUtils.NumCols(denseMatrices[i]), batchSize)
 		if i == 0 {
-			//840x92 --> 30x23
-			//denseMatricesBlock[i], _ = plainUtils.PartitionMatrix(denseMatrices[i], 28, 4)
 			//if go training 676x92 --> 26x23
 			denseMatricesBlock[i], err = plainUtils.PartitionMatrix(denseMatrices[i], 26, 4)
 			utils.ThrowErr(err)

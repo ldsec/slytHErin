@@ -93,7 +93,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	//colP := 30 //inputs are 30x30
 	colP := 28   //if go training
 	InColP := 28 //if go training --> 28x28
-	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	batchSize := cipherUtils.GetOptimalInnerRows(InColP, 26, params)
 	inputInnerRows := batchSize / rowP
 	nnb, _ := nn.NewBlockNN(batchSize, rowP, colP)
 
@@ -218,7 +218,7 @@ func TestEvalDataEncModelEncDistributedDummy(t *testing.T) {
 	//for input block
 	InRowP := 1
 	InColP := 28 //if go training --> 28x28
-	batchSize := cipherUtils.GetOptimalInnerRows(InColP, params)
+	batchSize := cipherUtils.GetOptimalInnerRows(InColP, 26, params)
 	inputInnerRows := batchSize / InRowP
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 
@@ -329,28 +329,28 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	*/
 	// CRYPTO =========================================================================================================
 
-	//ckksParams := ckks.ParametersLiteral{
-	//	LogN:         14,
-	//	LogSlots:     13,
-	//	LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
-	//	LogP:         []int{43, 43},
-	//	DefaultScale: 1 << 31,
-	//	Sigma:        rlwe.DefaultSigma,
-	//	RingType:     ring.Standard,
-	//}
+	ckksParams := ckks.ParametersLiteral{
+		LogN:         14,
+		LogSlots:     13,
+		LogQ:         []int{40, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31},
+		LogP:         []int{55},
+		DefaultScale: 1 << 31,
+		Sigma:        rlwe.DefaultSigma,
+		RingType:     ring.Standard,
+	}
 	//Given a deg of approximation of 63 (so 6 level needed for evaluation) this set of params performs really good:
 	//It has 18 levels, so it invokes a bootstrap every 2 layers (1 lvl for mul + 6 lvl for activation) when the level
 	//is 4, which is the minimum level. In this case, bootstrap is called only when needed
 	//In case of NN50, cut the modulo chain at 11 levels, so to spare memory. In thic case Btp happens every layer
-	ckksParams := ckks.ParametersLiteral{
-		LogN:         15,
-		LogSlots:     14,
-		LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35}, // 35, 35, 35, 35, 35, 35, 35}, //cut at 11 for NN50
-		LogP:         []int{50, 50, 50, 50},
-		DefaultScale: 1 << 35,
-		Sigma:        rlwe.DefaultSigma,
-		RingType:     ring.Standard,
-	}
+	//ckksParams := ckks.ParametersLiteral{
+	//	LogN:         15,
+	//	LogSlots:     14,
+	//	LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35}, // 35, 35, 35, 35, 35, 35, 35}, //cut at 11 for NN50
+	//	LogP:         []int{50, 50, 50, 50},
+	//	DefaultScale: 1 << 35,
+	//	Sigma:        rlwe.DefaultSigma,
+	//	RingType:     ring.Standard,
+	//}
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
@@ -359,16 +359,17 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	skQ := kgenQ.GenSecretKey()
 	pkQ := kgenQ.GenPublicKey(skQ)
 	decQ := ckks.NewDecryptor(params, skQ)
-	layers := 50
+	layers := 20
 
 	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
 
 	//for input block
 	InRowP := 1
-	//InColP := 30 //inputs are 30x30
-	InColP := 28 //if go training --> 28x28
-	batchSize := InRowP * cipherUtils.GetOptimalInnerRows(InColP, params)
+	InColP := 49
+	//with this split we run 157 batch in 246s instead of 146 in 292
+	batchSize := InRowP * cipherUtils.GetOptimalInnerRows(784/InColP, plainUtils.Max(676/26, 92/4), params)
+	fmt.Println("Batchsize: ", batchSize)
 	inputInnerRows := batchSize / InRowP
 	nnb, _ := nn.NewBlockNN(batchSize, InRowP, InColP)
 

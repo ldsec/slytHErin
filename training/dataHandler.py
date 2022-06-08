@@ -107,12 +107,13 @@ if __name__=="__main__":
     dataset = {'X':[], 'Y':[]}
     for data,label in dataHandler.test_dl:
       if args.model == "simplenet":
-        data = F.pad(data, (1,0,1,0)).numpy().flatten()
+        #data = F.pad(data, (1,0,1,0)).numpy().flatten()
+        data = data.numpy().flatten()
       else:
         data = data.numpy().flatten()
       sample = [x.item() for x in data] 
       dataset['X'].append(sample)
       dataset['Y'].append(label)
-    with open(f'./data/{args.model}_data.json','w') as f:
+    with open(f'./data/{args.model}_data_nopad.json','w') as f:
       json.dump(dataset,f)
 

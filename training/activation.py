@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 """ Approximated polynomial activation functions """
 
-degree = 31
-interval = 20
+degree = 3
+interval = 10
 
 '''
 def approx_relu_2d(x):

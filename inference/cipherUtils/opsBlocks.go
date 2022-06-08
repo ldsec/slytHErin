@@ -39,16 +39,16 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 	E.InnerCols = W.InnerCols
 	E.Blocks = make([][]*ckks.Ciphertext, q)
 
-	var wg sync.WaitGroup
-
+	final := make(chan struct{}, q*r)
+	//var wg sync.WaitGroup
 	for i := 0; i < q; i++ {
 		E.Blocks[i] = make([]*ckks.Ciphertext, r)
 		Xrow := X.Blocks[i]
 		for j := 0; j < r; j++ {
 			Wcol := W.Blocks[j]
-			wg.Add(1)
+			//wg.Add(1)
 			go func(i, j int, Xrow []*ckks.Ciphertext, Wcol []*PlainDiagMat) {
-				defer wg.Done()
+				//defer wg.Done()
 				accumulatorChan := make(chan *ckks.Ciphertext, s-1)
 				done := make(chan struct{})
 				for k := 0; k < s; k++ {
@@ -81,10 +81,16 @@ func BlocksC2PMul(X *EncInput, W *PlainWeightDiag, Box CkksBox) (*EncInput, erro
 					}(x, w, k, box)
 				}
 				<-done
+				final <- struct{}{}
 			}(i, j, Xrow, Wcol)
 		}
 	}
-	wg.Wait()
+	//wg.Wait()
+	terminated := 0
+	for terminated < q*r {
+		<-final
+		terminated++
+	}
 	utils.ThrowErr(err)
 	return E, err
 }
@@ -96,10 +102,6 @@ func BlocksC2CMul(X *EncInput, W *EncWeightDiag, Box CkksBox) (*EncInput, error)
 	//W is block-transposed
 	if X.ColP != W.ColP {
 		err = errors.New("Block partitions not compatible for multiplication")
-		utils.ThrowErr(err)
-	}
-	if X.InnerCols < W.InnerCols {
-		err = errors.New("Dim Mid must be >= Dim Out in sub-matrices")
 		utils.ThrowErr(err)
 	}
 	q := X.RowP

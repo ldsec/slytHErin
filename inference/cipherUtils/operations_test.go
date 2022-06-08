@@ -151,9 +151,9 @@ func TestEncMult(t *testing.T) {
 func TestEncPlainMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x pt
-	LDim := []int{1, 16}
-	W0Dim := []int{16, 100}
-	W1Dim := []int{100, 10}
+	LDim := []int{1, 28}
+	W0Dim := []int{28, 52}
+	W1Dim := []int{52, 23}
 
 	r := rand.New(rand.NewSource(0))
 
