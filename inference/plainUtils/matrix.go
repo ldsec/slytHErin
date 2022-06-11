@@ -87,7 +87,7 @@ func NumCols(m *mat.Dense) int {
 }
 
 //replicates v ,n times
-func Replicate(v float64, n int) []float64 {
+func ReplicateValue(v float64, n int) []float64 {
 	res := make([]float64, n)
 	for i := 0; i < n; i++ {
 		res[i] = v
@@ -192,4 +192,62 @@ func RealToComplex(v []float64) []complex128 {
 		c[i] = complex(v[i], 0.0)
 	}
 	return c
+}
+
+func MulByi(v []float64) []complex128 {
+	vi := make([]complex128, len(v))
+	for i := range vi {
+		vi[i] = complex(0, v[i])
+	}
+	return vi
+}
+
+//rotates v of k positions to the left or to the right if k < 0
+func RotateRealArray(v []float64, k int) []float64 {
+	if k < 0 || len(v) == 0 {
+		return v
+	}
+	var r int
+	if k < 0 {
+		//Right
+		r = len(v) - k%len(v)
+	} else {
+		r = k % len(v)
+	}
+	v = append(v[r:], v[:r]...)
+	return v
+}
+
+//rotates v of k positions to the left or to the right if k < 0
+func RotateComplexArray(v []complex128, k int) []complex128 {
+	if k < 0 || len(v) == 0 {
+		return v
+	}
+	var r int
+	if k < 0 {
+		//Right
+		r = len(v) - k%len(v)
+	} else {
+		r = k % len(v)
+	}
+	v = append(v[r:], v[:r]...)
+	return v
+}
+
+//replicates v with n copies
+func ReplicateRealArray(v []float64, n int) []float64 {
+	vr := make([]float64, n*len(v))
+	for i := range vr {
+		vr[i] = v[i%len(v)]
+	}
+	return vr
+}
+
+//replicates v with n copies
+func ReplicateComplexArray(v []complex128, n int) []complex128 {
+	vr := make([]complex128, n*len(v))
+	for i := range vr {
+		vr[i] = v[i%len(v)]
+	}
+	return vr
 }

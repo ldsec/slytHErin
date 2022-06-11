@@ -359,7 +359,7 @@ func TestEvalDataEncModelEncDistributedTCP(t *testing.T) {
 	skQ := kgenQ.GenSecretKey()
 	pkQ := kgenQ.GenPublicKey(skQ)
 	decQ := ckks.NewDecryptor(params, skQ)
-	layers := 20
+	layers := 50
 
 	nn := LoadNN("/francesco/nn" + strconv.Itoa(layers) + "_packed.json")
 	nn.Init(layers)
