@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-const FILLTHRESHOLD = 0.1 //how many % of slots out of available slots should be filled -> heuristic base
+const FILLTHRESHOLD = 0.5 //how many % of slots out of available slots should be filled -> heuristic base
 
 type BlockSplits struct {
 	InnerRows, InnerCols, RowP, ColP int
@@ -74,8 +74,8 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 			for {
 				//adjust weight inner col split or batch depending on strategy
 				adjusted := true
-				//check if weight submatrix can be stored
-				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, slotsAvailable) < FILLTHRESHOLD {
+				//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
+				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
 					adjusted = false
 				}
 				//check if replication of input can be stored
