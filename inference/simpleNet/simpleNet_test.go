@@ -9,6 +9,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
+	"math"
 	"testing"
 )
 
@@ -85,11 +86,15 @@ func TestEvalDataEncModelClearCompressed_withActivators_NoPad(t *testing.T) {
 	}
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	//rowP := 1
+	//colP := 28
+	//colPConv := 2
+	//batchSize has to be chosen so that InnerRows * Max(all InnerCols in pipeline) < 2^LogSlots
+	//batchSize := rowP * cipherUtils.GetOptimalInnerRows(784/colP, 100/colPConv, params) //here the cols should be the biggest in the pipeline btw
 	rowP := 1
 	colP := 28
-	colPConv := 2
-	//batchSize has to be chosen so that InnerRows * Max(all InnerCols in pipeline) < 2^LogSlots
-	batchSize := rowP * cipherUtils.GetOptimalInnerRows(784/colP, 100/colPConv, params) //here the cols should be the biggest in the pipeline btw
+	colPConv := 1
+	batchSize := 20
 	inputInnerRows := batchSize / rowP
 	fmt.Println("Batch: ", batchSize)
 	//for input block
@@ -162,7 +167,7 @@ func TestEvalDataEncModelClearCompressed_withActivators_NoPad(t *testing.T) {
 		rowP, 1, params.MaxLevel()-1-2-1, Box)
 	utils.ThrowErr(err)
 
-	rotations := cipherUtils.GenRotations(inputInnerRows, len(weightsBlock), []int{weightsBlock[0].InnerRows, weightsBlock[1].InnerRows}, []int{weightsBlock[0].InnerCols, weightsBlock[1].InnerCols}, params, nil)
+	rotations := cipherUtils.GenRotations(inputInnerRows, 784/colP, len(weightsBlock), []int{weightsBlock[0].InnerRows, weightsBlock[1].InnerRows}, []int{weightsBlock[0].InnerCols, weightsBlock[1].InnerCols}, params, nil)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 	Box.Evaluator = ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: kgen.GenRelinearizationKey(sk, 2), Rtks: rtks})
 	activators[0].Box = Box
@@ -179,7 +184,7 @@ func TestEvalDataEncModelClearCompressed_withActivators_NoPad(t *testing.T) {
 	corrects := 0
 	tot := 0
 	iters := 0
-	maxIters := 10
+	maxIters := int(math.Ceil(float64(1024 / batchSize)))
 	var elapsed int64
 	for true {
 		Xbatch, Y, err := dataSn.Batch()

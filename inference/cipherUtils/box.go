@@ -2,10 +2,12 @@ package cipherUtils
 
 import (
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"math"
 	"os"
 )
 
@@ -19,24 +21,27 @@ type CkksBox struct {
 	BootStrapper *bootstrapping.Bootstrapper
 }
 
-func GenRotations(dimIn, numWeights int, rowsW, colsW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
+func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
 	if btpParams != nil {
 		rotations = btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
 	}
+	var replicationFactor int
+	currCols := colIn
 	for w := 0; w < numWeights; w++ {
 		for i := 1; i < (rowsW[w]+1)>>1; i++ {
-			rotations = append(rotations, 2*i*dimIn)
+			rotations = append(rotations, 2*i*rowIn)
 		}
 		rotations = append(rotations, rowsW[w])
-		rotations = append(rotations, -rowsW[w]*dimIn)
-		rotations = append(rotations, -2*rowsW[w]*dimIn)
-
-		rotations = append(rotations, params.RotationsForReplicateLog(dimIn*rowsW[w], 3)...)
-		rotations = append(rotations, params.RotationsForReplicateLog(dimIn*colsW[w], 3)...)
-
+		rotations = append(rotations, -rowsW[w]*rowIn)
+		rotations = append(rotations, -2*rowsW[w]*rowIn)
+		if rowsW[w] < colsW[w] {
+			replicationFactor = plainUtils.Max(int(math.Ceil(float64(colsW[w]/rowsW[w]))), 3)
+			rotations = append(rotations, params.RotationsForReplicateLog(rowIn*currCols, replicationFactor)...)
+		}
+		currCols = colsW[w]
 	}
-	rotations = append(rotations, dimIn)
+	rotations = append(rotations, rowIn)
 	return rotations
 }
 

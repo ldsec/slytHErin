@@ -120,7 +120,7 @@ func TestBlocksC2PMul__Debug(t *testing.T) {
 		sk := kgen.GenSecretKey()
 		rlk := kgen.GenRelinearizationKey(sk, 2)
 
-		rotations := GenRotations(Ab.InnerRows, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
+		rotations := GenRotations(Ab.InnerRows, Ab.InnerCols, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
 
 		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -268,7 +268,7 @@ func TestBlocksC2PMul_Parallel_Debug(t *testing.T) {
 		sk := kgen.GenSecretKey()
 		rlk := kgen.GenRelinearizationKey(sk, 2)
 
-		rotations := GenRotations(Ab.InnerRows, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
+		rotations := GenRotations(Ab.InnerRows, Ab.InnerCols, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
 
 		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -419,7 +419,7 @@ func TestBlocksC2PMul_Parallel_Accumulator_Debug(t *testing.T) {
 		sk := kgen.GenSecretKey()
 		rlk := kgen.GenRelinearizationKey(sk, 2)
 
-		rotations := GenRotations(Ab.InnerRows, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
+		rotations := GenRotations(Ab.InnerRows, Ab.InnerCols, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
 
 		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -598,7 +598,7 @@ func TestBlocksC2PMul_Parallel_Accumulator_Transposed_Debug(t *testing.T) {
 		sk := kgen.GenSecretKey()
 		rlk := kgen.GenRelinearizationKey(sk, 2)
 
-		rotations := GenRotations(Ab.InnerRows, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
+		rotations := GenRotations(Ab.InnerRows, Ab.InnerCols, 1, []int{Bb.InnerRows}, []int{Bb.InnerCols}, params, nil)
 
 		rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -757,7 +757,7 @@ func TestBlockCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, Lb.InnerCols, 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -817,7 +817,7 @@ func TestBlockCipher2C(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 3, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, Lb.InnerCols, 3, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -930,7 +930,7 @@ func TestAddBlockCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(len(L), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(len(L), len(L[0]), 2, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -1039,7 +1039,7 @@ func TestMixCipher2P(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 1, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, Lb.InnerCols, 1, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -1150,7 +1150,7 @@ func TestActivator(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(Lb.InnerRows, 1, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
+	rotations := GenRotations(Lb.InnerRows, Lb.InnerCols, 1, []int{W0b.InnerRows, W1b.InnerRows}, []int{W0b.InnerCols, W1b.InnerCols}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -1226,7 +1226,7 @@ func TestRemoveImagFromBlocks(t *testing.T) {
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
-	rotations := GenRotations(len(L), 1, []int{Lb.InnerRows, Lb.InnerRows}, []int{Lb.InnerCols, Lb.InnerCols}, params, nil)
+	rotations := GenRotations(len(L), len(L[0]), 1, []int{Lb.InnerRows, Lb.InnerRows}, []int{Lb.InnerCols, Lb.InnerCols}, params, nil)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)

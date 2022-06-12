@@ -178,19 +178,3 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, 
 	utils.ThrowErr(err)
 	return Wp, nil
 }
-
-//Computes the optimal number of rows for input sub-matrices. Takes the innerCols of the Input and the maxInnerCols of all the weights in the pipeline
-func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Parameters) int {
-	innerCols := plainUtils.Max(inputInnerCols, maxInnerCols)
-	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots()-1)))
-	optInnerRows := int(math.Floor(slotsAvailable / float64(innerCols)))
-	//takes into account that if maxInnerCols > inputInnerRows we will have to rotate during prepacking with 3x space occupied
-	if optInnerRows*inputInnerCols*3 > params.LogSlots() {
-		return optInnerRows
-	} else {
-		for optInnerRows*inputInnerCols*3 > params.LogSlots() {
-			optInnerRows--
-		}
-		return optInnerRows
-	}
-}

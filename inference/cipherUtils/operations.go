@@ -26,13 +26,8 @@ func Cipher2PMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 		img := eval.MultByiNew(input)
 		eval.Rotate(img, dimIn, img)
 		eval.Add(input, img, input)
-		if dimMid < dimOut {
-			//3 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 3, input)
-		} else {
-			// 2 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
-		}
+		replicaFactor := GetReplicaFactor(dimMid, dimOut)
+		eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
 	}
 	// Lazy inner-product with hoisted rotations
 	res = eval.MulNew(input, weights[0])
@@ -74,13 +69,8 @@ func Cipher2CMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*c
 		img := eval.MultByiNew(input)
 		eval.Rotate(img, dimIn, img)
 		eval.Add(input, img, input)
-		if dimMid < dimOut {
-			//3 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 3, input)
-		} else {
-			// 2 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
-		}
+		replicaFactor := GetReplicaFactor(dimMid, dimOut)
+		eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
 	}
 
 	// Lazy inner-product with hoisted rotations
@@ -130,16 +120,12 @@ func Cipher2CMul_Debug(input *ckks.Ciphertext, inputPlain []complex128, dimIn, d
 		}
 		fmt.Println("before replication")
 		PrintDebug(input, inputPlain, Box)
-		if dimMid < dimOut {
-			//3 x space needed
-			replicaFactor := int(math.Floor(float64(dimOut/dimMid))) + 1
-			eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
-			inputPlain = plainUtils.ReplicateComplexArray(inputPlain[:dimIn*dimMid], replicaFactor)
-		} else {
-			// 2 x space needed
-			eval.ReplicateLog(input, dimIn*dimMid, 2, input)
-			inputPlain = plainUtils.ReplicateComplexArray(inputPlain[:dimIn*dimMid], 2)
-		}
+		replicaFactor := GetReplicaFactor(dimMid, dimOut)
+		eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
+		inputPlain = plainUtils.ReplicateComplexArray(inputPlain[:dimIn*dimMid], replicaFactor)
+
+		inputPlain = plainUtils.ReplicateComplexArray(inputPlain[:dimIn*dimMid], 2)
+
 		fmt.Println("Done prepacking")
 		PrintDebug(input, inputPlain, Box)
 	}
@@ -174,4 +160,14 @@ func Cipher2CMul_Debug(input *ckks.Ciphertext, inputPlain []complex128, dimIn, d
 	}
 
 	return
+}
+
+//HELPERS
+
+func GetReplicaFactor(dimMid, dimOut int) int {
+	if dimOut > dimMid {
+		return plainUtils.Max(int(math.Ceil(float64(dimOut)/float64(dimMid))), 3)
+	} else {
+		return 2
+	}
 }

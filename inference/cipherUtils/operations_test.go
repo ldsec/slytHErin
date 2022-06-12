@@ -29,8 +29,8 @@ func TestEncMult(t *testing.T) {
 	//make sure that input dim*2 < 2^logSlots
 	//ct x ct
 	LDim := []int{1, 16}
-	W0Dim := []int{16, 100}
-	W1Dim := []int{100, 100}
+	W0Dim := []int{16, 31}
+	W1Dim := []int{31, 20}
 
 	r := rand.New(rand.NewSource(0))
 
@@ -106,7 +106,7 @@ func TestEncMult(t *testing.T) {
 	sk := kgen.GenSecretKey()
 	rlk := kgen.GenRelinearizationKey(sk, 2)
 
-	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
+	rotations := GenRotations(len(L), len(L[0]), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
 	rotations = append(rotations, params.RotationsForReplicateLog(LDim[0]*LDim[1], int(math.Floor(float64(W0Dim[1]/W0Dim[0])))+1)...)
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -126,7 +126,7 @@ func TestEncMult(t *testing.T) {
 	ctA := EncryptInput(params.MaxLevel(), L, Box)
 
 	now := time.Now()
-	B := Cipher2CMul_Debug(ctA, plainUtils.RealToComplex(FormatInput(L)), len(L), len(W0), len(W0[0]), ctW0, FormatWeights(W0, len(L)), true, true, Box)
+	B := Cipher2CMul(ctA, len(L), len(W0), len(W0[0]), ctW0, true, true, Box)
 
 	fmt.Println("Done:", time.Since(now))
 
@@ -246,7 +246,7 @@ func TestEncPlainMult(t *testing.T) {
 		rotations = append(rotations, -len(W1)*len(L))
 		rotations = append(rotations, -2*len(W1)*len(L))
 	*/
-	rotations := GenRotations(len(L), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
+	rotations := GenRotations(len(L), len(L[0]), 2, []int{len(W0), len(W1)}, []int{len(W0[0]), len(W1[0])}, params, nil)
 
 	rtks := kgen.GenRotationKeysForRotations(rotations, true, sk)
 

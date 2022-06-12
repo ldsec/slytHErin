@@ -29,6 +29,7 @@ type Layer struct {
 	Weight Kernel `json:"weight"`
 	Bias   Bias   `json:"bias"`
 }
+
 type PolyApprox interface {
 	LevelsOfAct() int
 }
