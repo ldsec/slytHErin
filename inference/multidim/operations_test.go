@@ -94,8 +94,8 @@ func TestPackingSingle(t *testing.T) {
 }
 
 func TestPackingParallel(t *testing.T) {
-	rows := 784 * 10
-	cols := 784
+	rows := 784
+	cols := 100
 	dim := 28
 	x := make([]float64, rows*cols)
 	for row := 0; row < rows; row++ {
@@ -136,7 +136,7 @@ func TestPackingParallel(t *testing.T) {
 	sk, _ := kgen.GenKeyPair()
 
 	// Relinearization key
-	rlk := kgen.GenRelinearizationKey(sk, 2)
+	//rlk := kgen.GenRelinearizationKey(sk, 2)
 
 	// Decryptor
 	decryptor := ckks2.NewDecryptor(params, sk)
@@ -145,10 +145,10 @@ func TestPackingParallel(t *testing.T) {
 
 	// Size of the matrices (dxd)
 
-	rows0 := 28
-	cols0 := 28
-	rows1 := 28
-	cols1 := 28
+	//rows0 := 28
+	//cols0 := 28
+	//rows1 := 28
+	//cols1 := 28
 
 	lvl_W0 := params.MaxLevel()
 	mmLiteral := MatrixMultiplicationLiteral{
@@ -162,11 +162,11 @@ func TestPackingParallel(t *testing.T) {
 	// Rotation-keys generation
 	rotations := mmW0.Rotations(params)
 	rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT.PtDiagMatrix)...)
-	rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
-	eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
-	ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(rows0, rows1), utils2.MaxInt(cols0, cols1), eval)
-	ppm.AddMatrixOperation(mmW0)
-	ppm.AddMatrixOperation(transposeLT)
+	//rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
+	//eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
+	//ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(rows0, rows1), utils2.MaxInt(cols0, cols1), eval)
+	//ppm.AddMatrixOperation(mmW0)
+	//ppm.AddMatrixOperation(transposeLT)
 	batchEncryptor := NewBatchEncryptor(params, sk)
 
 	ct := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), pm)
