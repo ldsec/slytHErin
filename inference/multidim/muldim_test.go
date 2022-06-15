@@ -13,14 +13,14 @@ import (
 	"time"
 )
 
-func Test_Multiplication_Single(t *testing.T) {
+func Test_Multiplication(t *testing.T) {
 	ckksParams := ckks2.ParametersLiteral{
-		LogN:     13,
-		LogQ:     []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 13
-		LogP:     []int{33},
+		LogN:     14,
+		LogQ:     []int{40, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 218 for LogN 13
+		LogP:     []int{33, 33, 33},
 		Sigma:    rlwe2.DefaultSigma,
-		LogSlots: 12,
-		Scale:    float64(1 << 26),
+		LogSlots: 13,
+		Scale:    float64(1 << 30),
 	}
 	params, _ := ckks2.NewParametersFromLiteral(ckksParams)
 
@@ -95,7 +95,7 @@ func Test_Multiplication_Single(t *testing.T) {
 		rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_2.PtDiagMatrix)...)
 		rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
 		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
-		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(Apacked.rows, Bpacked.rows), utils2.MaxInt(Apacked.cols, Bpacked.cols), eval)
+		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(utils2.MaxInt(Apacked.rows, Bpacked.rows), Cpacked.rows), utils2.MaxInt(utils2.MaxInt(Apacked.cols, Bpacked.cols), Cpacked.cols), eval)
 		ppm.AddMatrixOperation(mm_1)
 		ppm.AddMatrixOperation(transposeLT_1)
 		ppm.AddMatrixOperation(mm_2)
@@ -124,7 +124,113 @@ func Test_Multiplication_Single(t *testing.T) {
 		for i := range resPlain {
 			fmt.Println("Test:", resCipher[i])
 			fmt.Println("Want:", resPlain[i])
-			require.LessOrEqual(t, math.Abs(resPlain[i]-resCipher[i]), 1e-2)
+			require.LessOrEqual(t, math.Abs(resPlain[i]-resCipher[i]), 1e-1)
+		}
+	})
+
+	t.Run("Test/Mult/Plain/Parallel", func(t *testing.T) {
+		Apacked := PackMatrixParallel(A, dim, params.LogSlots())
+		Bpacked := PackMatrixParallelReplicated(B, dim, Apacked.n)
+		Cpacked := PackMatrixParallelReplicated(C, dim, Apacked.n)
+
+		var tmp mat.Dense
+		var res mat.Dense
+		tmp.Mul(A, B)
+		res.Mul(&tmp, C)
+
+		Apacked.Mul(Apacked, Bpacked)
+		Cpacked.Mul(Apacked, Cpacked)
+
+		resFromPack := UnpackMatrixParallel(Cpacked, dim, plainUtils.NumRows(&res), plainUtils.NumCols(&res))
+		resFromDense := plainUtils.Vectorize(plainUtils.MatToArray(&res), true)
+		fmt.Println("Pack:", len(resFromPack), "dense", len(resFromDense))
+		for i := range resFromDense {
+			fmt.Println("Test:", resFromPack[i])
+			fmt.Println("Want:", resFromDense[i])
+			require.LessOrEqual(t, math.Abs(resFromPack[i]-resFromDense[i]), 1e-10)
+		}
+	})
+
+	t.Run("Test/Mult/Enc/Parallel", func(t *testing.T) {
+		Apacked := PackMatrixParallel(A, dim, params.LogSlots())
+		fmt.Println("Parallel Batches: ", Apacked.n)
+		Bpacked := PackMatrixParallelReplicated(B, dim, Apacked.n)
+		Cpacked := PackMatrixParallelReplicated(C, dim, Apacked.n)
+
+		encoder := ckks2.NewEncoder(params)
+
+		// Keys
+		kgen := ckks2.NewKeyGenerator(params)
+		sk, _ := kgen.GenKeyPair()
+
+		// Relinearization key
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		// Decryptor
+		decryptor := ckks2.NewDecryptor(params, sk)
+
+		lvl_W0 := params.MaxLevel()
+		mmLiteral := MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_1 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		transposeLT_1 := GenTransposeDiagMatrix(params.MaxLevel(), 1.0, 4.0, dim, params, encoder)
+		mmLiteral = MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0 - 3,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_2 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		transposeLT_2 := GenTransposeDiagMatrix(params.MaxLevel()-3, 1.0, 4.0, dim, params, encoder)
+		// Rotation-keys generation
+		rotations := mm_1.Rotations(params)
+		rotations = append(rotations, mm_2.Rotations(params)...)
+		rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_1.PtDiagMatrix)...)
+		rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_2.PtDiagMatrix)...)
+		rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
+		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
+		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(utils2.MaxInt(Apacked.rows, Bpacked.rows), Cpacked.rows), utils2.MaxInt(utils2.MaxInt(Apacked.cols, Bpacked.cols), Cpacked.cols), eval)
+		ppm.AddMatrixOperation(mm_1)
+		ppm.AddMatrixOperation(transposeLT_1)
+		ppm.AddMatrixOperation(mm_2)
+		ppm.AddMatrixOperation(transposeLT_2)
+		batchEncryptor := NewBatchEncryptor(params, sk)
+
+		ctA := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Apacked)
+		ctB := batchEncryptor.EncodeAndEncrypt(lvl_W0, params.Scale(), Bpacked)
+		ctC := batchEncryptor.EncodeAndEncrypt(lvl_W0-3, params.Scale(), Cpacked)
+
+		Apacked.Mul(Apacked, Bpacked)
+		Cpacked.Mul(Apacked, Cpacked)
+
+		start := time.Now()
+		ctTmp := AllocateCiphertextBatchMatrix(ctA.Rows(), ctB.Cols(), dim, ctA.Level()-2, params)
+		ppm.MulSquareMatricesPacked(ctA, ctB, dim, ctTmp)
+
+		resPlain := UnpackMatrixParallel(Apacked, dim, plainUtils.NumRows(A), plainUtils.NumCols(B))
+		resCipher := UnpackCipherParallel(ctTmp, dim, plainUtils.NumRows(A), plainUtils.NumCols(B), encoder, decryptor, params, Apacked.n)
+		for i := range resPlain {
+			fmt.Println("Test:", resCipher[i])
+			fmt.Println("Want:", resPlain[i])
+			require.LessOrEqual(t, math.Abs(resPlain[i]-resCipher[i]), 1e-1)
+		}
+
+		ctRes := AllocateCiphertextBatchMatrix(ctTmp.Rows(), ctC.Cols(), dim, 1, params)
+		fmt.Println("level: ", ctTmp.Level())
+		ppm.MulSquareMatricesPacked(ctTmp, ctC, dim, ctRes)
+		stop := time.Since(start)
+		fmt.Println("Done ", stop)
+
+		resPlain2 := UnpackMatrixParallel(Cpacked, dim, plainUtils.NumRows(A), plainUtils.NumCols(C))
+		resCipher2 := UnpackCipherParallel(ctRes, dim, plainUtils.NumRows(A), plainUtils.NumCols(C), encoder, decryptor, params, Apacked.n)
+		for i := range resPlain2 {
+			fmt.Println("Test:", resCipher2[i])
+			fmt.Println("Want:", resPlain2[i])
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
 		}
 	})
 }

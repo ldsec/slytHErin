@@ -216,7 +216,7 @@ func TestPackedMatrices(t *testing.T) {
 
 	// Size of the matrices (dxd)
 	var dim int = 4
-	var parallelBatches int = 1
+	var parallelBatches int = 4
 
 	rows0 := 8 * parallelBatches
 	cols0 := 8
