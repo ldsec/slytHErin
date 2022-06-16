@@ -233,4 +233,216 @@ func Test_Multiplication(t *testing.T) {
 			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
 		}
 	})
+	t.Run("Test/Mult/MulPlainLeft/Vanilla", func(t *testing.T) {
+		//pt x ct
+		D := plainUtils.RandMatrix(64, 64)
+		E := plainUtils.RandMatrix(64, 64)
+		Dpacked := PackMatrixSingle(D, dim)
+		Epacked := PackMatrixParallelReplicated(E, dim, Dpacked.n)
+
+		//E x D
+		var res mat.Dense
+		res.Mul(E, D)
+
+		encoder := ckks2.NewEncoder(params)
+
+		// Keys
+		kgen := ckks2.NewKeyGenerator(params)
+		sk, _ := kgen.GenKeyPair()
+
+		// Relinearization key
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		// Decryptor
+		decryptor := ckks2.NewDecryptor(params, sk)
+
+		lvl_W0 := params.MaxLevel()
+		mmLiteral := MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_1 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		//transposeLT_1 := GenTransposeDiagMatrix(params.MaxLevel(), 1.0, 4.0, dim, params, encoder)
+		// Rotation-keys generation
+		rotations := mm_1.Rotations(params)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_1.PtDiagMatrix)...)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_2.PtDiagMatrix)...)
+		rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
+		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
+		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(Dpacked.rows, Epacked.rows), utils2.MaxInt(Dpacked.cols, Epacked.cols), eval)
+		ppm.AddMatrixOperation(mm_1)
+		//ppm.AddMatrixOperation(transposeLT_1)
+		//ppm.AddMatrixOperation(transposeLT_2)
+		batchEncryptor := NewBatchEncryptor(params, sk)
+
+		ctD := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Dpacked)
+		ptE := batchEncryptor.EncodeForLeftMul(lvl_W0, Epacked)
+
+		ctRes := AllocateCiphertextBatchMatrix(Epacked.Rows(), Dpacked.Cols(), dim, lvl_W0, params)
+		ppm.MulPlainLeft([]*PlaintextBatchMatrix{ptE}, ctD, dim, []*CiphertextBatchMatrix{ctRes})
+
+		resCipher2 := UnpackCipherParallel(ctRes, dim, plainUtils.NumRows(E), plainUtils.NumCols(D), encoder, decryptor, params, Dpacked.n)
+		resPlain2 := plainUtils.RowFlatten(&res)
+		for i := range resPlain2 {
+			fmt.Println("Test:", resCipher2[i])
+			fmt.Println("Want:", resPlain2[i])
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
+		}
+	})
+	t.Run("Test/Mult/MulPlainLeft/WithTranspose", func(t *testing.T) {
+		//pt x ct
+		D := plainUtils.RandMatrix(64, 64) //->ct
+		E := plainUtils.RandMatrix(64, 64) //->pt
+		Dpacked := PackMatrixSingle(D, dim)
+		DpackedT := new(PackedMatrix)
+		DpackedT.Transpose(Dpacked)
+		Epacked := PackMatrixParallelReplicated(E, dim, Dpacked.n)
+		EpackedT := new(PackedMatrix)
+		EpackedT.Transpose(Epacked)
+
+		//D x E == (E.T x D.T).T
+		var res mat.Dense
+		res.Mul(D, E)
+
+		encoder := ckks2.NewEncoder(params)
+
+		// Keys
+		kgen := ckks2.NewKeyGenerator(params)
+		sk, _ := kgen.GenKeyPair()
+
+		// Relinearization key
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		// Decryptor
+		decryptor := ckks2.NewDecryptor(params, sk)
+
+		lvl_W0 := params.MaxLevel()
+		mmLiteral := MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_1 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		//transposeLT_1 := GenTransposeDiagMatrix(params.MaxLevel(), 1.0, 4.0, dim, params, encoder)
+		// Rotation-keys generation
+		rotations := mm_1.Rotations(params)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_1.PtDiagMatrix)...)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_2.PtDiagMatrix)...)
+		rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
+		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
+		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(Dpacked.rows, Epacked.rows), utils2.MaxInt(Dpacked.cols, Epacked.cols), eval)
+		ppm.AddMatrixOperation(mm_1)
+		//ppm.AddMatrixOperation(transposeLT_1)
+		//ppm.AddMatrixOperation(transposeLT_2)
+		batchEncryptor := NewBatchEncryptor(params, sk)
+
+		ctD := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), DpackedT)
+		ptE := batchEncryptor.EncodeForLeftMul(lvl_W0, EpackedT)
+
+		ctRes := AllocateCiphertextBatchMatrix(Epacked.Rows(), Dpacked.Cols(), dim, lvl_W0, params)
+		ppm.MulPlainLeft([]*PlaintextBatchMatrix{ptE}, ctD, dim, []*CiphertextBatchMatrix{ctRes})
+
+		resCipher := UnpackCipherParallel(ctRes, dim, plainUtils.NumCols(E), plainUtils.NumRows(D), encoder, decryptor, params, Dpacked.n)
+		resCipher2 := plainUtils.RowFlatten(plainUtils.TransposeDense(mat.NewDense(plainUtils.NumCols(E), plainUtils.NumRows(D), resCipher)))
+		//resPlain2 := plainUtils.RowFlatten(plainUtils.TransposeDense(&res))
+		resPlain2 := plainUtils.RowFlatten(&res)
+		for i := range resPlain2 {
+			fmt.Println("Test:", resCipher2[i])
+			fmt.Println("Want:", resPlain2[i])
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
+		}
+	})
+
+	t.Run("Test/Mult/Hybrid/Single", func(t *testing.T) {
+		//pt x ct
+
+		// A x B x C = (C.T X B.T X A.T).T = ((A x B X C).T).T
+		//if Parallel bad things happen, probably because 64x64 is too small for parallel batches
+		Apacked := PackMatrixSingle(A, dim)
+		ApackedT := new(PackedMatrix)
+		ApackedT.Transpose(Apacked)
+		fmt.Println("Parallel Batches: ", ApackedT.n)
+		Bpacked := PackMatrixParallelReplicated(B, dim, Apacked.n)
+		BpackedT := new(PackedMatrix)
+		BpackedT.Transpose(Bpacked)
+		Cpacked := PackMatrixParallelReplicated(C, dim, Apacked.n)
+		CpackedT := new(PackedMatrix)
+		CpackedT.Transpose(Cpacked)
+		encoder := ckks2.NewEncoder(params)
+
+		// Keys
+		kgen := ckks2.NewKeyGenerator(params)
+		sk, _ := kgen.GenKeyPair()
+
+		// Relinearization key
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		// Decryptor
+		decryptor := ckks2.NewDecryptor(params, sk)
+
+		lvl_W0 := params.MaxLevel()
+		mmLiteral := MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_1 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		//transposeLT_1 := GenTransposeDiagMatrix(params.MaxLevel(), 1.0, 4.0, dim, params, encoder)
+		mmLiteral = MatrixMultiplicationLiteral{
+			Dimension:   dim,
+			LevelStart:  lvl_W0 - 2,
+			InputScale:  params.Scale(),
+			TargetScale: params.Scale(),
+		}
+		mm_2 := NewMatrixMultiplicatonFromLiteral(params, mmLiteral, encoder)
+		//transposeLT_2 := GenTransposeDiagMatrix(params.MaxLevel()-2, 1.0, 4.0, dim, params, encoder)
+		// Rotation-keys generation
+		rotations := mm_1.Rotations(params)
+		rotations = append(rotations, mm_2.Rotations(params)...)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_1.PtDiagMatrix)...)
+		//rotations = append(rotations, params.RotationsForDiagMatrixMult(transposeLT_2.PtDiagMatrix)...)
+		rotKeys := kgen.GenRotationKeysForRotations(rotations, false, sk)
+		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: rotKeys})
+		ppm := NewPackedMatrixMultiplier(params, dim, utils2.MaxInt(utils2.MaxInt(ApackedT.rows, BpackedT.rows), CpackedT.rows), utils2.MaxInt(utils2.MaxInt(ApackedT.cols, BpackedT.cols), CpackedT.cols), eval)
+		ppm.AddMatrixOperation(mm_1)
+		ppm.AddMatrixOperation(mm_2)
+		//ppm.AddMatrixOperation(transposeLT_1)
+		//ppm.AddMatrixOperation(transposeLT_2)
+		batchEncryptor := NewBatchEncryptor(params, sk)
+
+		ctA := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), ApackedT)
+		ctB := batchEncryptor.EncodeForLeftMul(lvl_W0, BpackedT)
+		ctC := batchEncryptor.EncodeForLeftMul(lvl_W0-2, CpackedT)
+
+		start := time.Now()
+		ctTmp := AllocateCiphertextBatchMatrix(ctB.Rows(), ctA.Cols(), dim, ctA.Level(), params)
+		ppm.MulPlainLeft([]*PlaintextBatchMatrix{ctB}, ctA, dim, []*CiphertextBatchMatrix{ctTmp})
+		ctRes := AllocateCiphertextBatchMatrix(ctC.Rows(), ctTmp.Cols(), dim, ctA.Level(), params)
+		ppm.MulPlainLeft([]*PlaintextBatchMatrix{ctC}, ctTmp, dim, []*CiphertextBatchMatrix{ctRes})
+		fmt.Println("level: ", ctRes.Level())
+		require.Equal(t, lvl_W0-ctRes.Level(), 4)
+		stop := time.Since(start)
+		fmt.Println("Done ", stop)
+
+		var tmp mat.Dense
+		var res mat.Dense
+		tmp.Mul(A, B)
+		res.Mul(&tmp, C)
+
+		resPlain2 := plainUtils.RowFlatten(&res)
+		//transpose this
+		resCipher := UnpackCipherParallel(ctRes, dim, plainUtils.NumCols(C), plainUtils.NumRows(A), encoder, decryptor, params, Apacked.n)
+		resCipher2 := plainUtils.RowFlatten(plainUtils.TransposeDense(mat.NewDense(plainUtils.NumCols(C), plainUtils.NumRows(A), resCipher)))
+		for i := range resPlain2 {
+			fmt.Println("Test ", i, " :", resCipher2[i])
+			fmt.Println("Want ", i, " :", resPlain2[i])
+			fmt.Println()
+			//require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
+		}
+	})
+
 }
