@@ -480,7 +480,7 @@ func Test_Multiplication(t *testing.T) {
 		ctA := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Apacked)
 		start := time.Now()
 		ctRes := ppm.EvalPoly(ctA, ckks2.NewPoly(activation.Poly.Coeffs))
-		fmt.Println("level: ", ctA.Level())
+		fmt.Println("level: ", ctRes.Level())
 		stop := time.Since(start)
 		fmt.Println("Done ", stop)
 

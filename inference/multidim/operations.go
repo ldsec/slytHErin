@@ -566,6 +566,20 @@ func (ppm *PackedMatrixMultiplier) Add(A, B, C *CiphertextBatchMatrix) {
 	}
 }
 
+func (ppm *PackedMatrixMultiplier) AddPlain(A *CiphertextBatchMatrix, B *PlaintextBatchMatrix, C *CiphertextBatchMatrix) {
+	if len(A.M) != len(B.M) {
+		panic("input matrices are not compatible for addition")
+	}
+
+	if len(A.M) != len(C.M) {
+		panic("output matrix is not compatible with input matrices")
+	}
+
+	for i := range A.M {
+		ppm.eval.Add(A.M[i], B.M[i][0], C.M[i])
+	}
+}
+
 func (ppm *PackedMatrixMultiplier) Sub(A, B, C *CiphertextBatchMatrix) {
 	if len(A.M) != len(B.M) {
 		panic("input matrices are not compatible for subtraction")
