@@ -3,6 +3,7 @@ package multidim
 import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	ckks2 "github.com/ldsec/lattigo/v2/ckks"
 	rlwe2 "github.com/ldsec/lattigo/v2/rlwe"
 	utils2 "github.com/ldsec/lattigo/v2/utils"
@@ -441,8 +442,57 @@ func Test_Multiplication(t *testing.T) {
 			fmt.Println("Test ", i, " :", resCipher2[i])
 			fmt.Println("Want ", i, " :", resPlain2[i])
 			fmt.Println()
-			//require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
 		}
 	})
 
+	t.Run("Test/Activation/Poly", func(t *testing.T) {
+
+		// A x B x C = (C.T X B.T X A.T).T = ((A x B X C).T).T
+		//if Parallel bad things happen, probably because 64x64 is too small for parallel batches
+		Apacked := PackMatrixParallel(A, dim, params.LogSlots())
+
+		activation := utils.InitReLU(3)
+		f := func(v float64) float64 {
+			return v / float64(activation.Interval)
+		}
+		Apacked.Apply(Apacked, f)
+		encoder := ckks2.NewEncoder(params)
+
+		// Keys
+		kgen := ckks2.NewKeyGenerator(params)
+		sk, _ := kgen.GenKeyPair()
+
+		// Relinearization key
+		rlk := kgen.GenRelinearizationKey(sk, 2)
+
+		// Decryptor
+		decryptor := ckks2.NewDecryptor(params, sk)
+
+		// Rotation-keys generation
+
+		eval := ckks2.NewEvaluator(params, rlwe2.EvaluationKey{Rlk: rlk, Rtks: nil})
+		ppm := NewPackedMatrixMultiplier(params, dim, Apacked.rows, Apacked.cols, eval)
+		//ppm.AddMatrixOperation(transposeLT_1)
+		//ppm.AddMatrixOperation(transposeLT_2)
+		batchEncryptor := NewBatchEncryptor(params, sk)
+
+		ctA := batchEncryptor.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Apacked)
+		start := time.Now()
+		ctRes := ppm.EvalPoly(ctA, ckks2.NewPoly(activation.Poly.Coeffs))
+		fmt.Println("level: ", ctA.Level())
+		stop := time.Since(start)
+		fmt.Println("Done ", stop)
+
+		utils.ActivatePlain(A, activation)
+		//transpose this
+		resCipher2 := UnpackCipherParallel(ctRes, dim, plainUtils.NumRows(A), plainUtils.NumCols(A), encoder, decryptor, params, Apacked.n)
+		resPlain2 := plainUtils.RowFlatten(A)
+		for i := range resPlain2 {
+			fmt.Println("Test ", i, " :", resCipher2[i])
+			fmt.Println("Want ", i, " :", resPlain2[i])
+			fmt.Println()
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1e-1)
+		}
+	})
 }
