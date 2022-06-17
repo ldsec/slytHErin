@@ -15,6 +15,7 @@ import (
 //Testing SimpleNet with MultiDimentional packing for enhanced throughput
 
 func Test_BatchEncrypted(t *testing.T) {
+	debug := true
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()
 	//crypto
@@ -40,8 +41,9 @@ func Test_BatchEncrypted(t *testing.T) {
 	params, err := ckks2.NewParametersFromLiteral(ckksParams)
 
 	features := 784 //MNIST
-	batchSize := 256
-	innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
+	batchSize := 49
+	//innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
+	innerDim := 49
 	fmt.Printf("Input Dense: Rows %d, Cols %d --> InnerDim: %d\n", batchSize, features, innerDim)
 	dataSn := data.LoadData("simpleNet_data_nopad.json")
 	err = dataSn.Init(batchSize)
@@ -88,7 +90,6 @@ func Test_BatchEncrypted(t *testing.T) {
 	maxIters := int(math.Ceil(float64(1024 / batchSize)))
 	var elapsed int64
 
-	debug := false
 	for true {
 		Xenc := batchEnc.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Xpacked)
 		fmt.Printf("Input dimentions:\nRows:%d\nCols:%d\nInnerDim:%d\nBatches:%d\n\n", Xenc.Rows(), Xenc.Cols(), Xenc.Dim(), Xpacked.Batches())
