@@ -251,3 +251,13 @@ func ReplicateComplexArray(v []complex128, n int) []complex128 {
 	}
 	return vr
 }
+
+func ApplyFuncDense(f func(v float64) float64, a *mat.Dense) *mat.Dense {
+	m := mat.NewDense(NumRows(a), NumCols(a), nil)
+	for i := 0; i < NumRows(a); i++ {
+		for j := 0; j < NumCols(a); j++ {
+			m.Set(i, j, f(a.At(i, j)))
+		}
+	}
+	return m
+}
