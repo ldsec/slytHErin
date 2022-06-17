@@ -1,7 +1,6 @@
 package multidim
 
 import (
-	"fmt"
 	ckks2 "github.com/ldsec/lattigo/v2/ckks"
 	ring2 "github.com/ldsec/lattigo/v2/ring"
 	utils2 "github.com/ldsec/lattigo/v2/utils"
@@ -39,16 +38,16 @@ func (be *BatchEncryptor) EncodeAndEncrypt(level int, scale float64, pm *PackedM
 	for i := 0; i < pm.Rows()*pm.Cols(); i++ {
 		for j := 0; j < nbMatrices; j++ {
 			tmp := pm.M[i][j].M
-			fmt.Printf("Matrix slot inside pm at coord %d, batch %d\n", i, j)
-			fmt.Println(tmp)
+			//fmt.Printf("Matrix slot inside pm at coord %d, batch %d\n", i, j)
+			//fmt.Println(tmp)
 			for k, c := range tmp {
 				values[j*d+k] = c
 			}
-			fmt.Printf("finished putting in plaintext matrix in entry %d of batch %d\n", i, j)
-			fmt.Println(values)
+			//fmt.Printf("finished putting in plaintext matrix in entry %d of batch %d\n", i, j)
+			//fmt.Println(values)
 		}
-		fmt.Printf("finished putting in plaintext all batches of entry %d\n", i)
-		fmt.Println(values)
+		//fmt.Printf("finished putting in plaintext all batches of entry %d\n", i)
+		//fmt.Println(values)
 
 		be.encoder.EncodeNTT(pt, values, logSlots)
 		w[i] = be.encryptor.EncryptNew(pt)

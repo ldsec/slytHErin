@@ -6,6 +6,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	ckks2 "github.com/ldsec/lattigo/v2/ckks"
+	rlwe2 "github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"time"
 )
@@ -23,6 +24,16 @@ type SimpleNetMD struct {
 
 	innerDim, parallelBatches int
 	maxR, maxC                int
+}
+
+//HELPERS
+//takes the batch as dense matrix and packs it (transpose)
+func PackBatchParallel(X *mat.Dense, innerDim int, params ckks2.Parameters) *md.PackedMatrix {
+	//Xpacked := md.PackMatrixParallel(X, innerDim, params.LogSlots())
+	Xpacked := md.PackMatrixParallel(X, innerDim, params.LogSlots())
+	XpackedT := new(md.PackedMatrix)
+	XpackedT.Transpose(Xpacked)
+	return XpackedT
 }
 
 //Converts the loaded SimpleNet model in its MultiDimentional Packing representation
@@ -48,12 +59,15 @@ func (sn *SimpleNet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols i
 
 		weightsMD[i] = wPackedT
 
-		bPacked := md.PackMatrixParallelReplicated(biases[i], innerDim, parallelBatches)
+		bPacked := md.PackMatrixParallel(biases[i], innerDim, params.LogSlots())
 		bPackedT := new(md.PackedMatrix)
 		bPackedT.Transpose(bPacked)
 		biasesMD[i] = bPackedT
+		fmt.Printf("Layer %d:\n", i+1)
+		fmt.Printf("Weight Dim (Rows,Cols): %d, %d \n", wPackedT.Rows(), wPackedT.Cols())
+		fmt.Printf("Bias Dim (Rows,Cols): %d, %d \n", bPackedT.Rows(), bPackedT.Cols())
 	}
-	batchEnc := md.NewBatchEncryptor(params, nil)
+	batchEnc := md.NewBatchEncryptor(params, rlwe2.NewPublicKey(params.Parameters)) //it shouldn't be used
 	snMD := new(SimpleNetMD)
 	snMD.Layers = make([]*PackedMatrixLinearLayer, len(weights))
 	snMD.Activation = sn.ReLUApprox
@@ -70,10 +84,12 @@ func (sn *SimpleNet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols i
 			InputScale:  params.Scale(),
 			TargetScale: params.Scale(),
 		}
+
 		layer.Mm = md.NewMatrixMultiplicatonFromLiteral(params, mmLiteral, ecd)
 		level -= 2 //pt mul
 		layer.B = batchEnc.EncodeParallel(level, scale, biasesMD[i])
 		level -= sn.ReLUApprox.LevelsOfAct() //act
+		snMD.Layers[i] = layer
 	}
 	snMD.maxR = maxR
 	snMD.maxC = maxC
@@ -97,35 +113,40 @@ func (snMD *SimpleNetMD) InitPmMultiplier(params ckks2.Parameters, eval ckks2.Ev
 	}
 }
 
-func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box) {
+func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box) SimpleNetPipeLine {
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
 	resAfterBias := new(md.CiphertextBatchMatrix)
-
+	fmt.Println("Start level: ", Xenc.Level())
 	for i := range snMD.Layers {
 		layer := snMD.Layers[i]
 		if i == 0 {
 			resAfterBias = Xenc
 		}
-		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level()-2, Box.Params)
+		fmt.Println("Layer ", i+1)
+		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
 		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
+		fmt.Println("Level after Mul: ", tmpA.Level())
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
 		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
+		fmt.Println("Level after Add: ", tmpB.Level())
 		snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
+		fmt.Println("Level after Act: ", tmpB.Level())
 		resAfterBias = tmpB
 	}
 	elapsed := time.Since(start)
 	fmt.Println("Done: ", elapsed)
 
+	//tranpose the result
 	resCipher := md.UnpackCipherParallel(resAfterBias, snMD.innerDim, 10, len(Y), Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
-	resCipher2 := plainUtils.TransposeDense(mat.NewDense(len(Y), 10, resCipher))
+	resCipher2 := plainUtils.TransposeDense(mat.NewDense(10, len(Y), resCipher))
 	predictions := make([]int, len(Y))
 	corrects := 0
 	for i := 0; i < len(Y); i++ {
 		maxIdx := 0
 		maxConfidence := 0.0
-		for j := 0; j < len(Y); j++ {
+		for j := 0; j < 10; j++ {
 			confidence := resCipher2.At(i, j)
 			if confidence > maxConfidence {
 				maxConfidence = confidence
@@ -138,4 +159,75 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMat
 		}
 	}
 	fmt.Println("Corrects enc:", corrects)
+	return SimpleNetPipeLine{
+		Corrects: corrects,
+		Time:     elapsed,
+	}
+}
+
+func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box, Xclear *mat.Dense, weights, biases []*mat.Dense) SimpleNetPipeLine {
+	fmt.Println("Starting inference...")
+	start := time.Now()
+
+	resAfterBias := new(md.CiphertextBatchMatrix)
+	resAfterBiasClear := new(mat.Dense)
+	fmt.Println("Start level: ", Xenc.Level())
+	for i := range snMD.Layers {
+		layer := snMD.Layers[i]
+		if i == 0 {
+			resAfterBias = Xenc
+			resAfterBiasClear = Xclear
+		}
+		fmt.Println("Layer ", i+1)
+		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
+		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
+		fmt.Println("Level after Mul: ", tmpA.Level())
+		tmpAclear := new(mat.Dense)
+		tmpAclear.Mul(resAfterBiasClear, weights[i])
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpAclear, 1.0/snMD.Activation.Interval), tmpA, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+
+		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
+		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
+		tmpBclear := new(mat.Dense)
+		fmt.Println("Level after Add: ", tmpB.Level())
+		tmpBclear.Add(resAfterBiasClear, plainUtils.MulByConst(biases[i], 1.0/snMD.Activation.Interval))
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpBclear, 1.0/snMD.Activation.Interval), tmpB, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+
+		snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
+		utils.ActivatePlain(tmpBclear, snMD.Activation)
+		utils.ThrowErr(md.DebugMD(tmpBclear, tmpB, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+		fmt.Println("Level after Act: ", tmpB.Level())
+
+		resAfterBias = tmpB
+		resAfterBiasClear = tmpBclear
+	}
+	elapsed := time.Since(start)
+	fmt.Println("Done: ", elapsed)
+
+	//tranpose the result
+	resCipher := md.UnpackCipherParallel(resAfterBias, snMD.innerDim, len(Y), 10, Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
+	//resCipher2 := plainUtils.TransposeDense(mat.NewDense(10, len(Y), resCipher))
+	resCipher2 := mat.NewDense(len(Y), 10, resCipher)
+	predictions := make([]int, len(Y))
+	corrects := 0
+	for i := 0; i < len(Y); i++ {
+		maxIdx := 0
+		maxConfidence := 0.0
+		for j := 0; j < 10; j++ {
+			confidence := resCipher2.At(i, j)
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+				maxIdx = j
+			}
+		}
+		predictions[i] = maxIdx
+		if predictions[i] == Y[i] {
+			corrects += 1
+		}
+	}
+	fmt.Println("Corrects enc:", corrects)
+	return SimpleNetPipeLine{
+		Corrects: corrects,
+		Time:     elapsed,
+	}
 }

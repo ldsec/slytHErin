@@ -27,6 +27,10 @@ func (pm *PackedMatrix) Dim() int {
 	return pm.dim
 }
 
+func (pm *PackedMatrix) Batches() int {
+	return pm.n
+}
+
 // Pack matrix with padding
 func PackMatrixSingle(m *mat.Dense, dim int) (pm *PackedMatrix) {
 	raw_r, raw_c := m.Dims()

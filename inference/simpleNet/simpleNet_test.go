@@ -106,14 +106,12 @@ func TestEvalDataEncModelClearCompressed_withActivators_NoPad(t *testing.T) {
 	bias2M := utils.BuildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
 	pool2M := utils.BuildKernelMatrix(sn.Pool2.Weight)
 
-	utils.ThrowErr(err)
 	inputLayerDim = plainUtils.NumCols(pool2M)
 	bias3M := utils.BuildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
 
 	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
 	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
 
-	utils.ThrowErr(err)
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
 

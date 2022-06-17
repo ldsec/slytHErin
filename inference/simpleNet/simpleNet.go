@@ -57,6 +57,58 @@ func (sn *SimpleNet) Init() {
 	sn.ReLUApprox = utils.InitReLU(deg)
 }
 
+//returns list of (weights, biases) as arrays of *mat.Dense
+func (sn *SimpleNet) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
+	conv1M := utils.BuildKernelMatrix(sn.Conv1.Weight)
+	inputLayerDim := plainUtils.NumCols(conv1M)
+	bias1M := utils.BuildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
+	pool1M := utils.BuildKernelMatrix(sn.Pool1.Weight)
+	inputLayerDim = plainUtils.NumCols(pool1M)
+	bias2M := utils.BuildBiasMatrix(sn.Pool1.Bias, inputLayerDim, batchSize)
+	pool2M := utils.BuildKernelMatrix(sn.Pool2.Weight)
+	inputLayerDim = plainUtils.NumCols(pool2M)
+	bias3M := utils.BuildBiasMatrix(sn.Pool2.Bias, inputLayerDim, batchSize)
+	weightMatrices := []*mat.Dense{conv1M, pool1M, pool2M}
+	biasMatrices := []*mat.Dense{bias1M, bias2M, bias3M}
+
+	return weightMatrices, biasMatrices
+}
+
+//Compress the 2 linear layers back to back
+func (sn *SimpleNet) CompressLayers(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
+	//plaintext weights and bias
+	conv1M := weights[0]
+	pool1M := weights[1]
+	bias1M := biases[0]
+	bias2M := biases[1]
+
+	var compressed mat.Dense
+	compressed.Mul(conv1M, pool1M)
+	var biasCompressed mat.Dense
+	biasCompressed.Mul(bias1M, pool1M)
+	biasCompressed.Add(&biasCompressed, bias2M)
+
+	return []*mat.Dense{&compressed, weights[2]}, []*mat.Dense{&biasCompressed, biases[2]}
+}
+
+//Rescale the Parameters by 1/interval
+func (sn *SimpleNet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
+	wRescaled := make([]*mat.Dense, len(weights))
+	bRescaled := make([]*mat.Dense, len(biases))
+
+	for i := range weights {
+		wRescaled[i] = new(mat.Dense)
+		wRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), weights[i])
+		bRescaled[i] = new(mat.Dense)
+		bRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), biases[i])
+
+		fmt.Printf("Layer %d:\n", i+1)
+		fmt.Printf("Dense Weight Dims (R,C): %d,%d\n", plainUtils.NumRows(wRescaled[i]), plainUtils.NumCols(wRescaled[i]))
+		fmt.Printf("Dense Bias Dims (R,C): %d,%d\n", plainUtils.NumRows(bRescaled[i]), plainUtils.NumCols(bRescaled[i]))
+	}
+	return wRescaled, bRescaled
+}
+
 //Plaintext pipeline.
 func (sn *SimpleNet) EvalBatchPlain(Xbatch [][]float64, Y []int, maxDim, labels int) *SimpleNetPipeLine {
 	batchSize := len(Xbatch)
