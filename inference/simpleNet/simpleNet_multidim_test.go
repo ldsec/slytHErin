@@ -15,7 +15,7 @@ import (
 //Testing SimpleNet with MultiDimentional packing for enhanced throughput
 
 func Test_BatchEncrypted(t *testing.T) {
-	debug := true
+	debug := false
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()
 	//crypto

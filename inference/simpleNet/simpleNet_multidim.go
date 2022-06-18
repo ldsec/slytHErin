@@ -128,12 +128,13 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMat
 		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
 		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
 		fmt.Println("Level after Mul: ", tmpA.Level())
+
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
 		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
 		fmt.Println("Level after Add: ", tmpB.Level())
-		snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
+
+		resAfterBias = snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
 		fmt.Println("Level after Act: ", tmpB.Level())
-		resAfterBias = tmpB
 	}
 	elapsed := time.Since(start)
 	fmt.Println("Done: ", elapsed)
@@ -183,6 +184,7 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 		fmt.Println("Layer ", i+1)
 		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
 		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
+
 		fmt.Println("Level after Mul: ", tmpA.Level())
 		tmpAclear := new(mat.Dense)
 		tmpAclear.Mul(resAfterBiasClear, weights[i])
@@ -190,6 +192,7 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
 		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
+
 		tmpBclear := new(mat.Dense)
 		fmt.Println("Level after Add: ", tmpB.Level())
 		tmpBclear.Add(tmpAclear, biases[i])
