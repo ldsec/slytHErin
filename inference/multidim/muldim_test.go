@@ -25,11 +25,11 @@ func Test_MultiDimPacking_Operations(t *testing.T) {
 	}
 	params, _ := ckks2.NewParametersFromLiteral(ckksParams)
 
-	A := plainUtils.RandMatrix(64, 64)
-	B := plainUtils.RandMatrix(64, 32)
-	C := plainUtils.RandMatrix(32, 16)
+	A := plainUtils.RandMatrix(2, 4)
+	B := plainUtils.RandMatrix(4, 4)
+	C := plainUtils.RandMatrix(4, 8)
 
-	dim := 8
+	dim := 2
 
 	t.Run("Test/Mult/Plain/Single", func(t *testing.T) {
 		Apacked := PackMatrixSingle(A, dim)
@@ -237,7 +237,8 @@ func Test_MultiDimPacking_Operations(t *testing.T) {
 	t.Run("Test/Mult/Hybrid/MulPtLeft", func(t *testing.T) {
 		//pt x ct
 		D := plainUtils.RandMatrix(4, 4)
-		E := plainUtils.RandMatrix(4, 4)
+		E := plainUtils.RandMatrix(4, 2)
+		dim := 2
 		Dpacked := PackMatrixSingle(D, dim)
 		Epacked := PackMatrixParallelReplicated(E, dim, Dpacked.n)
 
@@ -451,15 +452,20 @@ func Test_MultiDimPacking_Operations(t *testing.T) {
 		//pt x ct
 
 		// A x B x C = (C.T X B.T X A.T).T = ((A x B X C).T).T
-		//dim = int(math.Ceil(float64(params.MaxSlots()) / float64(plainUtils.NumRows(A))))
-		Apacked := PackMatrixParallelReplicated(A, dim, params.LogSlots())
+		A := plainUtils.RandMatrix(256, 784)
+		B := plainUtils.RandMatrix(784, 100)
+		C := plainUtils.RandMatrix(100, 10)
+
+		dim := 32
+
+		Apacked := PackMatrixParallel(A, dim, params.LogSlots())
 		ApackedT := new(PackedMatrix)
 		ApackedT.Transpose(Apacked)
 		fmt.Println("Parallel Batches: ", ApackedT.n)
-		Bpacked := PackMatrixParallelReplicated(B, dim, params.LogSlots())
+		Bpacked := PackMatrixParallelReplicated(B, dim, Apacked.n)
 		BpackedT := new(PackedMatrix)
 		BpackedT.Transpose(Bpacked)
-		Cpacked := PackMatrixParallelReplicated(C, dim, params.LogSlots())
+		Cpacked := PackMatrixParallelReplicated(C, dim, Apacked.n)
 		CpackedT := new(PackedMatrix)
 		CpackedT.Transpose(Cpacked)
 		encoder := ckks2.NewEncoder(params)
@@ -525,23 +531,60 @@ func Test_MultiDimPacking_Operations(t *testing.T) {
 		res.Mul(&tmp, C)
 
 		resPlain2 := plainUtils.RowFlatten(&res)
-		fmt.Println("Plain")
-		for i, r := range resPlain2 {
-			fmt.Println(i, " --> ", r)
-		}
+		//fmt.Println("Plain")
+		//for i, r := range resPlain2 {
+		//	fmt.Println(i, " --> ", r)
+		//}
 		//transpose this
-		resCipher := UnpackCipherParallel(ctRes, dim, plainUtils.NumRows(A), plainUtils.NumCols(C), encoder, decryptor, params, Apacked.n)
-		fmt.Println("Cipher")
-		for i, r := range resCipher {
-			fmt.Println(i, " --> ", r)
-		}
-		resCipher2 := plainUtils.RowFlatten(plainUtils.TransposeDense(mat.NewDense(plainUtils.NumCols(C), plainUtils.NumRows(A), resCipher)))
+		//resCipher2 := UnpackCipherParallelTranspose(ctRes, dim, plainUtils.NumRows(A), plainUtils.NumCols(C), encoder, decryptor, params, Apacked.n)
+		//fmt.Println("Cipher")
+		//for i, r := range resCipher {
+		//	fmt.Println(i, " --> ", r)
+		//}
+		//resCipher2 := plainUtils.RowFlatten(plainUtils.TransposeDense(mat.NewDense(plainUtils.NumCols(C), plainUtils.NumRows(A), resCipher)))
 
-		for i := range resCipher2 {
-			fmt.Println("Test ", i, " :", resCipher2[i])
+		//for i := range resCipher2 {
+		//	fmt.Println("Test ", i, " :", resCipher2[i])
+		//	fmt.Println("Want ", i, " :", resPlain2[i])
+		//	fmt.Println()
+		//	require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 0.5)
+		//}
+
+		tmpPacked := new(PackedMatrix)
+		tmpPacked.Mul(BpackedT, ApackedT)
+		resPacked := new(PackedMatrix)
+		resPacked.Mul(CpackedT, tmpPacked)
+		//ok
+		//for i := range resPacked.M {
+		//	VerifyTestVectors(params, encoder, decryptor, resPacked.M[i], ctRes.M[i], t)
+		//}
+		for j := range resPacked.M[0] {
+			fmt.Println("Batch ", j)
+			for i := range resPacked.M {
+				fmt.Println("Coord ", i)
+				m := resPacked.M[i][j]
+				m.Print()
+			}
+		}
+		resPackedT := new(PackedMatrix)
+		resPackedT.Transpose(resPacked)
+		fmt.Printf("R %d C %d N %d unpack--> R %d C %d\n", resPacked.Rows(), resPacked.Cols(), resPacked.n, plainUtils.NumRows(&res), plainUtils.NumCols(&res))
+		resFromPacked := UnpackMatrixParallel(resPackedT, dim, plainUtils.NumRows(&res), plainUtils.NumCols(&res))
+
+		resCipher := DecryptCipher(ctRes, encoder, decryptor, params, Apacked.n)
+		resCipherT := new(PackedMatrix)
+		resCipherT.Transpose(resCipher)
+		resCipher2 := UnpackMatrixParallel(resCipherT, dim, plainUtils.NumRows(&res), plainUtils.NumCols(&res))
+
+		for i := range resPlain2 {
+			fmt.Println("Test Cipher ", i, " :", resCipher2[i])
+			fmt.Println("Test Packed", i, " :", resFromPacked[i])
 			fmt.Println("Want ", i, " :", resPlain2[i])
 			fmt.Println()
-			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 0.5)
+		}
+		for i := range resPlain2 {
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resFromPacked[i]), 1.0)
+			require.LessOrEqual(t, math.Abs(resPlain2[i]-resCipher2[i]), 1.0)
 		}
 	})
 

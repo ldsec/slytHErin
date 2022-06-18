@@ -41,9 +41,8 @@ func Test_BatchEncrypted(t *testing.T) {
 	params, err := ckks2.NewParametersFromLiteral(ckksParams)
 
 	features := 784 //MNIST
-	batchSize := 49
-	//innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
-	innerDim := 49
+	batchSize := 256
+	innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
 	fmt.Printf("Input Dense: Rows %d, Cols %d --> InnerDim: %d\n", batchSize, features, innerDim)
 	dataSn := data.LoadData("simpleNet_data_nopad.json")
 	err = dataSn.Init(batchSize)

@@ -35,7 +35,10 @@ func DebugMD(clear *mat.Dense, cipher *CiphertextBatchMatrix, innerDim, parallel
 	var resCipher2 []float64
 	var err error
 	if decodeParallel {
-		resCipher = UnpackCipherParallel(cipher, innerDim, plainUtils.NumCols(clear), plainUtils.NumRows(clear), encoder, decryptor, params, parallelBatches)
+		resCipherPacked := DecryptCipher(cipher, Box.Encoder, Box.Decryptor, Box.Params, parallelBatches)
+		resCipherPackedT := new(PackedMatrix)
+		resCipherPackedT.Transpose(resCipherPacked)
+		resCipher = UnpackMatrixParallel(resCipherPackedT, innerDim, plainUtils.NumRows(clear), plainUtils.NumCols(clear))
 	} else {
 		resCipher = UnpackCipherSingle(cipher, innerDim, plainUtils.NumCols(clear), plainUtils.NumRows(clear), encoder, decryptor, params)
 	}
@@ -50,7 +53,7 @@ func DebugMD(clear *mat.Dense, cipher *CiphertextBatchMatrix, innerDim, parallel
 		fmt.Println("Want ", i, " :", resPlain2[i])
 		fmt.Println()
 		if math.Abs(resCipher2[i]-resPlain2[i]) > 0.99 {
-			err = errors.New(fmt.Sprintf("Expected %f, got %f, at %d", resPlain2[i], resCipher[i], i))
+			err = errors.New(fmt.Sprintf("Expected %f, got %f, at %d", resPlain2[i], resCipher2[i], i))
 			break
 		}
 	}

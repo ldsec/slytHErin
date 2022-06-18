@@ -217,8 +217,8 @@ func VerifyTestVectors(params ckks2.Parameters, encoder ckks2.Encoder, decryptor
 		t.Log(precStats.String())
 	}
 
-	require.GreaterOrEqual(t, precStats.MeanPrecision.Real, minPrec)
-	require.GreaterOrEqual(t, precStats.MeanPrecision.Imag, minPrec)
+	require.GreaterOrEqual(t, precStats.MeanPrecision.Real, 10.0)
+	require.GreaterOrEqual(t, precStats.MeanPrecision.Imag, 10.0)
 
 }
 

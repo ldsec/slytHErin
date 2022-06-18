@@ -30,7 +30,7 @@ type SimpleNetMD struct {
 //takes the batch as dense matrix and packs it (transpose)
 func PackBatchParallel(X *mat.Dense, innerDim int, params ckks2.Parameters) *md.PackedMatrix {
 	//Xpacked := md.PackMatrixParallel(X, innerDim, params.LogSlots())
-	Xpacked := md.PackMatrixSingle(X, innerDim)
+	Xpacked := md.PackMatrixParallel(X, innerDim, params.LogSlots())
 	XpackedT := new(md.PackedMatrix)
 	XpackedT.Transpose(Xpacked)
 	return XpackedT
@@ -59,8 +59,7 @@ func (sn *SimpleNet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols i
 
 		weightsMD[i] = wPackedT
 
-		//bPacked := md.PackMatrixParallel(biases[i], innerDim, params.LogSlots())
-		bPacked := md.PackMatrixSingle(biases[i], innerDim)
+		bPacked := md.PackMatrixParallel(biases[i], innerDim, params.LogSlots())
 		bPackedT := new(md.PackedMatrix)
 		bPackedT.Transpose(bPacked)
 		biasesMD[i] = bPackedT
@@ -140,8 +139,10 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMat
 	fmt.Println("Done: ", elapsed)
 
 	//tranpose the result
-	resCipher := md.UnpackCipherParallel(resAfterBias, snMD.innerDim, 10, len(Y), Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
-	resCipher2 := plainUtils.TransposeDense(mat.NewDense(10, len(Y), resCipher))
+	resCipher := md.DecryptCipher(resAfterBias, Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
+	resCipherT := new(md.PackedMatrix)
+	resCipherT.Transpose(resCipher)
+	resCipher2 := mat.NewDense(len(Y), 10, md.UnpackMatrixParallel(resCipherT, snMD.innerDim, len(Y), 10))
 	predictions := make([]int, len(Y))
 	corrects := 0
 	for i := 0; i < len(Y); i++ {
@@ -185,19 +186,19 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 		fmt.Println("Level after Mul: ", tmpA.Level())
 		tmpAclear := new(mat.Dense)
 		tmpAclear.Mul(resAfterBiasClear, weights[i])
-		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpAclear, 1.0/snMD.Activation.Interval), tmpA, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpAclear, 1.0/snMD.Activation.Interval), tmpA, snMD.innerDim, snMD.parallelBatches, true, false, Box))
 
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
 		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
 		tmpBclear := new(mat.Dense)
 		fmt.Println("Level after Add: ", tmpB.Level())
 		tmpBclear.Add(tmpAclear, biases[i])
-		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpBclear, 1.0/snMD.Activation.Interval), tmpB, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpBclear, 1.0/snMD.Activation.Interval), tmpB, snMD.innerDim, snMD.parallelBatches, true, false, Box))
 
 		resAfterBias = snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
 		utils.ActivatePlain(tmpBclear, snMD.Activation)
 		fmt.Println("Level after Act: ", tmpB.Level())
-		utils.ThrowErr(md.DebugMD(tmpBclear, resAfterBias, snMD.innerDim, snMD.parallelBatches, true, true, Box))
+		utils.ThrowErr(md.DebugMD(tmpBclear, resAfterBias, snMD.innerDim, snMD.parallelBatches, true, false, Box))
 
 		resAfterBiasClear = tmpBclear
 	}
@@ -205,8 +206,10 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 	fmt.Println("Done: ", elapsed)
 
 	//tranpose the result
-	resCipher := md.UnpackCipherParallel(resAfterBias, snMD.innerDim, 10, len(Y), Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
-	resCipher2 := plainUtils.TransposeDense(mat.NewDense(10, len(Y), resCipher))
+	resCipher := md.DecryptCipher(resAfterBias, Box.Encoder, Box.Decryptor, Box.Params, snMD.parallelBatches)
+	resCipherT := new(md.PackedMatrix)
+	resCipherT.Transpose(resCipher)
+	resCipher2 := mat.NewDense(len(Y), 10, md.UnpackMatrixParallel(resCipherT, snMD.innerDim, len(Y), 10))
 
 	predictions := make([]int, len(Y))
 	corrects := 0

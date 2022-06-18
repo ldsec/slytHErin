@@ -191,6 +191,30 @@ func UnpackMatrixSingle(pm *PackedMatrix, dim, rows, cols int) (ret []float64) {
 	return ret
 }
 
+//decrypts cipher into the corresponding packed matrix
+func DecryptCipher(ct *CiphertextBatchMatrix, e ckks2.Encoder, d ckks2.Decryptor, params ckks2.Parameters, n int) *PackedMatrix {
+	pm := new(PackedMatrix)
+	pm.rows = ct.rows
+	pm.cols = ct.cols
+	pm.dim = ct.dim
+	pm.n = n
+	pm.M = make([][]*Matrix, pm.rows*pm.cols)
+	for i := range pm.M {
+		//i -> rows x cols
+		pm.M[i] = make([]*Matrix, n)
+		v := e.DecodePublic(d.DecryptNew(ct.M[i]), params.LogSlots(), params.Sigma())
+		for j := range pm.M[i] {
+			//j -> n
+			pm.M[i][j] = new(Matrix)
+			pm.M[i][j].rows = pm.dim
+			pm.M[i][j].cols = pm.dim
+			pm.M[i][j].Real = false
+			pm.M[i][j].M = make([]complex128, pm.dim*pm.dim)
+			pm.M[i][j].M = v[j*(pm.dim*pm.dim) : (j+1)*(pm.dim*pm.dim)]
+		}
+	}
+	return pm
+}
 func UnpackCipherParallel(ct *CiphertextBatchMatrix, dim, rows, cols int, e ckks2.Encoder, d ckks2.Decryptor, params ckks2.Parameters, n int) (ret []float64) {
 	ret = make([]float64, rows*cols)
 	if n == 0 {
@@ -203,7 +227,10 @@ func UnpackCipherParallel(ct *CiphertextBatchMatrix, dim, rows, cols int, e ckks
 			}
 			mat := e.Decode(d.DecryptNew(ct.M[i*ct.cols+j]), params.LogSlots())
 			for k := 0; k < n; k++ {
-				if (i*n+k)*dim >= rows {
+				if (i*n+k)*dim >= rows && rows >= cols {
+					break
+				}
+				if (j*n+k)*dim >= rows && rows < cols {
 					break
 				}
 				for ii := 0; ii < dim; ii++ {

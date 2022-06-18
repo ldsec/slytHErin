@@ -351,7 +351,9 @@ func TestPackedMatrices(t *testing.T) {
 		*/
 
 		start := time.Now()
+		fmt.Println("Before ", matCtW0.Level())
 		ppm.Transpose(matCtW0, matCtW0)
+		fmt.Println("After", matCtW0.Level())
 		fmt.Printf("Since :%s\n", time.Since(start))
 
 		resPlain := new(PackedMatrix)
