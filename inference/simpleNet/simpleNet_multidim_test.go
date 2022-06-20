@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+//test ssh push from windows
+
 //Testing SimpleNet with MultiDimentional packing for enhanced throughput
 
 func Test_BatchEncrypted(t *testing.T) {
