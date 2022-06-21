@@ -59,11 +59,17 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 	return
 }
 
-func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
+func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, afterMul bool, Box CkksBox) {
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
 			//because the plaintext in X.Blocks is the matrix transposed and flattened (if after a multiplication), so transpose the plaintext
-			pt := plainUtils.MatToArray(plainUtils.TransposeDense(Pt.Blocks[i][j]))
+			var ptm *mat.Dense
+			if afterMul {
+				ptm = plainUtils.TransposeDense(Pt.Blocks[i][j])
+			} else {
+				ptm = Pt.Blocks[i][j]
+			}
+			pt := plainUtils.MatToArray(ptm)
 			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), Box)
 			return //only first
 		}
@@ -72,17 +78,15 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 	return
 }
 
-func CompareBlocks(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
+//L2 distance between blocks of ct and pt
+func CompareBlocksL2(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
 	ct := DecInput(Ct, Box)
 	pt := plainUtils.MatToArray(plainUtils.ExpandBlocks(Pt))
-	//fmt.Println("Dec:")
-	//fmt.Println(ct)
-	//fmt.Println("Expected:")
-	//fmt.Println(pt)
 	fmt.Println("Distance:", plainUtils.Distance(plainUtils.Vectorize(ct, true), plainUtils.Vectorize(pt, true)))
 }
 
-func CompareMatrices(Ct *ckks.Ciphertext, rows, cols int, Pt *mat.Dense, Box CkksBox) {
+//L2 distance between pt and ct
+func CompareMatricesL2(Ct *ckks.Ciphertext, rows, cols int, Pt *mat.Dense, Box CkksBox) {
 	ct := Box.Decryptor.DecryptNew(Ct)
 	ptArray := Box.Encoder.DecodeSlots(ct, Box.Params.LogSlots())
 	//this is flatten(x.T)

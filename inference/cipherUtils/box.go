@@ -21,6 +21,17 @@ type CkksBox struct {
 	BootStrapper *bootstrapping.Bootstrapper
 }
 
+func BoxShallowCopy(Box CkksBox) CkksBox {
+	boxNew := CkksBox{
+		Params:    Box.Params,
+		Encoder:   Box.Encoder.ShallowCopy(),
+		Evaluator: Box.Evaluator.ShallowCopy(),
+		Decryptor: nil,
+		Encryptor: nil,
+	}
+	return boxNew
+}
+
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
 	if btpParams != nil {

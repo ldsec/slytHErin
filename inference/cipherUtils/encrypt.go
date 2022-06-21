@@ -37,6 +37,7 @@ func EncryptWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ctW []*
 	ctW = make([]*ckks.Ciphertext, len(wF))
 
 	//for i := range ctW {
+	// pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
 	//	ecd.EncodeSlots(wF[i], pt, params.LogSlots())
 	//	ctW[i] = enc.EncryptNew(pt)
 	//}

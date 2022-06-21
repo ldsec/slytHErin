@@ -9,7 +9,14 @@ import (
 	"math"
 )
 
+type BlocksOperand interface {
+	GetBlock(i, j int) []ckks.Operand
+	GetPartitions() (int, int)
+	GetInnerDims() (int, int)
+}
+
 type EncInput struct {
+	BlocksOperand
 	//stores an encrypted input block matrix
 	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                  //num of partitions
@@ -17,6 +24,7 @@ type EncInput struct {
 	InnerCols  int
 }
 type PlainInput struct {
+	BlocksOperand
 	//stores a plaintext input block matrix --> this is used for addition ops
 	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                 //num of partitions
@@ -25,10 +33,12 @@ type PlainInput struct {
 }
 
 type EncDiagMat struct {
+	BlocksOperand
 	//store an encrypted weight matrix in diagonal form
 	Diags []*ckks.Ciphertext //enc diagonals
 }
 type EncWeightDiag struct {
+	BlocksOperand
 	Blocks     [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP int
 	LeftDim    int //rows of left matrix
@@ -94,6 +104,30 @@ func NewEncInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*EncInp
 		}
 	}
 	return XEnc, nil
+}
+
+func (X *EncInput) GetBlock(i, j int) []ckks.Operand {
+	return []ckks.Operand{X.Blocks[i][j]}
+}
+
+func (X *EncInput) GetPartitions() (int, int) {
+	return X.RowP, X.ColP
+}
+
+func (X *EncInput) GetInnerDims() (int, int) {
+	return X.InnerRows, X.InnerCols
+}
+
+func (X *PlainInput) GetBlock(i, j int) []ckks.Operand {
+	return []ckks.Operand{X.Blocks[i][j]}
+}
+
+func (X *PlainInput) GetPartitions() (int, int) {
+	return X.RowP, X.ColP
+}
+
+func (X *PlainInput) GetInnerDims() (int, int) {
+	return X.InnerRows, X.InnerCols
 }
 
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
@@ -177,4 +211,36 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, 
 	}
 	utils.ThrowErr(err)
 	return Wp, nil
+}
+
+func (W *EncWeightDiag) GetBlock(i, j int) []ckks.Operand {
+	v := make([]ckks.Operand, len(W.Blocks[i][j].Diags))
+	for k := range v {
+		v[k] = W.Blocks[i][j].Diags[k]
+	}
+	return v
+}
+
+func (W *EncWeightDiag) GetPartitions() (int, int) {
+	return W.RowP, W.ColP
+}
+
+func (W *EncWeightDiag) GetInnerDims() (int, int) {
+	return W.InnerRows, W.InnerCols
+}
+
+func (W *PlainWeightDiag) GetBlock(i, j int) []ckks.Operand {
+	v := make([]ckks.Operand, len(W.Blocks[i][j].Diags))
+	for k := range v {
+		v[k] = W.Blocks[i][j].Diags[k]
+	}
+	return v
+}
+
+func (W *PlainWeightDiag) GetPartitions() (int, int) {
+	return W.RowP, W.ColP
+}
+
+func (W *PlainWeightDiag) GetInnerDims() (int, int) {
+	return W.InnerRows, W.InnerCols
 }

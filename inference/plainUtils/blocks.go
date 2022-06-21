@@ -13,6 +13,7 @@ type BMatrix struct {
 	InnerRows, InnerCols int //size of sub-matrixes
 }
 
+//Tranpose the blocks partition of the matrix, but leaves untouched the inner matrix of each block
 func TransposeBlocks(Bm *BMatrix) *BMatrix {
 	Tm := new(BMatrix)
 	Tm.RowP = Bm.ColP
