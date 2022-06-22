@@ -30,12 +30,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, Box)
+		resEnc := Mul.Multiply(Xenc, Wpt)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
 	})
 
 	t.Run("Test/C2P/Multithread", func(t *testing.T) {
@@ -46,13 +46,13 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, Box)
+		resEnc := Mul.Multiply(Xenc, Wpt)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
 	})
 
 	t.Run("Test/C2C", func(t *testing.T) {
@@ -61,12 +61,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct, Box)
+		resEnc := Mul.Multiply(Xenc, Wct)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
 	})
 
 	t.Run("Test/C2C/Multithread", func(t *testing.T) {
@@ -77,13 +77,13 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct, Box)
+		resEnc := Mul.Multiply(Xenc, Wct)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
 	})
 }
 
@@ -105,7 +105,7 @@ func TestAdder_AddBias(t *testing.T) {
 		var res mat.Dense
 		res.Add(X, B)
 		resPt, _ := pU.PartitionMatrix(&res, Xenc.RowP, Xenc.ColP)
-		PrintDebugBlocks(Xenc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 
 	})
 	t.Run("Test/Add/Multitrehad", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestAdder_AddBias(t *testing.T) {
 		var res mat.Dense
 		res.Add(X, B)
 		resPt, _ := pU.PartitionMatrix(&res, Xenc.RowP, Xenc.ColP)
-		PrintDebugBlocks(Xenc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 }
 
@@ -145,7 +145,7 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		utils.ActivatePlain(Xc, activation) //this automatically rescales the input before activating
 
 		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
-		PrintDebugBlocks(Xenc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 	t.Run("Test/Activate/MultiThread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
@@ -162,6 +162,6 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 
 		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
 
-		PrintDebugBlocks(Xenc, resPt, true, 0.01, Box)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 }

@@ -9,24 +9,31 @@ import (
 	"math"
 )
 
-func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh float64, Box CkksBox) (valuesTest []complex128) {
-	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
+type DebugStats struct {
+	MinPrec  float64
+	AvgPrec  float64
+	MaxPrec  float64
+	MaxValue float64
+	L2Dist   float64
+}
 
+func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh float64, Box CkksBox) DebugStats {
 	encoder := Box.Encoder
 	params := Box.Params
 	decryptor := Box.Decryptor
 
-	valuesTest = encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
+	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
 
 	fmt.Println()
 	fmt.Printf("Level: %d (logQ = %d)\n", ciphertext.Level(), params.LogQLvl(ciphertext.Level()))
 	fmt.Println("Consumed levels:", params.MaxLevel()-ciphertext.Level())
-	fmt.Printf("Scale: 2^%f\n", math.Log2(ciphertext.Scale))
+
 	fmt.Printf("ValuesTest:")
 	for i := range valuesWant {
 		fmt.Printf(" %6.10f", valuesTest[i])
 	}
 	fmt.Println()
+
 	fmt.Printf("ValuesWant:")
 	for i := range valuesWant {
 		fmt.Printf(" %6.10f", valuesWant[i])
@@ -34,15 +41,16 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 	fmt.Println()
 
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
-
 	fmt.Println(precStats.String())
+
 	fmt.Println("L2 Distance:")
-	fmt.Println(plainUtils.Distance(plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant)))
+	dist := plainUtils.Distance(plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant))
+	fmt.Println(dist)
 	fmt.Println()
-	fmt.Println("Scale:")
+	fmt.Println("Difference with expected Scale:")
 	fmt.Println(Box.Params.DefaultScale() - ciphertext.Scale)
 	fmt.Println()
-	fmt.Println("Max value:")
+
 	maxTest := 0.0
 	maxWant := 0.0
 	vT, vW := plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant)
@@ -54,51 +62,56 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 			maxWant = math.Abs(vW[i])
 		}
 	}
+	fmt.Println("Max value:")
 	fmt.Printf("Test: %.8f\n", maxTest)
 	fmt.Printf("Want: %.8f\n\n", maxWant)
+
+	//compare L1 distance between values
 	for i := range valuesWant {
 		if math.Abs(real(valuesWant[i]-valuesTest[i])) > thresh {
 			panic(errors.New(fmt.Sprintf("Expected %f, got %f, at %d", valuesWant[i], valuesTest[i], i)))
 		}
 	}
-	fmt.Println("----------------------------------------------------------------------------------------")
-	return
+	return DebugStats{
+		MinPrec:  precStats.MinPrecision.Real,
+		AvgPrec:  precStats.MeanPrecision.Real,
+		MaxPrec:  precStats.MaxPrecision.Real,
+		MaxValue: maxTest,
+		L2Dist:   dist,
+	}
 }
 
-func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, afterMul bool, thresh float64, Box CkksBox) {
+func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
+	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
+	stats := DebugStats{}
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
 			//because the plaintext in X.Blocks is the matrix transposed and flattened, transpose the plaintext
 			var ptm *mat.Dense
-			if afterMul {
-				ptm = plainUtils.TransposeDense(Pt.Blocks[i][j])
-			} else {
-				ptm = Pt.Blocks[i][j]
-			}
+			ptm = plainUtils.TransposeDense(Pt.Blocks[i][j])
+
 			pt := plainUtils.MatToArray(ptm)
-			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), thresh, Box)
-			return //only first
+			stat := PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), thresh, Box)
+			stats.MaxPrec += stat.MaxPrec
+			stats.MinPrec += stat.MinPrec
+			stats.AvgPrec += stat.AvgPrec
+			stats.MaxValue += stat.MaxValue
+			stats.L2Dist += stat.L2Dist
 		}
 	}
+	stats.MaxPrec /= float64(X.RowP * X.ColP)
+	stats.MinPrec /= float64(X.RowP * X.ColP)
+	stats.AvgPrec /= float64(X.RowP * X.ColP)
+	stats.MaxValue /= float64(X.RowP * X.ColP)
+	stats.L2Dist /= float64(X.RowP * X.ColP)
 
+	fmt.Println("[!] Final Stats:")
+	fmt.Printf("MAX Prec: %f\n", stats.MaxPrec)
+	fmt.Printf("MIN Prec: %f\n", stats.MinPrec)
+	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
+	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
+	fmt.Printf("L2 Dist: %f\n", stats.L2Dist)
+
+	fmt.Println("----------------------------------------------------------------------------------------")
 	return
-}
-
-//L2 distance between blocks of ct and pt
-func CompareBlocksL2(Ct *EncInput, Pt *plainUtils.BMatrix, Box CkksBox) {
-	ct := DecInput(Ct, Box)
-	pt := plainUtils.MatToArray(plainUtils.ExpandBlocks(Pt))
-	fmt.Println("Distance:", plainUtils.Distance(plainUtils.Vectorize(ct, true), plainUtils.Vectorize(pt, true)))
-}
-
-//L2 distance between pt and ct
-func CompareMatricesL2(Ct *ckks.Ciphertext, rows, cols int, Pt *mat.Dense, Box CkksBox) {
-	ct := Box.Decryptor.DecryptNew(Ct)
-	ptArray := Box.Encoder.DecodeSlots(ct, Box.Params.LogSlots())
-	//this is flatten(x.T)
-	resReal := plainUtils.ComplexToReal(ptArray)[:rows*cols]
-	res := plainUtils.TransposeDense(mat.NewDense(cols, rows, resReal))
-	fmt.Println("Distance:",
-		plainUtils.Distance(plainUtils.Vectorize(plainUtils.MatToArray(res), true),
-			plainUtils.Vectorize(plainUtils.MatToArray(Pt), true)))
 }

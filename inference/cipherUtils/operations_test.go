@@ -118,7 +118,7 @@ func TestBootstrap(t *testing.T) {
 	fmt.Println("Done")
 
 	fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
-	CompareMatricesL2(ct2, LDim[0], LDim[1], L, Box)
+
 	PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), true)), 0.001, Box)
 }
 

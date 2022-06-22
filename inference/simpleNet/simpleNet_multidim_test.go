@@ -12,12 +12,10 @@ import (
 	"testing"
 )
 
-//test ssh push from windows
-
 //Testing SimpleNet with MultiDimentional packing for enhanced throughput
-
 func Test_BatchEncrypted(t *testing.T) {
 	debug := false
+
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()
 	//crypto
@@ -94,7 +92,7 @@ func Test_BatchEncrypted(t *testing.T) {
 	for true {
 		Xenc := batchEnc.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Xpacked)
 		fmt.Printf("Input dimentions:\nRows:%d\nCols:%d\nInnerDim:%d\nBatches:%d\n\n", Xenc.Rows(), Xenc.Cols(), Xenc.Dim(), Xpacked.Batches())
-		var res SimpleNetPipeLine
+		var res utils.Stats
 		if !debug {
 			res = snMD.EvalBatchEncrypted(Y, Xenc, Box)
 		} else {

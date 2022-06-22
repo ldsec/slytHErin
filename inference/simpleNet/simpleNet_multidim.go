@@ -113,7 +113,7 @@ func (snMD *SimpleNetMD) InitPmMultiplier(params ckks2.Parameters, eval ckks2.Ev
 	}
 }
 
-func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box) SimpleNetPipeLine {
+func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box) utils.Stats {
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
@@ -144,31 +144,16 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMat
 	resCipherT := new(md.PackedMatrix)
 	resCipherT.Transpose(resCipher)
 	resCipher2 := mat.NewDense(len(Y), 10, md.UnpackMatrixParallel(resCipherT, snMD.innerDim, len(Y), 10))
-	predictions := make([]int, len(Y))
-	corrects := 0
-	for i := 0; i < len(Y); i++ {
-		maxIdx := 0
-		maxConfidence := 0.0
-		for j := 0; j < 10; j++ {
-			confidence := resCipher2.At(i, j)
-			if confidence > maxConfidence {
-				maxConfidence = confidence
-				maxIdx = j
-			}
-		}
-		predictions[i] = maxIdx
-		if predictions[i] == Y[i] {
-			corrects += 1
-		}
-	}
+	corrects, accuracy, _ := utils.Predict(Y, 10, plainUtils.MatToArray(resCipher2))
 	fmt.Println("Corrects enc:", corrects)
-	return SimpleNetPipeLine{
+	return utils.Stats{
 		Corrects: corrects,
 		Time:     elapsed,
+		Accuracy: accuracy,
 	}
 }
 
-func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box, Xclear *mat.Dense, weights, biases []*mat.Dense) SimpleNetPipeLine {
+func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBatchMatrix, Box md.Ckks2Box, Xclear *mat.Dense, weights, biases []*mat.Dense) utils.Stats {
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
@@ -214,45 +199,11 @@ func (snMD *SimpleNetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 	resCipherT.Transpose(resCipher)
 	resCipher2 := mat.NewDense(len(Y), 10, md.UnpackMatrixParallel(resCipherT, snMD.innerDim, len(Y), 10))
 
-	predictions := make([]int, len(Y))
-	corrects := 0
-	for i := 0; i < len(Y); i++ {
-		maxIdx := 0
-		maxConfidence := 0.0
-		for j := 0; j < 10; j++ {
-			confidence := resCipher2.At(i, j)
-			if confidence > maxConfidence {
-				maxConfidence = confidence
-				maxIdx = j
-			}
-		}
-		predictions[i] = maxIdx
-		if predictions[i] == Y[i] {
-			corrects += 1
-		}
-	}
-
-	resPlain := plainUtils.MatToArray(resAfterBiasClear)
-	predictionsClear := make([]int, len(Y))
-	correctsClear := 0
-	for i := 0; i < len(Y); i++ {
-		maxIdx := 0
-		maxConfidence := 0.0
-		for j := 0; j < 10; j++ {
-			confidence := resPlain[i][j]
-			if confidence > maxConfidence {
-				maxConfidence = confidence
-				maxIdx = j
-			}
-		}
-		predictionsClear[i] = maxIdx
-		if predictionsClear[i] == Y[i] {
-			correctsClear += 1
-		}
-	}
-	fmt.Println("Corrects enc/plain:", corrects, " / ", correctsClear)
-	return SimpleNetPipeLine{
+	corrects, accuracy, _ := utils.Predict(Y, 10, plainUtils.MatToArray(resCipher2))
+	fmt.Println("Corrects enc:", corrects)
+	return utils.Stats{
 		Corrects: corrects,
 		Time:     elapsed,
+		Accuracy: accuracy,
 	}
 }

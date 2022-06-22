@@ -1,6 +1,7 @@
 package cipherUtils
 
 import (
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"math"
@@ -10,6 +11,14 @@ const FILLTHRESHOLD = 0.5 //how many % of slots out of available slots should be
 
 type BlockSplits struct {
 	InnerRows, InnerCols, RowP, ColP int
+}
+
+type SplitsInfo struct {
+	InputRows, InputCols int
+	InputRowP, InputColP int
+	NumWeights           int
+	RowsOfWeights        []int
+	ColsOfWeights        []int
 }
 
 func GetFillRatio(rows, cols, replicaFactor int, slotsAvailable float64) float64 {
@@ -121,4 +130,40 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 		}
 	}
 	return blockSplits
+}
+
+func ExctractInfo(splits []BlockSplits) SplitsInfo {
+	info := SplitsInfo{}
+	info.InputRows = splits[0].InnerRows
+	info.InputCols = splits[0].InnerCols
+	info.InputRowP, info.InputColP = splits[0].RowP, splits[0].ColP
+	info.NumWeights = len(splits) - 1
+	info.RowsOfWeights = make([]int, info.NumWeights)
+	info.ColsOfWeights = make([]int, info.NumWeights)
+	for i, split := range splits[1:] {
+		info.RowsOfWeights[i] = split.InnerRows
+		info.ColsOfWeights[i] = split.InnerCols
+	}
+	return info
+}
+
+func PrintAllSplits(splits [][]BlockSplits) {
+	for i := range splits {
+		fmt.Printf("\nPossible split %d\n", i+1)
+		PrintSetOfSplits(splits[i])
+	}
+}
+
+func PrintSetOfSplits(setOfSplits []BlockSplits) {
+	for j := range setOfSplits {
+		var splittingWhat string
+		if j == 0 {
+			splittingWhat = "Input"
+		} else {
+			splittingWhat = fmt.Sprintf("Weight %d", j)
+		}
+		split := setOfSplits[j]
+		fmt.Println("Splits for ", splittingWhat)
+		fmt.Printf("InR: %d InC: %d RP: %d CP: %d\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
+	}
 }

@@ -30,20 +30,7 @@ func TestFindSplits_SimpleNet(t *testing.T) {
 			fmt.Println("[!] Strategy on tweaking weights split")
 		}
 		splits := FindSplits(inputFeatures, weightRows, weightCols, params, strategy)
-		for i := range splits {
-			fmt.Printf("\nPossible split %d\n", i+1)
-			for j := range splits[i] {
-				var splittingWhat string
-				if j == 0 {
-					splittingWhat = "Input"
-				} else {
-					splittingWhat = fmt.Sprintf("Weight %d", j)
-				}
-				split := splits[i][j]
-				fmt.Println("Splits for ", splittingWhat)
-				fmt.Printf("InR: %d InC: %d RP: %d CP: %d\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
-			}
-		}
+		PrintAllSplits(splits)
 	}
 }
 

@@ -57,8 +57,9 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W
 }
 
 //Multiplication between encrypted input and plaintext weight
-func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand, Box CkksBox) *EncInput {
+func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
+	Box := Mul.box
 	wRowP, wColP := W.GetPartitions()
 	dimIn := X.InnerRows
 	dimMid, dimOut := W.GetInnerDims()
