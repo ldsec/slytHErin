@@ -19,6 +19,31 @@ type CkksBox struct {
 	Encryptor    ckks.Encryptor
 	Decryptor    ckks.Decryptor
 	BootStrapper *bootstrapping.Bootstrapper
+	sk           *rlwe.SecretKey
+	kgen         ckks.KeyGenerator
+}
+
+func NewBox(params ckks.Parameters) CkksBox {
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+
+	//init rotations
+	//rotations are performed between submatrixes
+
+	enc := ckks.NewEncryptor(params, sk)
+	dec := ckks.NewDecryptor(params, sk)
+
+	Box := CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: kgen.GenRelinearizationKey(sk, 2)}),
+		Decryptor:    dec,
+		Encryptor:    enc,
+		BootStrapper: nil,
+		sk:           sk,
+		kgen:         kgen,
+	}
+	return Box
 }
 
 func BoxShallowCopy(Box CkksBox) CkksBox {
@@ -30,6 +55,24 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 		Encryptor: nil,
 	}
 	return boxNew
+}
+
+//returns Box with Evaluator and Bootstrapper if needed
+func BoxWithEvaluators(Box CkksBox, btpParams *bootstrapping.Parameters, withBtp bool, rowIn, colIn, numWeights int, rowsW, colsW []int) CkksBox {
+	rotations := GenRotations(rowIn, colIn, numWeights, rowsW, colsW, Box.Params, btpParams)
+	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
+	rtks := Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
+	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
+		Rlk:  rlk,
+		Rtks: rtks,
+	})
+	var err error
+	if withBtp {
+		evk := bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, evk)
+		utils.ThrowErr(err)
+	}
+	return Box
 }
 
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {

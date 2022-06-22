@@ -8,25 +8,17 @@ import (
 //Deals with addition between encrypted or plaintext encoded block matrices
 type Adder struct {
 	poolSize int
-	B        BlocksOperand //either plaintext or ecnrypted bias
 	box      CkksBox
 }
 
-func NewAdder(B BlocksOperand, Box CkksBox, poolSize int) *Adder {
-	switch B.(type) {
-	case *EncInput:
-	case *PlainInput:
-	default:
-		panic(errors.New("Adder supports either *EncInput or *PlainInput"))
-	}
+func NewAdder(Box CkksBox, poolSize int) *Adder {
 	Ad := new(Adder)
-	Ad.B = B
 	Ad.poolSize = poolSize
 	Ad.box = Box
 	return Ad
 }
 
-func (Ad *Adder) spawnEvaluators(X *EncInput, ch chan []int) {
+func (Ad *Adder) spawnEvaluators(X *EncInput, B BlocksOperand, ch chan []int) {
 	eval := Ad.box.Evaluator.ShallowCopy()
 
 	for {
@@ -36,17 +28,17 @@ func (Ad *Adder) spawnEvaluators(X *EncInput, ch chan []int) {
 			return
 		}
 		i, j := coords[0], coords[1]
-		X.Blocks[i][j] = eval.AddNew(X.Blocks[i][j], Ad.B.GetBlock(i, j)[0])
+		X.Blocks[i][j] = eval.AddNew(X.Blocks[i][j], B.GetBlock(i, j)[0])
 	}
 }
 
 //Addition between encrypted input and bias. This modifies X
-func (Ad *Adder) AddBias(X *EncInput) {
-	rowP, colP := Ad.B.GetPartitions()
+func (Ad *Adder) AddBias(X *EncInput, B BlocksOperand) {
+	rowP, colP := B.GetPartitions()
 	if X.RowP != rowP || X.ColP != colP {
 		panic(errors.New("Block partitions not compatible for addition"))
 	}
-	innerR, innerC := Ad.B.GetInnerDims()
+	innerR, innerC := B.GetInnerDims()
 	if X.InnerRows != innerR || X.InnerCols != innerC {
 		panic(errors.New("Inner dimentions not compatible for addition"))
 	}
@@ -54,7 +46,7 @@ func (Ad *Adder) AddBias(X *EncInput) {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				X.Blocks[i][j] = Ad.box.Evaluator.AddNew(X.Blocks[i][j], Ad.B.GetBlock(i, j)[0])
+				X.Blocks[i][j] = Ad.box.Evaluator.AddNew(X.Blocks[i][j], B.GetBlock(i, j)[0])
 			}
 		}
 	} else if Ad.poolSize > 1 {
@@ -66,7 +58,7 @@ func (Ad *Adder) AddBias(X *EncInput) {
 		for i := 0; i < Ad.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Ad.spawnEvaluators(X, ch)
+				Ad.spawnEvaluators(X, B, ch)
 				defer wg.Done()
 			}()
 		}

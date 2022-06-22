@@ -3,6 +3,7 @@ package cipherUtils
 import "C"
 import (
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"sync"
@@ -27,7 +28,7 @@ func BootStrapBlocks(X *EncInput, Box CkksBox) {
 //Dummy Bootstrap where cipher is freshly encrypted
 func DummyBootStrapBlocks(X *EncInput, Box CkksBox) *EncInput {
 	pt := DecInput(X, Box)
-	Xnew, err := NewEncInput(pt, X.RowP, X.ColP, Box.Params.MaxLevel(), Box)
+	Xnew, err := NewEncInput(plainUtils.NewDense(pt), X.RowP, X.ColP, Box.Params.MaxLevel(), Box)
 	utils.ThrowErr(err)
 	return Xnew
 }

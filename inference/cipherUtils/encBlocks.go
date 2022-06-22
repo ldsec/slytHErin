@@ -59,8 +59,7 @@ type PlainWeightDiag struct {
 	InnerCols  int
 }
 
-func NewPlainInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*PlainInput, error) {
-	Xm := plainUtils.NewDense(X)
+func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*PlainInput, error) {
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -81,8 +80,7 @@ func NewPlainInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*Plai
 	return XPlain, nil
 }
 
-func NewEncInput(X [][]float64, rowP, colP int, level int, Box CkksBox) (*EncInput, error) {
-	Xm := plainUtils.NewDense(X)
+func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*EncInput, error) {
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -156,8 +154,8 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
-	Wm := plainUtils.NewDense(W)
+//Return encrypted weight in block matrix form. The matrix is also block-transposed
+func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
@@ -184,8 +182,8 @@ func NewEncWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Bo
 	return WEnc, nil
 }
 
-func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
-	Wm := plainUtils.NewDense(W)
+//Return plaintex weight in block matrix form. The matrix is also block-transposed
+func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
@@ -198,7 +196,7 @@ func NewPlainWeightDiag(W [][]float64, rowP, colP, leftInnerDim int, level int, 
 	Wp.LeftDim = leftInnerDim
 	Wp.InnerRows = Wbt.InnerRows
 	Wp.InnerCols = Wbt.InnerCols
-	//add safety check for dimentions (dimMid > dimOut -> 2x space o.w 3x space)
+
 	Wp.Blocks = make([][]*PlainDiagMat, Wbt.RowP)
 	for i := 0; i < Wbt.RowP; i++ {
 		Wp.Blocks[i] = make([]*PlainDiagMat, Wbt.ColP)

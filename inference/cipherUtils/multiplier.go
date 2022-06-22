@@ -11,7 +11,6 @@ import (
 //Deals with multipication between encrypted or plaintext encoded block matrices
 type Multiplier struct {
 	poolSize int
-	W        BlocksOperand //either plaintext or ecnrypted bias
 	box      CkksBox
 }
 
@@ -23,21 +22,14 @@ type MulTask struct {
 	//done chan struct{} //flag when accumulator is done
 }
 
-func NewMultiplier(W BlocksOperand, Box CkksBox, poolSize int) *Multiplier {
-	switch W.(type) {
-	case *EncWeightDiag:
-	case *PlainWeightDiag:
-	default:
-		panic(errors.New("Adder supports either *EncWeightDiag or *PlainWeightDiag"))
-	}
+func NewMultiplier(Box CkksBox, poolSize int) *Multiplier {
 	Mul := new(Multiplier)
-	Mul.W = W
 	Mul.poolSize = poolSize
 	Mul.box = Box
 	return Mul
 }
 
-func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, ch chan MulTask, Out *EncInput) {
+func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W BlocksOperand, ch chan MulTask, Out *EncInput) {
 	box := BoxShallowCopy(Mul.box)
 	for {
 		task, ok := <-ch //feed the goroutines
@@ -46,7 +38,7 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, c
 			return
 		}
 		i, j, k := task.i, task.j, task.k
-		ct := DiagMul(X.Blocks[i][j].CopyNew(), dimIn, dimMid, dimOut, Mul.W.GetBlock(i, j), true, true, box)
+		ct := DiagMul(X.Blocks[i][k].CopyNew(), dimIn, dimMid, dimOut, W.GetBlock(j, k), true, true, box)
 		if k == 0 {
 			//I am the accumulator
 			defer close(task.accumulatorChan)
@@ -67,7 +59,6 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, c
 //Multiplication between encrypted input and plaintext weight
 func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand, Box CkksBox) *EncInput {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
-
 	wRowP, wColP := W.GetPartitions()
 	dimIn := X.InnerRows
 	dimMid, dimOut := W.GetInnerDims()
@@ -119,7 +110,7 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand, Box CkksBox) *EncI
 		for i := 0; i < Mul.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, ch, Out)
+				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, W, ch, Out)
 				defer wg.Done()
 			}()
 		}
@@ -183,7 +174,9 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.O
 	}
 
 	// Rescale
-	eval.Relinearize(res, res)
+	if res.Degree() > 1 {
+		eval.Relinearize(res, res)
+	}
 	eval.Rescale(res, params.DefaultScale(), res)
 
 	// Erases imaginary part

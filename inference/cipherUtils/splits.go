@@ -83,7 +83,6 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 				if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < FILLTHRESHOLD {
 					adjusted = false
 				}
-
 				if !adjusted {
 					if strategyOnBatch {
 						// find nearest divisors of weight column

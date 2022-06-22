@@ -1,6 +1,7 @@
 package cipherUtils
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -8,7 +9,7 @@ import (
 	"math"
 )
 
-func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBox) (valuesTest []complex128) {
+func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh float64, Box CkksBox) (valuesTest []complex128) {
 	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
 
 	encoder := Box.Encoder
@@ -31,6 +32,7 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 		fmt.Printf(" %6.10f", valuesWant[i])
 	}
 	fmt.Println()
+
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 
 	fmt.Println(precStats.String())
@@ -54,15 +56,19 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, Box CkksBo
 	}
 	fmt.Printf("Test: %.8f\n", maxTest)
 	fmt.Printf("Want: %.8f\n\n", maxWant)
+	for i := range valuesWant {
+		if math.Abs(real(valuesWant[i]-valuesTest[i])) > thresh {
+			panic(errors.New(fmt.Sprintf("Expected %f, got %f, at %d", valuesWant[i], valuesTest[i], i)))
+		}
+	}
 	fmt.Println("----------------------------------------------------------------------------------------")
-
 	return
 }
 
-func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, afterMul bool, Box CkksBox) {
+func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, afterMul bool, thresh float64, Box CkksBox) {
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
-			//because the plaintext in X.Blocks is the matrix transposed and flattened (if after a multiplication), so transpose the plaintext
+			//because the plaintext in X.Blocks is the matrix transposed and flattened, transpose the plaintext
 			var ptm *mat.Dense
 			if afterMul {
 				ptm = plainUtils.TransposeDense(Pt.Blocks[i][j])
@@ -70,7 +76,7 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, afterMul bool, Box Ck
 				ptm = Pt.Blocks[i][j]
 			}
 			pt := plainUtils.MatToArray(ptm)
-			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), Box)
+			PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), thresh, Box)
 			return //only first
 		}
 	}
