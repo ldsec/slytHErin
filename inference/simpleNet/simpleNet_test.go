@@ -34,8 +34,8 @@ var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
-	var debug = false       //set to true for debug mode
-	var multiThread = false //set to true to enable multiple threads
+	var debug = false      //set to true for debug mode
+	var multiThread = true //set to true to enable multiple threads
 
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()
@@ -50,13 +50,16 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 	}
 
 	possibleSplits := cipherUtils.FindSplits(28*28, []int{784, 100}, []int{100, 10}, params, true)
+
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
 	cipherUtils.PrintAllSplits(possibleSplits)
 
 	for _, splits := range possibleSplits {
+		fmt.Println()
 		fmt.Println("Trying split: ")
+		fmt.Println()
 		cipherUtils.PrintSetOfSplits(splits)
 
 		splitInfo := cipherUtils.ExctractInfo(splits)
@@ -106,8 +109,9 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 			tot += batchSize
 			elapsed += res.Time.Milliseconds()
 			iters++
+			fmt.Println()
 		}
-		fmt.Println("Accuracy:", accuracy)
+		fmt.Println("Accuracy:", accuracy/float64(iters))
 		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
 	}
 }
