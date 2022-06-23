@@ -160,6 +160,7 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 	nne.Activators = make([]*cipherUtils.Activator, layers)
 	nne.Layers = nn.Layers
 	nne.ReLUApprox = nn.ReLUApprox
+	nne.Box = Box
 
 	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel
@@ -450,7 +451,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.001, nne.Box)
 		}
 	}
-	fmt.Println("Key Switch to querier secret key")
+	fmt.Println("Key Switch to querier public key")
 	master.StartProto(distributed.CKSWITCH, Xint, pkQ, minLevel)
 
 	elapsed := time.Since(now)
@@ -518,7 +519,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed(Xenc *cipherUtils.EncInput, Y [
 			nne.Activators[i].ActivateBlocks(Xint)
 		}
 	}
-	fmt.Println("Key Switch to querier secret key")
+	fmt.Println("Key Switch to querier public key")
 	master.StartProto(distributed.CKSWITCH, Xint, pkQ, minLevel)
 
 	elapsed := time.Since(now)

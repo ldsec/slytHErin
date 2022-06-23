@@ -145,7 +145,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 }
 func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	debug := false
-	multithread := false
+	multithread := true
 	poolSize := 1
 	if multithread {
 		poolSize = runtime.NumCPU()

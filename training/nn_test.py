@@ -53,62 +53,6 @@ def soft_relu_approx_np(X):
     X = softrelu_approx(X)
     return X.numpy()
 
-def linear_eval(X,Y, serialized):
-    """
-        Evaluates the HE friendly pipeline
-    """
-    #conv = np.array(serialized['conv']['weight']['w'])
-    #bias_conv = np.array(serialized['conv']['bias']['b'])
-    #CONV, CONV_BIAS = torch.from_numpy(conv).double(), torch.from_numpy(bias_conv).double()
-    #exp = F.conv2d(X, CONV, CONV_BIAS, stride=1, padding=1)
-    
-    #X = F.pad(X, [1,1,1,1])
-    X = X.reshape(X.shape[0],-1)
-    X = X.numpy()
-
-    #record max values seen
-    max = 0.0
-
-    conv = np.array(serialized['conv']['weight']['w']).reshape(serialized['conv']['weight']['rows'],serialized['conv']['weight']['cols'])
-    conv_bias = np.array(serialized['conv']['bias']['b'])
-    dense, bias = [],[]
-    for d in serialized['dense']:
-        dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
-        bias.append(np.array(d['bias']['b']))
-
-    act = soft_relu_np
-
-    X = X @ conv
-    
-    for i in range(len(X)):
-        X[i] += conv_bias
-    
-    max_tmp = np.abs(X).max()
-    if max_tmp > max:
-        max = max_tmp
-    X = act(X)
-    
-    iter = 0
-    for d,b in zip(dense, bias):
-        X = X @ d
-        
-        for i in range(len(X)):
-            X[i] = X[i] + b
-        
-        max_tmp = np.abs(X).max()
-        if max_tmp > max:
-            max = max_tmp
-        
-        if iter != len(dense)-1:
-            X = act(X)
-        iter += 1
-    
-    pred = np.argmax(X,axis=1)
-    corrects = np.sum(pred == Y.numpy())
-
-    print("Max value in run", max)
-
-    return corrects
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
@@ -129,7 +73,9 @@ if __name__=="__main__":
     elif args.model == "nn100":
         layers = 100
 
-
+    intervals = []
+    for i in range(layers):
+        intervals.append({0, 0})
 
 
     batchsize = 32
@@ -143,4 +89,68 @@ if __name__=="__main__":
 
     print("Accuracy:")
     print(corrects/tot)
+    print("Intervals")
+    for i, interval in enumerate(intervals):
+        print("Layer: ", i + 1)
+        print("Min: ", interval[0])
+        print("Max: ", interval[1])
+        print()
 
+def linear_eval(X, Y, serialized):
+    """
+        Evaluates the HE friendly pipeline
+    """
+
+    X = X.reshape(X.shape[0], -1)
+    X = X.numpy()
+
+    conv = np.array(serialized['conv']['weight']['w']).reshape(serialized['conv']['weight']['rows'],
+                                                               serialized['conv']['weight']['cols'])
+    conv_bias = np.array(serialized['conv']['bias']['b'])
+    dense, bias = [], []
+
+    for d in serialized['dense']:
+        dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
+        bias.append(np.array(d['bias']['b']))
+
+    act = soft_relu_np
+
+    X = X @ conv
+
+    for i in range(len(X)):
+        X[i] += conv_bias
+
+    max_tmp = X[np.argmax(X)]
+    min_tmp = X[np.argmin(X)]
+
+    if max_tmp > intervals[0][1]:
+        intervals[0][1] = max_tmp
+    if min_tmp < intervals[0][0]:
+        intervals[0][0] = min_tmp
+    X = act(X)
+
+    iter = 0
+    for d, b in zip(dense, bias):
+        X = X @ d
+
+        for i in range(len(X)):
+            X[i] = X[i] + b
+
+        if iter != len(dense) - 1:
+            max_tmp = X[np.argmax(X)]
+            min_tmp = X[np.argmin(X)]
+
+            if max_tmp > intervals[iter + 1][1]:
+                intervals[0][1] = max_tmp
+            if min_tmp < intervals[iter + 1][0]:
+                intervals[0][0] = min_tmp
+            X = act(X)
+
+        iter += 1
+
+    pred = np.argmax(X, axis=1)
+    corrects = np.sum(pred == Y.numpy())
+
+
+
+    return corrects
