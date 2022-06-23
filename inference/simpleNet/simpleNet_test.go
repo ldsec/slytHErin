@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/data"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"math"
 	"runtime"
 	"testing"
@@ -68,7 +69,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
 		weights, biases := sn.BuildParams(batchSize)
 
-		Box = cipherUtils.BoxWithEvaluators(Box, nil, false, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
+		Box = cipherUtils.BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
 
 		sne := sn.EncodeSimpleNet(weights, biases, splits, Box, poolSize)
 

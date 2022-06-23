@@ -6,6 +6,7 @@ import (
 	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"
 	"runtime"
 	"testing"
@@ -27,7 +28,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
+		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt)
@@ -43,7 +44,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
+		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt)
@@ -58,7 +59,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2C", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
+		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct)
@@ -74,7 +75,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, nil, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
+		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct)

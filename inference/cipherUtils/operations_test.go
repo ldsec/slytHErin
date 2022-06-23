@@ -2,19 +2,12 @@ package cipherUtils
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/distributed"
 	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
-	utils "github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
-	"github.com/tuneinsight/lattigo/v3/dckks"
-	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
-	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
 	"gonum.org/v1/gonum/mat"
-	"strconv"
 	"testing"
-	"time"
 )
 
 /********************************************
@@ -30,7 +23,7 @@ func TestMultiplication(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	Box := NewBox(params)
-	Box = BoxWithEvaluators(Box, nil, false, pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)})
+	Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)})
 
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), pU.MatToArray(X), Box)
@@ -122,6 +115,7 @@ func TestBootstrap(t *testing.T) {
 	PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), true)), 0.001, Box)
 }
 
+/*
 func TestBootstrapDistributed(t *testing.T) {
 	PARTIES := []int{5, 10}
 	PARAMS := []ckks.ParametersLiteral{ckks.PN15QP880, ckks.ParametersLiteral{
@@ -164,7 +158,7 @@ func TestBootstrapDistributed(t *testing.T) {
 					partiesAddr[i] = localhost + ":" + strconv.Itoa(8080+i)
 				}
 			}
-			master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr)
+			master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, 1)
 			utils.ThrowErr(err)
 			players := make([]*distributed.LocalPlayer, parties-1)
 			//start players
@@ -176,11 +170,12 @@ func TestBootstrapDistributed(t *testing.T) {
 			minLevel, _, _ := dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q())
 			ctL := EncryptInput(params.MaxLevel(), pU.MatToArray(L), Box)
 			Box.Evaluator.DropLevel(ctL, params.MaxLevel()-minLevel)
-			ctBtp, err := master.InitProto(distributed.TYPES[1], nil, ctL, 0)
+			ctBtp, err := master.InitProto(distributed.REFRESH, nil, ctL, 0)
 			utils.ThrowErr(err)
 			PrintDebug(ctBtp, pU.RealToComplex(pU.RowFlatten(L)), 0.001, Box)
-			master.InitProto(distributed.TYPES[2], nil, nil, 0)
+			master.InitProto(distributed.END, nil, nil, 0)
 			time.Sleep(1000 * time.Millisecond) //wait for stop
 		}
 	}
 }
+*/

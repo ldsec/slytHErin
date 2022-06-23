@@ -58,8 +58,8 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 }
 
 //returns Box with Evaluator and Bootstrapper if needed
-func BoxWithEvaluators(Box CkksBox, btpParams *bootstrapping.Parameters, withBtp bool, rowIn, colIn, numWeights int, rowsW, colsW []int) CkksBox {
-	rotations := GenRotations(rowIn, colIn, numWeights, rowsW, colsW, Box.Params, btpParams)
+func BoxWithEvaluators(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool, rowIn, colIn, numWeights int, rowsW, colsW []int) CkksBox {
+	rotations := GenRotations(rowIn, colIn, numWeights, rowsW, colsW, Box.Params, &btpParams)
 	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
 	rtks := Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
@@ -68,8 +68,8 @@ func BoxWithEvaluators(Box CkksBox, btpParams *bootstrapping.Parameters, withBtp
 	})
 	var err error
 	if withBtp {
-		evk := bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.sk)
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, evk)
+		evk := bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, evk)
 		utils.ThrowErr(err)
 	}
 	return Box

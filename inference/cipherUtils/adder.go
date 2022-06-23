@@ -20,7 +20,6 @@ func NewAdder(Box CkksBox, poolSize int) *Adder {
 
 func (Ad *Adder) spawnEvaluators(X *EncInput, B BlocksOperand, ch chan []int) {
 	eval := Ad.box.Evaluator.ShallowCopy()
-
 	for {
 		coords, ok := <-ch //feed the goroutines
 		if !ok {

@@ -1,12 +1,12 @@
 package distributed
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
@@ -32,26 +32,6 @@ var MB = 1024 * KB
 var MAX_SIZE = 21 * MB //LogN = 15
 
 //HELPERS
-
-//custom Split function for bufio.Scanner to read until the DELIM sequence
-func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	//fmt.Println("Scanner: len of data", len(data))
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-	if i := bytes.Index(data, DELIM); i >= 0 {
-		return i + len(DELIM), data[0:i], nil
-	}
-	if atEOF {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
-}
-
-//Append DELIM sequence to bytes
-func DelimEncode(buf []byte) []byte {
-	return append(buf, DELIM...)
-}
 
 //write TLV value
 func WriteTo(c io.Writer, buf []byte) error {
@@ -91,7 +71,7 @@ func ReadFrom(c io.Reader) ([]byte, error) {
 }
 
 type LocalMaster struct {
-	ProtoBuf *sync.Map //ct id -> protocol instance *DummyProtocol
+	ProtoBuf *sync.Map //ct id -> protocol instance *Protocol
 	sk       *rlwe.SecretKey
 	Cpk      *rlwe.PublicKey
 	Params   ckks.Parameters
@@ -101,7 +81,9 @@ type LocalMaster struct {
 	PartiesAddr []*net.TCPAddr
 	//for Ending
 	runningMux    sync.RWMutex
-	runningProtos int       //counter for how many protos are running
+	runningProtos int //counter for how many protos are running
+	poolSize      int //bound on parallel protocols
+	Box           cipherUtils.CkksBox
 	Done          chan bool //flag caller that master is done with all instances
 }
 
@@ -116,7 +98,7 @@ type LocalPlayer struct {
 	Conn   *net.TCPListener
 }
 
-func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string) (*LocalMaster, error) {
+func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int) (*LocalMaster, error) {
 	master := new(LocalMaster)
 	master.sk = sk
 	master.Cpk = cpk
@@ -132,6 +114,8 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 		master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i])
 		utils.ThrowErr(err)
 	}
+	master.poolSize = poolSize
+	master.Box = Box
 	return master, nil
 }
 
@@ -152,14 +136,64 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 //MASTER PROTOCOL
 
-//starts a new protocol instance and runs it
-func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
+func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, proto ProtocolType, pkQ *rlwe.PublicKey, ch chan []int) {
+	var err error
+	for {
+		coords, ok := <-ch //feed the goroutines
+		if !ok {
+			//if channel is closed
+			return
+		}
+		i, j := coords[0], coords[1]
+		lmst.Box.Evaluator.ShallowCopy().DropLevel(X.Blocks[i][j], X.Blocks[i][j].Level()-minLevel)
+		X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.RowP+j)
+		utils.ThrowErr(err)
+	}
+}
+
+//starts protocol instances in parallel
+func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int) {
+	var err error
+	if lmst.poolSize == 1 {
+		//single threaded
+		for i := 0; i < X.RowP; i++ {
+			for j := 0; j < X.ColP; j++ {
+				X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.RowP+j)
+				utils.ThrowErr(err)
+			}
+		}
+	} else if lmst.poolSize > 1 {
+		//bounded threading
+
+		ch := make(chan []int)
+		var wg sync.WaitGroup
+		//spawn consumers
+		for i := 0; i < lmst.poolSize; i++ {
+			wg.Add(1)
+			go func() {
+				lmst.spawnEvaluators(X, minLevel, proto, pkQ, ch)
+				defer wg.Done()
+			}()
+		}
+		//feed consumers
+		for i := 0; i < X.RowP; i++ {
+			for j := 0; j < X.ColP; j++ {
+				ch <- []int{i, j}
+			}
+		}
+		close(ch)
+		wg.Wait()
+	}
+}
+
+//initiate protocol instance
+func (lmst *LocalMaster) InitProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
 	switch proto {
-	case TYPES[0]:
+	case CKSWITCH:
 		//prepare PubKeySwitch
 		//fmt.Printf("[*] Master -- Registering PubKeySwitch ID: %d\n\n", ctId)
 		protocol := dckks.NewPCKSProtocol(lmst.Params, 3.2)
-		lmst.ProtoBuf.Store(ctId, &DummyProtocol{
+		lmst.ProtoBuf.Store(ctId, &Protocol{
 			Protocol:     protocol,
 			Ct:           ct,
 			Shares:       make([]interface{}, lmst.Parties),
@@ -168,7 +202,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 		})
 		go lmst.RunPubKeySwitch(protocol.ShallowCopy(), pkQ, ct, ctId)
 
-	case TYPES[1]:
+	case REFRESH:
 		//prepare Refresh
 		//fmt.Printf("[*] Master -- Registering Refresh ID: %d\n\n", ctId)
 		var minLevel, logBound int
@@ -180,7 +214,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 		protocol := dckks.NewRefreshProtocol(lmst.Params, logBound, 3.2)
 		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 		crp := protocol.SampleCRP(lmst.Params.MaxLevel(), crs)
-		lmst.ProtoBuf.Store(ctId, &DummyProtocol{
+		lmst.ProtoBuf.Store(ctId, &Protocol{
 			Protocol:     protocol,
 			Ct:           ct,
 			Crp:          crp,
@@ -189,7 +223,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 			FeedbackChan: make(chan *ckks.Ciphertext),
 		})
 		go lmst.RunRefresh(protocol.ShallowCopy(), ct, crp, minLevel, logBound, ctId)
-	case TYPES[2]:
+	case END:
 		lmst.RunEnd()
 		return nil, nil
 	default:
@@ -199,7 +233,7 @@ func (lmst *LocalMaster) InitProto(proto string, pkQ *rlwe.PublicKey, ct *ckks.C
 	if !ok {
 		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
 	}
-	res := <-entry.(*DummyProtocol).FeedbackChan
+	res := <-entry.(*Protocol).FeedbackChan
 	lmst.ProtoBuf.Delete(ctId)
 	return res, nil
 }
@@ -210,14 +244,14 @@ func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
 	utils.ThrowErr(err)
 	//sum := md5.Sum(buf)
 	//fmt.Printf("[*] Master received data %d B. Checksum: %x\n\n", len(buf), sum)
-	var resp DummyProtocolResp
+	var resp ProtocolResp
 	err = json.Unmarshal(buf, &resp)
 	utils.ThrowErr(err)
 	switch resp.Type {
-	case TYPES[0]:
+	case CKSWITCH:
 		//key switch
 		lmst.DispatchPCKS(resp)
-	case TYPES[1]:
+	case REFRESH:
 		lmst.DispatchRef(resp)
 	default:
 		utils.ThrowErr(errors.New("resp for unknown protocol"))
@@ -231,21 +265,21 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	if !ok {
 		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
 	}
-	entry.(*DummyProtocol).muxProto.Lock()
-	//proto := entry.(*DummyProtocol).Proto.(*dckks.PCKSProtocol)
+	entry.(*Protocol).muxProto.Lock()
+	//proto := entry.(*Protocol).Proto.(*dckks.PCKSProtocol)
 	share := proto.AllocateShare(ct.Level())
 	proto.GenShare(lmst.sk, pkQ, ct.Value[1], share)
-	entry.(*DummyProtocol).Shares[0] = share
-	entry.(*DummyProtocol).Completion++
-	entry.(*DummyProtocol).muxProto.Unlock()
-	lmst.ProtoBuf.Store(ctId, entry.(*DummyProtocol))
+	entry.(*Protocol).Shares[0] = share
+	entry.(*Protocol).Completion++
+	entry.(*Protocol).muxProto.Unlock()
+	lmst.ProtoBuf.Store(ctId, entry.(*Protocol))
 
 	dat, err := ct.Value[1].MarshalBinary()
 	utils.ThrowErr(err)
 	dat2, err := pkQ.MarshalBinary()
 	utils.ThrowErr(err)
-	msg := DummyProtocolMsg{Type: TYPES[0], Id: ctId, Ct: dat}
-	msg.Extension = DummyPCKSExt{Pk: dat2}
+	msg := ProtocolMsg{Type: CKSWITCH, Id: ctId, Ct: dat}
+	msg.Extension = PCKSExt{Pk: dat2}
 	buf, err := json.Marshal(msg)
 	sum := md5.Sum(buf)
 	utils.ThrowErr(err)
@@ -277,9 +311,9 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	}
 	share := proto.AllocateShare(minLevel, lmst.Params.MaxLevel())
 	proto.GenShare(lmst.sk, logBound, lmst.Params.LogSlots(), ct.Value[1], ct.Scale, crp, share)
-	entry.(*DummyProtocol).Shares[0] = share
-	entry.(*DummyProtocol).Completion++
-	lmst.ProtoBuf.Store(ctId, entry.(*DummyProtocol))
+	entry.(*Protocol).Shares[0] = share
+	entry.(*Protocol).Completion++
+	lmst.ProtoBuf.Store(ctId, entry.(*Protocol))
 	dat, err := ct.Value[1].MarshalBinary()
 	utils.ThrowErr(err)
 	var dat2 []byte
@@ -287,8 +321,8 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	if dat2, err = MarshalCrp(crp); err != nil {
 		utils.ThrowErr(err)
 	}
-	msg := DummyProtocolMsg{Type: TYPES[1], Id: ctId, Ct: dat}
-	msg.Extension = DummyRefreshExt{
+	msg := ProtocolMsg{Type: REFRESH, Id: ctId, Ct: dat}
+	msg.Extension = RefreshExt{
 		Crp:       dat2,
 		Precision: logBound,
 		MinLevel:  minLevel,
@@ -317,7 +351,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 }
 
 func (lmst *LocalMaster) RunEnd() {
-	msg := DummyProtocolMsg{Type: TYPES[2], Id: 0, Ct: nil}
+	msg := ProtocolMsg{Type: END, Id: 0, Ct: nil}
 	msg.Extension = struct{}{}
 	buf, err := json.Marshal(msg)
 	utils.ThrowErr(err)
@@ -337,7 +371,7 @@ func (lmst *LocalMaster) RunEnd() {
 }
 
 //Listen for shares and aggregates
-func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
+func (lmst *LocalMaster) DispatchPCKS(resp ProtocolResp) {
 	if resp.PlayerId == 0 {
 		//ignore invalid
 		return
@@ -347,33 +381,33 @@ func (lmst *LocalMaster) DispatchPCKS(resp DummyProtocolResp) {
 	if !ok {
 		return
 	}
-	entry.(*DummyProtocol).muxProto.Lock()
-	proto := entry.(*DummyProtocol).Protocol.(*dckks.PCKSProtocol)
-	ct := entry.(*DummyProtocol).Ct
+	entry.(*Protocol).muxProto.Lock()
+	proto := entry.(*Protocol).Protocol.(*dckks.PCKSProtocol)
+	ct := entry.(*Protocol).Ct
 
 	share := new(drlwe.PCKSShare)
 	err := share.UnmarshalBinary(resp.Share)
 	utils.ThrowErr(err)
-	entry.(*DummyProtocol).Shares[resp.PlayerId] = share
-	entry.(*DummyProtocol).Completion++
-	if entry.(*DummyProtocol).Completion == lmst.Parties {
+	entry.(*Protocol).Shares[resp.PlayerId] = share
+	entry.(*Protocol).Completion++
+	if entry.(*Protocol).Completion == lmst.Parties {
 		//finalize
 		for i := 1; i < lmst.Parties; i++ {
 			proto.AggregateShare(
-				entry.(*DummyProtocol).Shares[i].(*drlwe.PCKSShare),
-				entry.(*DummyProtocol).Shares[0].(*drlwe.PCKSShare),
-				entry.(*DummyProtocol).Shares[0].(*drlwe.PCKSShare))
+				entry.(*Protocol).Shares[i].(*drlwe.PCKSShare),
+				entry.(*Protocol).Shares[0].(*drlwe.PCKSShare),
+				entry.(*Protocol).Shares[0].(*drlwe.PCKSShare))
 		}
 		ctSw := ckks.NewCiphertext(lmst.Params, 1, ct.Level(), ct.Scale)
-		proto.KeySwitch(ct, entry.(*DummyProtocol).Shares[0].(*drlwe.PCKSShare), ctSw)
-		entry.(*DummyProtocol).FeedbackChan <- ctSw
+		proto.KeySwitch(ct, entry.(*Protocol).Shares[0].(*drlwe.PCKSShare), ctSw)
+		entry.(*Protocol).FeedbackChan <- ctSw
 	}
-	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*DummyProtocol))
-	entry.(*DummyProtocol).muxProto.Unlock()
+	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*Protocol))
+	entry.(*Protocol).muxProto.Unlock()
 }
 
 //Listen for shares and Finalize
-func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
+func (lmst *LocalMaster) DispatchRef(resp ProtocolResp) {
 	if resp.PlayerId == 0 {
 		//ignore invalid
 		return
@@ -383,31 +417,31 @@ func (lmst *LocalMaster) DispatchRef(resp DummyProtocolResp) {
 	if !ok {
 		return
 	}
-	entry.(*DummyProtocol).muxProto.Lock()
-	proto := entry.(*DummyProtocol).Protocol.(*dckks.RefreshProtocol)
-	crp := entry.(*DummyProtocol).Crp
-	ct := entry.(*DummyProtocol).Ct
+	entry.(*Protocol).muxProto.Lock()
+	proto := entry.(*Protocol).Protocol.(*dckks.RefreshProtocol)
+	crp := entry.(*Protocol).Crp
+	ct := entry.(*Protocol).Ct
 
 	share := new(dckks.RefreshShare)
 	err := share.UnmarshalBinary(resp.Share)
 	utils.ThrowErr(err)
-	entry.(*DummyProtocol).Shares[resp.PlayerId] = share
-	entry.(*DummyProtocol).Completion++
-	if entry.(*DummyProtocol).Completion == lmst.Parties {
+	entry.(*Protocol).Shares[resp.PlayerId] = share
+	entry.(*Protocol).Completion++
+	if entry.(*Protocol).Completion == lmst.Parties {
 		//finalize
 		for i := 1; i < lmst.Parties; i++ {
 			proto.AggregateShare(
-				entry.(*DummyProtocol).Shares[i].(*dckks.RefreshShare),
-				entry.(*DummyProtocol).Shares[0].(*dckks.RefreshShare),
-				entry.(*DummyProtocol).Shares[0].(*dckks.RefreshShare))
+				entry.(*Protocol).Shares[i].(*dckks.RefreshShare),
+				entry.(*Protocol).Shares[0].(*dckks.RefreshShare),
+				entry.(*Protocol).Shares[0].(*dckks.RefreshShare))
 		}
 		ctFresh := ckks.NewCiphertext(lmst.Params, 1, lmst.Params.MaxLevel(), ct.Scale)
-		proto.Finalize(ct, lmst.Params.LogSlots(), crp, entry.(*DummyProtocol).Shares[0].(*dckks.RefreshShare), ctFresh)
-		entry.(*DummyProtocol).FeedbackChan <- ctFresh
+		proto.Finalize(ct, lmst.Params.LogSlots(), crp, entry.(*Protocol).Shares[0].(*dckks.RefreshShare), ctFresh)
+		entry.(*Protocol).FeedbackChan <- ctFresh
 	}
 
-	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*DummyProtocol))
-	entry.(*DummyProtocol).muxProto.Unlock()
+	lmst.ProtoBuf.Store(resp.ProtoId, entry.(*Protocol))
+	entry.(*Protocol).muxProto.Unlock()
 }
 
 //PLAYERS PROTOCOL
@@ -440,15 +474,15 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 
 		//sum := md5.Sum(netData)
 		//fmt.Printf("[+] Player %d received data %d B. Checksum: %x\n\n", lp.Id, len(netData), sum)
-		var msg DummyProtocolMsg
+		var msg ProtocolMsg
 		err = json.Unmarshal(netData, &msg)
 		utils.ThrowErr(err)
 		switch msg.Type {
-		case TYPES[0]: //PubKeySwitch
+		case CKSWITCH: //PubKeySwitch
 			lp.RunPubKeySwitch(c, msg)
-		case TYPES[1]: //Refresh
+		case REFRESH: //Refresh
 			lp.RunRefresh(c, msg)
-		case TYPES[2]: //End
+		case END: //End
 			lp.End(c)
 			return
 		default:
@@ -458,12 +492,12 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 }
 
 //Generates and send share to Master
-func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
+func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg ProtocolMsg) {
 	//fmt.Printf("[+] Player %d -- Received msg PCKS ID: %d from master\n\n", lp.Id, msg.Id)
 	proto := dckks.NewPCKSProtocol(lp.Params, 3.2)
 	var ct ring.Poly
 	var pk rlwe.PublicKey
-	var Ext DummyPCKSExt
+	var Ext PCKSExt
 	jsonString, err := json.Marshal(msg.Extension)
 	utils.ThrowErr(err)
 	err = json.Unmarshal(jsonString, &Ext)
@@ -476,7 +510,7 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	proto.GenShare(lp.sk, &pk, &ct, share)
 	dat, err := share.MarshalBinary()
 	utils.ThrowErr(err)
-	resp := DummyProtocolResp{Type: TYPES[0], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
+	resp := ProtocolResp{Type: CKSWITCH, Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
 	sum := md5.Sum(dat)
@@ -485,12 +519,12 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg DummyProtocolMsg) {
 	utils.ThrowErr(err)
 }
 
-func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
+func (lp *LocalPlayer) RunRefresh(c net.Conn, msg ProtocolMsg) {
 	var ct ring.Poly
 	//fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)
 	err := ct.UnmarshalBinary(msg.Ct)
 	utils.ThrowErr(err)
-	var Ext DummyRefreshExt
+	var Ext RefreshExt
 	jsonString, err := json.Marshal(msg.Extension)
 	utils.ThrowErr(err)
 	err = json.Unmarshal(jsonString, &Ext)
@@ -505,7 +539,7 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg DummyProtocolMsg) {
 	proto.GenShare(lp.sk, precision, lp.Params.LogSlots(), &ct, scale, crp, share)
 	dat, err := share.MarshalBinary()
 	utils.ThrowErr(err)
-	resp := DummyProtocolResp{Type: TYPES[1], Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
+	resp := ProtocolResp{Type: REFRESH, Share: dat, PlayerId: lp.Id, ProtoId: msg.Id}
 	dat, err = json.Marshal(resp)
 	utils.ThrowErr(err)
 	sum := md5.Sum(dat)

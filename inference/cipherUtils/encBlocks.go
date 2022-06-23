@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -92,7 +93,7 @@ func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*EncInp
 	XEnc.InnerRows = Xb.InnerRows
 	XEnc.InnerCols = Xb.InnerCols
 	if float64(XEnc.InnerRows*XEnc.InnerCols*2) > math.Pow(2, float64(Box.Params.LogSlots())) {
-		utils.ThrowErr(errors.New("Input submatrixes elements must be less than 2^(LogSlots-1)"))
+		utils.ThrowErr(errors.New(fmt.Sprintf("Input submatrixes elements must be less than 2^(LogSlots-1): had %d*%d", XEnc.InnerRows, XEnc.InnerCols)))
 	}
 	XEnc.Blocks = make([][]*ckks.Ciphertext, rowP)
 	for i := 0; i < rowP; i++ {
