@@ -54,48 +54,6 @@ def soft_relu_approx_np(X):
     return X.numpy()
 
 
-if __name__=="__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", help="nn20, nn50, nn100",type=str)
-    args = parser.parse_args()
-    device = 'cpu'
-    if "nn" not in args.model:
-        print("call --model nn20, nn50 or nn100")
-        exit()
-    with open(f'./models/{args.model}_packed.json', 'r') as f:
-        serialized = json.load(f)
-    if args.model == "nn20":
-        layers = 20
-
-    elif args.model == "nn50":
-        layers = 50
-
-    elif args.model == "nn100":
-        layers = 100
-
-    intervals = []
-    for i in range(layers):
-        intervals.append({0, 0})
-
-
-    batchsize = 32
-    dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
-    corrects = 0
-
-    tot = 0.0
-    for X,Y in dataHandler.test_dl:
-        corrects += linear_eval(X.double(),Y.double(),serialized)
-        tot += batchsize
-
-    print("Accuracy:")
-    print(corrects/tot)
-    print("Intervals")
-    for i, interval in enumerate(intervals):
-        print("Layer: ", i + 1)
-        print("Min: ", interval[0])
-        print("Max: ", interval[1])
-        print()
-
 def linear_eval(X, Y, serialized):
     """
         Evaluates the HE friendly pipeline
@@ -120,8 +78,8 @@ def linear_eval(X, Y, serialized):
     for i in range(len(X)):
         X[i] += conv_bias
 
-    max_tmp = X[np.argmax(X)]
-    min_tmp = X[np.argmin(X)]
+    max_tmp = X.flatten()[np.argmax(X)]
+    min_tmp = X.flatten()[np.argmin(X)]
 
     if max_tmp > intervals[0][1]:
         intervals[0][1] = max_tmp
@@ -137,13 +95,13 @@ def linear_eval(X, Y, serialized):
             X[i] = X[i] + b
 
         if iter != len(dense) - 1:
-            max_tmp = X[np.argmax(X)]
-            min_tmp = X[np.argmin(X)]
+            max_tmp = X.flatten()[np.argmax(X)]
+            min_tmp = X.flatten()[np.argmin(X)]
 
             if max_tmp > intervals[iter + 1][1]:
-                intervals[0][1] = max_tmp
+                intervals[iter+1][1] = max_tmp
             if min_tmp < intervals[iter + 1][0]:
-                intervals[0][0] = min_tmp
+                intervals[iter+1][0] = min_tmp
             X = act(X)
 
         iter += 1
@@ -154,3 +112,46 @@ def linear_eval(X, Y, serialized):
 
 
     return corrects
+
+if __name__=="__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="nn20, nn50, nn100",type=str)
+    args = parser.parse_args()
+    device = 'cpu'
+    if "nn" not in args.model:
+        print("call --model nn20, nn50 or nn100")
+        exit()
+    with open(f'./models/{args.model}_packed.json', 'r') as f:
+        serialized = json.load(f)
+    if args.model == "nn20":
+        layers = 20
+
+    elif args.model == "nn50":
+        layers = 50
+
+    elif args.model == "nn100":
+        layers = 100
+
+    intervals = []
+    for i in range(layers):
+        intervals.append([0, 0])
+
+
+    batchsize = 32
+    dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
+    corrects = 0
+
+    tot = 0.0
+    for X,Y in dataHandler.test_dl:
+        corrects += linear_eval(X.double(),Y.double(),serialized)
+        tot += batchsize
+
+    print("Accuracy:")
+    print(corrects/tot)
+    print("Intervals")
+    for i, interval in enumerate(intervals):
+        print("Layer: ", i + 1)
+        print("Min: ", interval[0])
+        print("Max: ", interval[1])
+        print()
+

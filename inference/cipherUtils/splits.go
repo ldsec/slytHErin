@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/utils"
 	"math"
 )
 
@@ -42,10 +43,23 @@ func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Param
 	}
 }
 
+//Compute tha average multiplication complexity of a series of splits
+func GetAvgComplexity(splits []BlockSplits) float64 {
+	complexity := 0
+	for i := 0; i < len(splits)-1; i++ {
+		n := splits[i].RowP
+		m := splits[i].ColP
+		l := splits[i+1].ColP
+		complexity += n * m * l
+	}
+	return float64(complexity) / float64(len(splits)-1)
+}
+
 // Finds all possible splits for the current model, given the number
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
-// the weights of the model expressed as matrices
-func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, strategyOnBatch bool) [][]BlockSplits {
+// the weights of the model expressed as matrices.
+// You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
+func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, strategyOnBatch bool) [][]BlockSplits {
 	sq := int(math.Ceil(math.Sqrt(float64(inputFeatures))))
 	var colPartitions []int
 	var innerCols []int
@@ -56,7 +70,11 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 		if inputFeatures%d == 0 {
 			colPartitions = append(colPartitions, d)
 			innerCols = append(innerCols, inputFeatures/d)
+
 			batch := int(math.Floor(slotsAvailable / (2 * float64(inputFeatures/d))))
+			if inputRows != -1 {
+				batch = utils.MinInt(batch, inputRows)
+			}
 			if batch*(inputFeatures/d)*2 <= int(slotsAvailable) {
 				batchSizes = append(batchSizes, batch)
 			}
@@ -84,7 +102,7 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 				//adjust weight inner col split or batch depending on strategy
 				adjusted := true
 				//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
-				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
+				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, GetReplicaFactor(inRowsW, inColsW), float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
 					adjusted = false
 				}
 				//check if replication of input can be stored
@@ -125,11 +143,33 @@ func FindSplits(inputFeatures int, weightRows, weightCols []int, params ckks.Par
 			currCols = inColsW
 		}
 		if isValid {
-			blockSplit[0] = BlockSplits{InnerRows: batch, InnerCols: inCols, RowP: 1, ColP: colP}
+			var rowP int
+			if inputRows == -1 {
+				rowP = 1
+			} else {
+				if inputRows%batch != 0 {
+					continue
+				}
+				rowP = inputRows / batch
+			}
+			blockSplit[0] = BlockSplits{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
 			blockSplits = append(blockSplits, blockSplit)
 		}
 	}
-	return blockSplits
+	minComplexity := GetAvgComplexity(blockSplits[0])
+	for i := 0; i < len(blockSplits); i++ {
+		complexity := GetAvgComplexity(blockSplits[i])
+		if complexity < minComplexity {
+			minComplexity = complexity
+		}
+	}
+	var filteredSplits [][]BlockSplits
+	for i := 0; i < len(blockSplits); i++ {
+		if GetAvgComplexity(blockSplits[i]) == minComplexity {
+			filteredSplits = append(filteredSplits, blockSplits[i])
+		}
+	}
+	return filteredSplits
 }
 
 func ExctractInfo(splits []BlockSplits) SplitsInfo {

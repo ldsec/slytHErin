@@ -276,7 +276,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
 		utils.ThrowErr(err)
 		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.001, Box)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, Box)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
@@ -305,7 +305,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 
 			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
 			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.001, Box)
+			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.1, Box)
 		}
 	}
 	elapsed := time.Since(now)
@@ -414,7 +414,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
 		utils.ThrowErr(err)
 		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.001, nne.Box)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, nne.Box)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
@@ -424,7 +424,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
 		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
 		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.001, nne.Box)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, nne.Box)
 
 		if i != len(nne.Weights)-1 {
 			if (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
@@ -448,7 +448,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 			nne.Activators[i].ActivateBlocks(Xint)
 			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
 			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.001, nne.Box)
+			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.1, nne.Box)
 		}
 	}
 	fmt.Println("Key Switch to querier public key")

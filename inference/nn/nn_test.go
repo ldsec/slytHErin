@@ -83,7 +83,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(784, weightRows, weightCols, params, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
@@ -199,7 +199,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(784, weightRows, weightCols, params, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))

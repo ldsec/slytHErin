@@ -156,6 +156,9 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 //starts protocol instances in parallel
 func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int) {
 	var err error
+	if proto == END {
+		lmst.InitProto(proto, nil, nil, -1)
+	}
 	if lmst.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {

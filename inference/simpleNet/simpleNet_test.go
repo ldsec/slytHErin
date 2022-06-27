@@ -35,8 +35,8 @@ var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
-	var debug = false      //set to true for debug mode
-	var multiThread = true //set to true to enable multiple threads
+	var debug = false       //set to true for debug mode
+	var multiThread = false //set to true to enable multiple threads
 
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()
@@ -50,7 +50,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 		poolSize = runtime.NumCPU()
 	}
 
-	possibleSplits := cipherUtils.FindSplits(28*28, []int{784, 100}, []int{100, 10}, params, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 100}, []int{100, 10}, params, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
