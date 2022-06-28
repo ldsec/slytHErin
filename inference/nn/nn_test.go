@@ -94,13 +94,14 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		Box = cipherUtils.BoxWithEvaluators(Box, btpParams, true, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
 		Btp := cipherUtils.NewBootstrapper(Box, poolSize)
 
-		weights, biases := nn.BuildParams(splitInfo.InputRows)
+		batchSize := splitInfo.InputRows * splitInfo.InputRowP
+		weights, biases := nn.BuildParams(batchSize)
 		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
 		nne, err := nn.EncryptNN(weightsRescaled, biasesRescaled, splits, btpCapacity, -1, Box, poolSize)
 		utils.ThrowErr(err)
 		//load dataset
 		dataSn := data.LoadData("nn_data.json")
-		err = dataSn.Init(splitInfo.InputRows)
+		err = dataSn.Init(batchSize)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -172,7 +173,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
-	parties := 5
+	parties := 3
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)

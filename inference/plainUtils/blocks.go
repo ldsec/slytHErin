@@ -3,6 +3,7 @@ package plainUtils
 import (
 	"errors"
 	"gonum.org/v1/gonum/mat"
+	"math"
 	"sync"
 )
 
@@ -34,11 +35,25 @@ func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 		where each sub-matrix is row(m)/rowP x col(m)/colP
 	*/
 	rowM, colM := m.Dims()
-	if rowM%rowP != 0 || colM%colP != 0 {
+	if colM%colP != 0 {
 		return nil, errors.New("Cannot Split Matrix in Blocks!")
 	}
-	rowS := rowM / rowP
-	colS := colM / colP
+	mP := new(mat.Dense)
+	if rowM%rowP != 0 {
+		//pad
+		f := int(math.Ceil(float64(rowM) / float64(rowP)))
+		mP = mat.NewDense(f*rowP, colM, nil)
+		for i := 0; i < NumRows(m); i++ {
+			for j := 0; j < NumCols(m); j++ {
+				mP.Set(i, j, m.At(i, j))
+			}
+		}
+	} else {
+		mP = m
+	}
+	rowMp, colMp := mP.Dims()
+	rowS := rowMp / rowP
+	colS := colMp / colP
 	Bm := make([][]*mat.Dense, rowP)
 	for i := 0; i < rowP; i++ {
 		Bm[i] = make([]*mat.Dense, colP)
@@ -46,7 +61,7 @@ func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 			Bm[i][j] = mat.NewDense(rowS, colS, nil)
 			for s := i * rowS; s < (i+1)*rowS; s++ {
 				for r := j * colS; r < (j+1)*colS; r++ {
-					Bm[i][j].Set(s%rowS, r%colS, m.At(s, r))
+					Bm[i][j].Set(s%rowS, r%colS, mP.At(s, r))
 				}
 			}
 		}

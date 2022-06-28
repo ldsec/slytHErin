@@ -24,6 +24,15 @@ var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	DefaultScale: float64(1 << 35),
 })
 
+var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	LogN:         14,
+	LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{33},
+	Sigma:        rlwe.DefaultSigma,
+	LogSlots:     13,
+	DefaultScale: float64(1 << 26),
+})
+
 var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         13,
 	LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 13
@@ -65,7 +74,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
 		splitInfo := cipherUtils.ExctractInfo(splits)
 
-		batchSize := splitInfo.InputRows
+		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 
 		weights, biases := sn.BuildParams(batchSize)
 
@@ -100,8 +109,8 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 			if !debug {
 				res = sne.EvalBatchEncrypted(Xenc, Y, 10)
 			} else {
-				weights, biases = sn.CompressLayers(weights, biases)
-				res = sne.EvalBatchEncrypted_Debug(Xenc, Xbatch, weights, biases, sn.ReLUApprox, Y, 10)
+				weightsD, biasesD := sn.CompressLayers(weights, biases)
+				res = sne.EvalBatchEncrypted_Debug(Xenc, Xbatch, weightsD, biasesD, sn.ReLUApprox, Y, 10)
 			}
 			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 			fmt.Println("Accuracy:", res.Accuracy)

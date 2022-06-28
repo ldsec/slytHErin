@@ -155,3 +155,10 @@ if __name__=="__main__":
         print("Max: ", interval[1])
         print()
 
+    ## dump intervals
+    intervals_json = {'intervals':[{'a': x[0], 'b':x[1]} for x in intervals]}
+    with open(f'./models/nn_{layers}_intervals.json', 'w') as f:
+        json.dump(intervals_json, f)
+
+
+

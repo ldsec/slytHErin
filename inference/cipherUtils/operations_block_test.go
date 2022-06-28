@@ -14,11 +14,11 @@ import (
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(64, 64)
+	X := pU.RandMatrix(63, 64)
 	W := pU.RandMatrix(64, 32)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
-	splits := FindSplits(pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params, false)
+	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params, false)
 	if len(splits) == 0 {
 		panic(errors.New("No splits found"))
 	}
@@ -89,8 +89,8 @@ func TestMultiplier_Multiply(t *testing.T) {
 }
 
 func TestAdder_AddBias(t *testing.T) {
-	X := pU.RandMatrix(64, 64)
-	B := pU.RandMatrix(64, 64)
+	X := pU.RandMatrix(63, 64)
+	B := pU.RandMatrix(63, 64)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	Box := NewBox(params)

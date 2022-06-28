@@ -12,6 +12,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
+	"math"
 	"os"
 	"time"
 )
@@ -20,10 +21,10 @@ import (
 	Stores NN model in clear, as in json format
 */
 type NN struct {
-	Conv       utils.Layer            `json:"conv"`
-	Dense      []utils.Layer          `json:"dense"`
-	Layers     int                    `json:"layers"`
-	ReLUApprox *utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
+	Conv       utils.Layer              `json:"conv"`
+	Dense      []utils.Layer            `json:"dense"`
+	Layers     int                      `json:"layers"`
+	ReLUApprox []*utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
 
 	RowsOutConv, ColsOutConv, ChansOutConv, DimOutDense int //dimentions
 }
@@ -35,7 +36,7 @@ type NNEnc struct {
 	Weights    []*cipherUtils.EncWeightDiag
 	Bias       []*cipherUtils.EncInput
 	Activators []*cipherUtils.Activator
-	ReLUApprox *utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
+	ReLUApprox []*utils.ChebyPolyApprox //this will store the coefficients of the poly approximating ReLU
 
 	Multiplier *cipherUtils.Multiplier
 	Adder      *cipherUtils.Adder
@@ -61,7 +62,7 @@ func (nne NNEnc) LevelsToComplete(currLayer int, afterMul bool) int {
 		levelsNeeded += 1 //mul
 		if i != nne.Layers {
 			//last layer with no act
-			levelsNeeded += nne.ReLUApprox.LevelsOfAct()
+			levelsNeeded += nne.ReLUApprox[i].LevelsOfAct()
 		}
 	}
 	if afterMul {
@@ -76,7 +77,7 @@ func LoadNN(path string) *NN {
 
 	jsonFile, err := os.Open(path)
 	if err != nil {
-		fmt.Println(err)
+		utils.ThrowErr(err)
 	}
 	defer jsonFile.Close()
 	byteValue, _ := ioutil.ReadAll(jsonFile)
@@ -86,28 +87,66 @@ func LoadNN(path string) *NN {
 	return &res
 }
 
+//decides the degree of approximation for each interval
+func SetDegOfInterval(intervals utils.ApproxIntervals) utils.ApproxIntervals {
+	intervalsNew := make([]utils.ApproxInterval, len(intervals.Intervals))
+	margin := 2.0
+	for i, interval := range intervals.Intervals {
+		interval.A = math.Floor(interval.A) - margin
+		interval.B = math.Floor(interval.B) + margin
+		diff := interval.B - interval.A
+		if diff <= 6 {
+			interval.Deg = 3
+		} else if diff <= 14 {
+			interval.Deg = 7
+		} else if diff <= 20 {
+			interval.Deg = 15
+		} else if diff <= 30 {
+			interval.Deg = 31
+		} else {
+			interval.Deg = 63
+		}
+		fmt.Printf("Layer %d Approx: A = %f, B=%f --> deg = %d\n", i+1, interval.A, interval.B, interval.Deg)
+		intervalsNew[i] = interval
+	}
+	return utils.ApproxIntervals{intervalsNew}
+}
+
 func (nn *NN) Init(layers int, distributedBtp bool) {
 	//init dimensional values (not really used, just for reference)
 	nn.Layers = layers
-	//nn.RowsOutConv = 21
-	//nn.ColsOutConv = 20
-	//nn.ChansOutConv = 2 //tot is 21*20*2 = 840 per sample after conv
-	//nn.DimOutDense = 92 //per sample, all dense are the same but last one which is 92x10
-	if layers == 20 {
-		if distributedBtp {
-			//distributed
-			nn.ReLUApprox = utils.InitActivationCheby("soft relu", NN20Params.a, NN20Params.b, NN20Params.deg)
-		} else {
-			nn.ReLUApprox = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+	nn.ReLUApprox = make([]*utils.ChebyPolyApprox, layers)
+	jsonFile, err := os.Open(fmt.Sprintf("nn_%d_intervals.json", layers))
+	if err != nil {
+		fmt.Println("Couldn't open intervals file")
+		//default approximation
+		if layers == 20 {
+			if distributedBtp {
+				//distributed
+				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params.a, NN20Params.b, NN20Params.deg)
+			} else {
+				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+			}
+		} else if layers == 50 {
+			if distributedBtp {
+				//distributed
+				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN50Params.a, NN50Params.b, NN50Params.deg)
+			} else {
+				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+			}
 		}
-	} else if layers == 50 {
-		if distributedBtp {
-			//distributed
-			nn.ReLUApprox = utils.InitActivationCheby("soft relu", NN50Params.a, NN50Params.b, NN50Params.deg)
-		} else {
-			nn.ReLUApprox = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+	} else {
+		defer jsonFile.Close()
+		byteValue, _ := ioutil.ReadAll(jsonFile)
+		var intervals utils.ApproxIntervals
+		json.Unmarshal([]byte(byteValue), &intervals)
+		intervals = SetDegOfInterval(intervals)
+		for i := range intervals.Intervals {
+			interval := intervals.Intervals[i]
+			nn.ReLUApprox[i] = utils.InitActivationCheby("soft relu", interval.A, interval.B, interval.Deg)
 		}
 	}
+
 }
 
 func (nn *NN) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
@@ -133,14 +172,13 @@ func (nn *NN) RescaleWeightsForActivation(weights, biases []*mat.Dense) ([]*mat.
 	scaledB := make([]*mat.Dense, len(biases))
 	for i := range weights {
 		//change to cheby base
-		a := nn.ReLUApprox.A
-		b := nn.ReLUApprox.B
-		mulC := 2 / (b - a)
-		addC := (-a - b) / (b - a)
-		if i == nn.Layers {
-			//skip base switch for activation, since there is none in last layer
-			mulC = 1.0
-			addC = 0.0
+		var a, b = 0.0, 0.0
+		var mulC, addC = 1.0, 0.0
+		if i != len(weights)-1 {
+			a = nn.ReLUApprox[i].A
+			b = nn.ReLUApprox[i].B
+			mulC = 2 / (b - a)
+			addC = (-a - b) / (b - a)
 		}
 		scaledW[i] = plainUtils.MulByConst(weights[i], mulC)
 		scaledB[i] = plainUtils.AddConst(plainUtils.MulByConst(biases[i], mulC), addC)
@@ -170,6 +208,10 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 
 	splitIdx := 1
 	for i := 0; i < layers+1; i++ {
+		levelsOfAct := 0
+		if i != layers {
+			levelsOfAct = nne.ReLUApprox[i].LevelsOfAct()
+		}
 
 		if ((level <= minLevel && minLevel != -1) || level == 0) && level < nne.LevelsToComplete(i, false) {
 			//bootstrap
@@ -201,7 +243,7 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 		nne.Bias[i], err = cipherUtils.NewEncInput(biases[i], inputRowP, split.ColP, level, Box)
 		utils.ThrowErr(err)
 
-		if (level < nne.ReLUApprox.LevelsOfAct() || (minLevel != -1 && (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel))) && level < nne.LevelsToComplete(i, true) {
+		if (level < levelsOfAct || (minLevel != -1 && (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel))) && level < nne.LevelsToComplete(i, true) {
 			if minLevel != -1 {
 				//distributed
 				if level < minLevel {
@@ -218,9 +260,9 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 		if i != layers {
 			//activation
 			var err error
-			nne.Activators[i], err = cipherUtils.NewActivator(nn.ReLUApprox, level, Box.Params.DefaultScale(), innerRows, split.InnerCols, Box, poolsize)
+			nne.Activators[i], err = cipherUtils.NewActivator(nn.ReLUApprox[i], level, Box.Params.DefaultScale(), innerRows, split.InnerCols, Box, poolsize)
 			utils.ThrowErr(err)
-			level -= nne.ReLUApprox.LevelsOfAct() //activation
+			level -= nne.ReLUApprox[i].LevelsOfAct() //activation
 
 			if (level < minLevel && level < nne.LevelsToComplete(i+1, true)) || level < 0 {
 				if minLevel > 0 {
@@ -261,8 +303,8 @@ func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 		}
 		Xint = nne.Multiplier.Multiply(Xint, W)
 
-		a := nne.ReLUApprox.A
-		b := nne.ReLUApprox.B
+		a := nne.ReLUApprox[i].A
+		b := nne.ReLUApprox[i].B
 		mulC := 2 / (b - a)
 		addC := (-a - b) / (b - a)
 		if i == nne.Layers {
@@ -291,7 +333,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 		//activation
 		if i != len(nne.Weights)-1 {
 			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox.LevelsOfAct() {
+			if level < nne.ReLUApprox[i].LevelsOfAct() {
 				fmt.Println("Bootstrapping for Activation")
 				fmt.Println("pre boot")
 				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
@@ -348,7 +390,7 @@ func (nne *NNEnc) EvalBatchEncrypted(Xenc *cipherUtils.EncInput, Y []int, labels
 		//activation
 		if i != len(nne.Weights)-1 {
 			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox.LevelsOfAct() {
+			if level < nne.ReLUApprox[i].LevelsOfAct() {
 				fmt.Println("Bootstrapping for Activation")
 				fmt.Println("pre boot")
 				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
@@ -399,14 +441,13 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		}
 		Xint = nne.Multiplier.Multiply(Xint, W)
 
-		a := nne.ReLUApprox.A
-		b := nne.ReLUApprox.B
-		mulC := 2 / (b - a)
-		addC := (-a - b) / (b - a)
-		if i == nne.Layers {
-			//skip base switch for activation, since there is none in last layer
-			mulC = 1.0
-			addC = 0.0
+		var a, b = 0.0, 0.0
+		var mulC, addC = 1.0, 0.0
+		if i != len(weights)-1 {
+			a = nne.ReLUApprox[i].A
+			b = nne.ReLUApprox[i].B
+			mulC = 2 / (b - a)
+			addC = (-a - b) / (b - a)
 		}
 		var tmp mat.Dense
 		tmp.Mul(XintPlain, weights[i])
@@ -426,13 +467,14 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
 		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, nne.Box)
 
+		level = Xint.Blocks[0][0].Level()
 		if i != len(nne.Weights)-1 {
-			if (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
+			if (level < nne.ReLUApprox[i].LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox[i].LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
 				if level < minLevel {
 					utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
 				}
-				if level < nne.ReLUApprox.LevelsOfAct() {
-					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox.LevelsOfAct())
+				if level < nne.ReLUApprox[i].LevelsOfAct() {
+					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox[i].LevelsOfAct())
 				} else if level == minLevel {
 					fmt.Println("Min Level , Bootstrapping...")
 				} else {
@@ -492,18 +534,20 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed(Xenc *cipherUtils.EncInput, Y [
 			master.StartProto(distributed.REFRESH, Xint, pkQ, minLevel)
 			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
 		}
+
 		Xint = nne.Multiplier.Multiply(Xint, W)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
 
+		level = Xint.Blocks[0][0].Level()
 		if i != len(nne.Weights)-1 {
-			if (level < nne.ReLUApprox.LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox.LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
+			if (level < nne.ReLUApprox[i].LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox[i].LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
 				if level < minLevel {
 					utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
 				}
-				if level < nne.ReLUApprox.LevelsOfAct() {
-					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox.LevelsOfAct())
+				if level < nne.ReLUApprox[i].LevelsOfAct() {
+					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox[i].LevelsOfAct())
 				} else if level == minLevel {
 					fmt.Println("Min Level , Bootstrapping...")
 				} else {

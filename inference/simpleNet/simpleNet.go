@@ -186,7 +186,7 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 		tmp.Mul(Xclear, weights[i])
 		tmpRescaled := plainUtils.MulByConst(&tmp, 1.0/activation.Interval)
 		tmpB, _ := plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
-		cU.PrintDebugBlocks(Xenc, tmpB, 0.001, sne.Box)
+		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
 
@@ -194,12 +194,12 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 		tmp2.Add(&tmp, biases[i])
 		tmpRescaled = plainUtils.MulByConst(&tmp2, 1.0/activation.Interval)
 		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
-		cU.PrintDebugBlocks(Xenc, tmpB, 0.001, sne.Box)
+		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
 		sne.Activators[iAct].ActivateBlocks(Xenc)
 		utils.ActivatePlain(&tmp2, activation)
 		tmpB, _ = plainUtils.PartitionMatrix(&tmp2, Xenc.RowP, Xenc.ColP)
-		cU.PrintDebugBlocks(Xenc, tmpB, 0.001, sne.Box)
+		cU.PrintDebugBlocks(Xenc, tmpB, 1, sne.Box)
 
 		iAct++
 		*Xclear = tmp2

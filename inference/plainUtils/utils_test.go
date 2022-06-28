@@ -7,13 +7,13 @@ import (
 )
 
 func TestBlock(t *testing.T) {
-	m := RandMatrix(4, 4)
+	m := RandMatrix(5, 4)
 	bm, err := PartitionMatrix(m, 2, 2)
 	if err != nil {
 		panic(err)
 	}
 	m2 := ExpandBlocks(bm)
-	for i := 0; i < NumRows(m2); i++ {
+	for i := 0; i < NumRows(m); i++ {
 		fmt.Println("real:", m.RawRowView(i))
 		fmt.Println("test:", m2.RawRowView(i))
 	}
@@ -46,11 +46,11 @@ func TestSumBlock(t *testing.T) {
 }
 
 func TestMultiPlyBlocks(t *testing.T) {
-	a := RandMatrix(128, 841)
-	b := RandMatrix(841, 845)
+	a := RandMatrix(63, 64)
+	b := RandMatrix(64, 64)
 
-	ba, err := PartitionMatrix(a, 1, 29)
-	bb, err := PartitionMatrix(b, 29, 65)
+	ba, err := PartitionMatrix(a, 2, 2)
+	bb, err := PartitionMatrix(b, 2, 2)
 	var c mat.Dense
 	c.Mul(a, b)
 	bc, err := MultiPlyBlocks(ba, bb)
@@ -66,5 +66,5 @@ func TestMultiPlyBlocks(t *testing.T) {
 	for i := 0; i < NumRows(m); i++ {
 		fmt.Println(m.RawRowView(i))
 	}
-	fmt.Println("Distance:", Distance(RowFlatten(m), RowFlatten(&c)))
+	fmt.Println("Distance:", Distance(RowFlatten(m)[:NumRows(&c)*NumCols(&c)], RowFlatten(&c)))
 }

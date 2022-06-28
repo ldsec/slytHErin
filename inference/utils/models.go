@@ -25,6 +25,14 @@ type Layer struct {
 	Bias   Bias   `json:"bias"`
 }
 
+type ApproxInterval struct {
+	A   float64 `json:"a"`
+	B   float64 `json:"b"`
+	Deg int
+}
+type ApproxIntervals struct {
+	Intervals []ApproxInterval `json:"intervals"`
+}
 type Stats struct {
 	Predictions []int
 	Corrects    int

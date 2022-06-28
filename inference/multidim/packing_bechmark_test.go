@@ -67,9 +67,10 @@ func Test_Multiplication(t *testing.T) {
 	params2, _ := ckks2.NewParametersFromLiteral(ckks2.PN14QP438)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
-	A := plainUtils.RandMatrix(36, 784)
+	A := plainUtils.RandMatrix(256, 784)
 	B := plainUtils.RandMatrix(784, 100)
 	dim := utils2.MinInt(int(math.Ceil(float64(params2.N())/(2.0*float64(plainUtils.NumRows(A))))), plainUtils.NumRows(A))
+	fmt.Println("Dim: ", dim)
 	t.Run("Test/C2P", func(t *testing.T) {
 
 		Apacked := PackMatrixParallel(A, dim, params2.LogSlots())

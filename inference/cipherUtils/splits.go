@@ -70,10 +70,13 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 		if inputFeatures%d == 0 {
 			colPartitions = append(colPartitions, d)
 			innerCols = append(innerCols, inputFeatures/d)
-
 			batch := int(math.Floor(slotsAvailable / (2 * float64(inputFeatures/d))))
 			if inputRows != -1 {
 				batch = utils.MinInt(batch, inputRows)
+				for inputRows%batch != 0 {
+					//resize to input rows divider
+					batch--
+				}
 			}
 			if batch*(inputFeatures/d)*2 <= int(slotsAvailable) {
 				batchSizes = append(batchSizes, batch)
@@ -147,25 +150,29 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 			if inputRows == -1 {
 				rowP = 1
 			} else {
-				if inputRows%batch != 0 {
-					continue
-				}
 				rowP = inputRows / batch
 			}
 			blockSplit[0] = BlockSplits{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
 			blockSplits = append(blockSplits, blockSplit)
 		}
 	}
+	if len(blockSplits) == 0 {
+		return blockSplits
+	}
 	minComplexity := GetAvgComplexity(blockSplits[0])
+	minRowP := blockSplits[0][0].RowP
 	for i := 0; i < len(blockSplits); i++ {
 		complexity := GetAvgComplexity(blockSplits[i])
-		if complexity < minComplexity {
+		if complexity <= minComplexity {
 			minComplexity = complexity
+			if blockSplits[i][0].RowP < minRowP {
+				minRowP = blockSplits[i][0].RowP
+			}
 		}
 	}
 	var filteredSplits [][]BlockSplits
 	for i := 0; i < len(blockSplits); i++ {
-		if GetAvgComplexity(blockSplits[i]) == minComplexity {
+		if GetAvgComplexity(blockSplits[i]) == minComplexity && blockSplits[i][0].RowP == minRowP {
 			filteredSplits = append(filteredSplits, blockSplits[i])
 		}
 	}
