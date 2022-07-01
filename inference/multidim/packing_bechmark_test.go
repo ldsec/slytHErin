@@ -52,6 +52,7 @@ func Test_Multiplication(t *testing.T) {
 			InR: 64 InC: 64 RP: 4 CP: 4
 			Splits for  Weight 1
 			InR: 64 InC: 64 RP: 4 CP: 4
+
 			MultiDim:  1m27.2544526s
 			Blocks:  1m2.4505149s
 			MultiDim:  1m37.3221046s
@@ -61,7 +62,6 @@ func Test_Multiplication(t *testing.T) {
 
 			Multidim seems to perform better when model is in clear
 			Blocks seems to perform better when model is encrypted
-			--> not true if we set rows = 36 tho
 
 	*/
 	params2, _ := ckks2.NewParametersFromLiteral(ckks2.PN14QP438)

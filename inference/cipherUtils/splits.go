@@ -8,7 +8,7 @@ import (
 	"math"
 )
 
-const FILLTHRESHOLD = 0.5 //how many % of slots out of available slots should be filled -> heuristic base
+const FILLTHRESHOLD = 0.01 //how many % of slots out of available slots should be filled -> heuristic base
 
 type BlockSplits struct {
 	InnerRows, InnerCols, RowP, ColP int
@@ -59,7 +59,7 @@ func GetAvgComplexity(splits []BlockSplits) float64 {
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
 // the weights of the model expressed as matrices.
 // You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
-func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, strategyOnBatch bool) [][]BlockSplits {
+func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, strategyOnBatch bool, maximizeThput bool) [][]BlockSplits {
 	sq := int(math.Ceil(math.Sqrt(float64(inputFeatures))))
 	var colPartitions []int
 	var innerCols []int
@@ -105,11 +105,11 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 				//adjust weight inner col split or batch depending on strategy
 				adjusted := true
 				//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
-				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, GetReplicaFactor(inRowsW, inColsW), float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
+				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
 					adjusted = false
 				}
-				//check if replication of input can be stored
 
+				//check if replication of input can be stored
 				if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < FILLTHRESHOLD {
 					adjusted = false
 				}
@@ -159,22 +159,41 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	if len(blockSplits) == 0 {
 		return blockSplits
 	}
+	maxBatch := blockSplits[0][0].InnerRows
 	minComplexity := GetAvgComplexity(blockSplits[0])
-	minRowP := blockSplits[0][0].RowP
+
 	for i := 0; i < len(blockSplits); i++ {
 		complexity := GetAvgComplexity(blockSplits[i])
 		if complexity <= minComplexity {
 			minComplexity = complexity
-			if blockSplits[i][0].RowP < minRowP {
-				minRowP = blockSplits[i][0].RowP
-			}
+		}
+		if blockSplits[i][0].InnerRows > maxBatch {
+			maxBatch = blockSplits[i][0].InnerRows
 		}
 	}
 	var filteredSplits [][]BlockSplits
+
 	for i := 0; i < len(blockSplits); i++ {
-		if GetAvgComplexity(blockSplits[i]) == minComplexity && blockSplits[i][0].RowP == minRowP {
-			filteredSplits = append(filteredSplits, blockSplits[i])
+		if maximizeThput {
+			if blockSplits[i][0].InnerRows == maxBatch {
+				filteredSplits = append(filteredSplits, blockSplits[i])
+			}
+		} else {
+			if GetAvgComplexity(blockSplits[i]) == minComplexity {
+				filteredSplits = append(filteredSplits, blockSplits[i])
+			}
 		}
+	}
+	if len(filteredSplits) > 1 {
+		minRowP := filteredSplits[0][0].RowP
+		idxMinRowP := 0
+		for i := range filteredSplits {
+			if filteredSplits[i][0].RowP < minRowP {
+				minRowP = filteredSplits[i][0].RowP
+				idxMinRowP = i
+			}
+		}
+		filteredSplits = [][]BlockSplits{filteredSplits[idxMinRowP]}
 	}
 	return filteredSplits
 }

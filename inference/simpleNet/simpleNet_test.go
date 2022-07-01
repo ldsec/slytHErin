@@ -26,11 +26,11 @@ var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
-	LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 438 for LogN 14
-	LogP:         []int{33},
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{42, 42},
 	Sigma:        rlwe.DefaultSigma,
 	LogSlots:     13,
-	DefaultScale: float64(1 << 26),
+	DefaultScale: float64(1 << 30),
 })
 
 var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -44,8 +44,8 @@ var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
-	var debug = false       //set to true for debug mode
-	var multiThread = false //set to true to enable multiple threads
+	var debug = false      //set to true for debug mode
+	var multiThread = true //set to true to enable multiple threads
 
 	sn := LoadSimpleNet("simplenet_packed.json")
 	sn.Init()

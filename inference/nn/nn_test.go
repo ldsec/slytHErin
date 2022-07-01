@@ -54,11 +54,12 @@ var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 func TestEvalDataEncModelEnc(t *testing.T) {
 	debug := false
-	multithread := false
+	multithread := true
 	poolSize := 1
 	if multithread {
 		poolSize = runtime.NumCPU()
 	}
+	fmt.Printf("Running on %d threads\n", poolSize)
 	layers := 50 //20 or 50
 
 	nn := LoadNN("nn" + strconv.Itoa(layers) + "_packed.json")
@@ -83,18 +84,19 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
 	for _, splits := range possibleSplits {
 		splitInfo := cipherUtils.ExctractInfo(splits)
+		batchSize := splitInfo.InputRows * splitInfo.InputRowP
+		fmt.Println("Batch: ", batchSize)
 		Box := cipherUtils.NewBox(params)
 		Box = cipherUtils.BoxWithEvaluators(Box, btpParams, true, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
 		Btp := cipherUtils.NewBootstrapper(Box, poolSize)
 
-		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 		weights, biases := nn.BuildParams(batchSize)
 		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
 		nne, err := nn.EncryptNN(weightsRescaled, biasesRescaled, splits, btpCapacity, -1, Box, poolSize)
@@ -111,12 +113,11 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 
 		tot := 0
 		iters := 0
-		maxIters := 5
+		maxIters := 2
 
 		var elapsed int64
 		var res utils.Stats
 		for true {
-			batchSize := splitInfo.InputRows
 			X, Y, err := dataSn.Batch()
 			Xbatch := plainUtils.NewDense(X)
 			if err != nil || iters >= maxIters {
@@ -151,6 +152,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	if multithread {
 		poolSize = runtime.NumCPU()
 	}
+	fmt.Printf("Running on %d threads\n", poolSize)
 	layers := 20 //20 or 50
 
 	nn := LoadNN("nn" + strconv.Itoa(layers) + "_packed.json")
@@ -158,11 +160,8 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	nn.Init(layers, true)
 
 	var params ckks.Parameters
-	if layers == 20 {
-		params = paramsLogN14
-	} else {
-		params = paramsLogN15_NN50
-	}
+
+	params = paramsLogN14
 
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
@@ -173,7 +172,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
-	parties := 3
+	parties := 5
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
@@ -200,13 +199,15 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
 	for _, splits := range possibleSplits {
 		splitInfo := cipherUtils.ExctractInfo(splits)
+		cipherUtils.PrintSetOfSplits(splits)
+		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 		rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, params, nil)
 		rtks := kgenP.GenRotationKeysForRotations(rotations, true, skP)
 		decP := ckks.NewDecryptor(params, skP)
@@ -238,13 +239,13 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 		}
 
-		weights, biases := nn.BuildParams(splitInfo.InputRows)
+		weights, biases := nn.BuildParams(batchSize)
 		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
 		nne, err := nn.EncryptNN(weightsRescaled, biasesRescaled, splits, -1, minLevel, Box, poolSize)
 		utils.ThrowErr(err)
 		//load dataset
 		dataSn := data.LoadData("nn_data.json")
-		err = dataSn.Init(splitInfo.InputRows)
+		err = dataSn.Init(batchSize)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -254,12 +255,11 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 
 		tot := 0
 		iters := 0
-		maxIters := 5
+		maxIters := 2
 
 		var elapsed int64
 		var res utils.Stats
 		for true {
-			batchSize := splitInfo.InputRows
 			X, Y, err := dataSn.Batch()
 			Xbatch := plainUtils.NewDense(X)
 			if err != nil || iters >= maxIters {
