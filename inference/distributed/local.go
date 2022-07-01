@@ -148,7 +148,7 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 		if proto == REFRESH && X.Blocks[i][j].Level() > minLevel {
 			lmst.Box.Evaluator.ShallowCopy().DropLevel(X.Blocks[i][j], X.Blocks[i][j].Level()-minLevel)
 		}
-		X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.RowP+j)
+		X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
 		utils.ThrowErr(err)
 	}
 }
@@ -163,7 +163,7 @@ func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput,
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.RowP+j)
+				X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
 				utils.ThrowErr(err)
 			}
 		}

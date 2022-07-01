@@ -146,6 +146,9 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 	}
 }
 func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
+	//NN20
+	//5 parties -> 146 batch in 229s
+	//10 parties ->
 	debug := false
 	multithread := true
 	poolSize := 1
@@ -199,7 +202,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true, true)
+	possibleSplits := cipherUtils.FindSplits(292, 784, weightRows, weightCols, params, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
