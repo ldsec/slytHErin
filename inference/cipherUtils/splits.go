@@ -8,8 +8,6 @@ import (
 	"math"
 )
 
-const FILLTHRESHOLD = 0.01 //how many % of slots out of available slots should be filled -> heuristic base
-
 type BlockSplits struct {
 	InnerRows, InnerCols, RowP, ColP int
 }
@@ -46,8 +44,8 @@ func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Param
 //Compute tha average multiplication complexity of a series of splits
 func GetAvgComplexity(splits []BlockSplits) float64 {
 	complexity := 0
+	n := splits[0].RowP
 	for i := 0; i < len(splits)-1; i++ {
-		n := splits[i].RowP
 		m := splits[i].ColP
 		l := splits[i+1].ColP
 		complexity += n * m * l
@@ -59,7 +57,7 @@ func GetAvgComplexity(splits []BlockSplits) float64 {
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
 // the weights of the model expressed as matrices.
 // You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
-func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, strategyOnBatch bool, maximizeThput bool) [][]BlockSplits {
+func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, filltresh float64, strategyOnBatch bool, maximizeThput bool) [][]BlockSplits {
 	sq := int(math.Ceil(math.Sqrt(float64(inputFeatures))))
 	var colPartitions []int
 	var innerCols []int
@@ -100,17 +98,20 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 
 		for w := range weightRows {
 			inRowsW := weightRows[w] / currColP
-			inColsW := plainUtils.Min(int(math.Ceil(slotsAvailable/float64(inRowsW))), weightCols[w])
+			inColsW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(inRowsW))), weightCols[w])
+			for weightCols[w]%inColsW != 0 {
+				inColsW--
+			}
 			for {
 				//adjust weight inner col split or batch depending on strategy
 				adjusted := true
 				//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
-				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < FILLTHRESHOLD {
+				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < filltresh {
 					adjusted = false
 				}
 
 				//check if replication of input can be stored
-				if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < FILLTHRESHOLD {
+				if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < filltresh {
 					adjusted = false
 				}
 				if !adjusted {

@@ -84,12 +84,13 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, true, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, 0.2, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
 	for _, splits := range possibleSplits {
+		cipherUtils.PrintSetOfSplits(splits)
 		splitInfo := cipherUtils.ExctractInfo(splits)
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 		fmt.Println("Batch: ", batchSize)
@@ -175,7 +176,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
-	parties := 5
+	parties := 3
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 	skShares, skP, pkP, kgenP := distributed.DummyEncKeyGen(params, crs, parties)
 	rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
@@ -202,7 +203,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(292, 784, weightRows, weightCols, params, true, true)
+	possibleSplits := cipherUtils.FindSplits(292, 784, weightRows, weightCols, params, 0.2, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))

@@ -15,7 +15,7 @@ from utils import *
 
 ## HELPERS FOR JSON SERIALIZATION
 
-def format_cryptonet(serialized):
+def format_SimpleNet(serialized):
     ## changes the keys name in the serialized representation (dict)
     formatted = {}
     ## get all layers name
@@ -52,7 +52,7 @@ def extract_param(param_name, param):
             weights.append(k.item())
     return weights
 
-def serialize_cryptonet(model, format):
+def serialize_simpleNet(model, format):
     '''
     Serialize the model. Returns a dictionary which maps layer name to a flattened
     representation of the underlying weight in a json-serializable format
@@ -63,8 +63,8 @@ def serialize_cryptonet(model, format):
     serialized = format(serialized)
     return serialized
 
-def pack_cryptonet(model):
-    serialized = serialize_cryptonet(model, format_cryptonet)
+def pack_simpleNet(model):
+    serialized = serialize_simpleNet(model, format_SimpleNet)
     
     conv1 = np.array(serialized['conv1']['weight']).reshape(5,1,5,5)
     pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,12,12)
@@ -88,9 +88,9 @@ def pack_cryptonet(model):
     packed['pool2'] = {'weight':pool2M, 'bias': bias3}
     return packed
 
-class cryptonet(nn.Module):
+class SimpleNet(nn.Module):
   '''
-    Simpliefied network used in paper for inference https://www.microsoft.com/en-us/research/publication/cryptonets-applying-neural-networks-to-encrypted-data-with-high-throughput-and-accuracy/
+    Over-Simpliefied network used in paper for inference with two linear layers back to back https://www.microsoft.com/en-us/research/publication/cryptonets-applying-neural-networks-to-encrypted-data-with-high-throughput-and-accuracy/
   '''
   
   def __init__(self, batch_size : int, activation : str, sigmoid : str, init_method : str, verbose : bool):
@@ -124,12 +124,10 @@ class cryptonet(nn.Module):
     #x = self.pad(x, (1,1,1,1))
     x = self.conv1(x)
     #print(x.shape)
-    x = self.activation(x)
+    x = self.activation(self.pool1(x))
     #print(x.shape)
-    x = self.pool1(x)
     x = x.reshape([self.batch_size,1,100,1]) #batch_size tensors in 1 channel, 100x1
-    x = self.activation(x)
-    x = self.pool2(x)
+    x = self.activation(self.pool2(x))
     x = x.reshape(x.shape[0], -1)
     return x
  
@@ -163,7 +161,7 @@ if __name__ == "__main__":
     #sigmoid = True
     #for method in methods:
     #  for activation in activations:
-    #    models[method+"_"+activation] = cryptonet(batch_size=dataHandler.batch_size,
+    #    models[method+"_"+activation] = SimpleNet(batch_size=dataHandler.batch_size,
     #                                    activation=activation,
     #                                    init_method=method,
     #                                    verbose=False,
@@ -171,12 +169,12 @@ if __name__ == "__main__":
     ## TEST
 
     models = {}
-    #models["xavier_relu"] = cryptonet(batch_size=dataHandler.batch_size,
+    #models["xavier_relu"] = SimpleNet(batch_size=dataHandler.batch_size,
     #                                    activation="relu",
     #                                    init_method="xavier",
     #                                    verbose=False,
     #                                    sigmoid=True).to(device=device)
-    #models["he_relu"] = cryptonet(batch_size=dataHandler.batch_size,
+    #models["he_relu"] = SimpleNet(batch_size=dataHandler.batch_size,
     #                                    activation="relu",
     #                                    init_method="he",
     #                                    verbose=False,
@@ -184,13 +182,13 @@ if __name__ == "__main__":
 
     ## Most promising model. With approximated sigmoid we can increase accuracy
     ## up to 96%, but it's not faithful to the original model, plus it is more complex
-    models["xavier_relu_approx"] = cryptonet(batch_size=dataHandler.batch_size,
+    models["xavier_relu_approx"] = SimpleNet(batch_size=dataHandler.batch_size,
                                         activation="relu_approx",
                                         init_method="xavier",
                                         sigmoid="none",
                                         verbose=False).to(device=device)
 
-    #models["he_relu_approx"] = cryptonet(batch_size=dataHandler.batch_size,
+    #models["he_relu_approx"] = SimpleNet(batch_size=dataHandler.batch_size,
     #                                    activation="relu_approx",
     #                                    init_method="he",
     #                                    verbose=False,
@@ -199,7 +197,7 @@ if __name__ == "__main__":
     scores = {}
 
     for key, model in models.items():
-      logger = Logger("./logs/",f"cryptonet_{key}")
+      logger = Logger("./logs/",f"SimpleNet_{key}")
       model.apply(model.weights_init)
       train(logger, model, dataHandler, num_epochs=50, lr=5e-4, regularizer='None')
       loss, accuracy = eval(logger, model, dataHandler, loss='MSE')
@@ -207,9 +205,9 @@ if __name__ == "__main__":
       scores[key] = {"loss":loss, "accuracy":accuracy}
       
       ## save
-      torch.save(model, f"./models/cryptonet_{key}.pt")
-      packed = pack_cryptonet(model)
-      with open(f'./models/cryptonet_{key}_packed.json', 'w') as f:
+      torch.save(model, f"./models/SimpleNet_{key}.pt")
+      packed = pack_simpleNet(model)
+      with open(f'./models/SimpleNet_{key}_packed.json', 'w') as f:
         json.dump(packed, f)
 
     

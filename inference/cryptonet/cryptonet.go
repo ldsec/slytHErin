@@ -1,4 +1,4 @@
-package simpleNet
+package cryptonet
 
 import "C"
 import (
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-type SimpleNet struct {
+type cryptonet struct {
 	Conv1 utils.Layer `json:"conv1"`
 	Pool1 utils.Layer `json:"pool1"`
 	Pool2 utils.Layer `json:"pool2"`
@@ -23,7 +23,7 @@ type SimpleNet struct {
 }
 
 //holds encoded model for encrypted data inference
-type SimpleNetEcd struct {
+type cryptonetEcd struct {
 	Weights    []*cU.PlainWeightDiag
 	Bias       []*cU.PlainInput
 	Activators []*cU.Activator
@@ -35,7 +35,7 @@ type SimpleNetEcd struct {
 /***************************
 HELPERS
  ***************************/
-func LoadSimpleNet(path string) *SimpleNet {
+func Loadcryptonet(path string) *cryptonet {
 	// loads json file with weights
 	jsonFile, err := os.Open(path)
 	if err != nil {
@@ -44,22 +44,22 @@ func LoadSimpleNet(path string) *SimpleNet {
 	defer jsonFile.Close()
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 
-	var res SimpleNet
+	var res cryptonet
 	json.Unmarshal([]byte(byteValue), &res)
 	return &res
 }
 
 /****************
-SIMPLENET METHODS
+cryptonet METHODS
  ***************/
 
-func (sn *SimpleNet) Init() {
+func (sn *cryptonet) Init() {
 	deg := 3
 	sn.ReLUApprox = utils.InitReLU(deg)
 }
 
 //returns list of (weights, biases) as arrays of *mat.Dense
-func (sn *SimpleNet) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
+func (sn *cryptonet) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
 	conv1M := utils.BuildKernelMatrix(sn.Conv1.Weight)
 	inputLayerDim := plainUtils.NumCols(conv1M)
 	bias1M := utils.BuildBiasMatrix(sn.Conv1.Bias, inputLayerDim, batchSize)
@@ -76,7 +76,7 @@ func (sn *SimpleNet) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
 }
 
 //Compress the 2 linear layers back to back
-func (sn *SimpleNet) CompressLayers(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
+func (sn *cryptonet) CompressLayers(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
 	//plaintext weights and bias
 	conv1M := weights[0]
 	pool1M := weights[1]
@@ -93,7 +93,7 @@ func (sn *SimpleNet) CompressLayers(weights, biases []*mat.Dense) ([]*mat.Dense,
 }
 
 //Rescale the Parameters by 1/interval
-func (sn *SimpleNet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
+func (sn *cryptonet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
 	wRescaled := make([]*mat.Dense, len(weights))
 	bRescaled := make([]*mat.Dense, len(biases))
 
@@ -110,11 +110,11 @@ func (sn *SimpleNet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.
 	return wRescaled, bRescaled
 }
 
-func (sn *SimpleNet) EncodeSimpleNet(weights, biases []*mat.Dense, splits []cU.BlockSplits, Box cU.CkksBox, poolsize int) *SimpleNetEcd {
-	sne := new(SimpleNetEcd)
+func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.BlockSplits, Box cU.CkksBox, poolsize int) *cryptonetEcd {
+	sne := new(cryptonetEcd)
 
 	//compress layers 1 and 2 which are linear and back to back, then rescale for the activation
-	weights, biases = sn.RescaleForActivation(sn.CompressLayers(weights, biases))
+	weights, biases = sn.RescaleForActivation(weights, biases)
 
 	sne.Weights = make([]*cU.PlainWeightDiag, len(weights))
 	sne.Bias = make([]*cU.PlainInput, len(biases))
@@ -127,6 +127,7 @@ func (sn *SimpleNet) EncodeSimpleNet(weights, biases []*mat.Dense, splits []cU.B
 	leftInnerDim := splits[0].InnerRows
 	inputRowP := splits[0].RowP
 
+	iAct := 0
 	for i, split := range splits[1:] {
 		sne.Weights[i], err = cU.NewPlainWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
@@ -136,10 +137,12 @@ func (sn *SimpleNet) EncodeSimpleNet(weights, biases []*mat.Dense, splits []cU.B
 		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, Box)
 		utils.ThrowErr(err)
 
-		sne.Activators[i], err = cU.NewActivator(sn.ReLUApprox, level, scale, leftInnerDim, split.InnerCols, Box, poolsize)
-		utils.ThrowErr(err)
-
-		level -= sn.ReLUApprox.LevelsOfAct()
+		if iAct < 2 {
+			sne.Activators[iAct], err = cU.NewActivator(sn.ReLUApprox, level, scale, leftInnerDim, split.InnerCols, Box, poolsize)
+			utils.ThrowErr(err)
+			iAct++
+			level -= sn.ReLUApprox.LevelsOfAct()
+		}
 	}
 	sne.Adder = cU.NewAdder(Box, poolsize)
 	sne.Multiplier = cU.NewMultiplier(Box, poolsize)
@@ -148,14 +151,18 @@ func (sn *SimpleNet) EncodeSimpleNet(weights, biases []*mat.Dense, splits []cU.B
 	return sne
 }
 
-func (sne *SimpleNetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels int) utils.Stats {
+func (sne *cryptonetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels int) utils.Stats {
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
+	iAct := 0
 	for i := range sne.Weights {
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
-		sne.Activators[i].ActivateBlocks(Xenc)
+		if iAct < 2 {
+			sne.Activators[iAct].ActivateBlocks(Xenc)
+			iAct++
+		}
 	}
 	end := time.Since(start)
 	fmt.Println("Done ", end)
@@ -170,9 +177,11 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels i
 	}
 }
 
-func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat.Dense, weights, biases []*mat.Dense, activation *utils.MinMaxPolyApprox, Y []int, labels int) utils.Stats {
+func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat.Dense, weights, biases []*mat.Dense, activation *utils.MinMaxPolyApprox, Y []int, labels int) utils.Stats {
 	fmt.Println("Starting inference...")
 	start := time.Now()
+
+	iAct := 0
 
 	for i := range sne.Weights {
 
@@ -192,11 +201,12 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
 		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
-		sne.Activators[i].ActivateBlocks(Xenc)
+		sne.Activators[iAct].ActivateBlocks(Xenc)
 		utils.ActivatePlain(&tmp2, activation)
 		tmpB, _ = plainUtils.PartitionMatrix(&tmp2, Xenc.RowP, Xenc.ColP)
 		cU.PrintDebugBlocks(Xenc, tmpB, 1, sne.Box)
 
+		iAct++
 		*Xclear = tmp2
 	}
 	end := time.Since(start)

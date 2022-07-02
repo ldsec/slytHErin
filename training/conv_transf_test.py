@@ -209,8 +209,8 @@ if __name__ == "__main__":
     ##TEST 4 -> simplenet pipeline (working fine)
     #device = torch.device('cpu')
     ##torch_model = SimpleNet(64, 'relu_approx', 'none', 'xavier', False)
-    ##torch_model.load_state_dict(torch.load("./models/SimpleNet_xavier_relu_approx.pt",map_location=device))
-    #torch_model = torch.load("./models/SimpleNet_xavier_relu_approx.pt",map_location=device)
+    ##torch_model.load_state_dict(torch.load("./models/cryptonet.pt",map_location=device))
+    #torch_model = torch.load("./models/cryptonet.pt",map_location=device)
     #torch_model = torch_model.double()
     #torch_model.batch_size = 64
     #torch_model.eval()
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     ## TEST 5 -> AlexNet simplified (what about the padding in between?)
     device = torch.device('cpu')
     #torch_model = SimpleNet(64, 'relu_approx', 'none', 'xavier', False)
-    #torch_model.load_state_dict(torch.load("./models/SimpleNet_xavier_relu_approx.pt",map_location=device))
+    #torch_model.load_state_dict(torch.load("./models/cryptonet.pt",map_location=device))
     torch_model = torch.load("./models/AlexNet_simplified.pt",map_location=device)
     torch_model = torch_model.double()
     torch_model.simplified = True

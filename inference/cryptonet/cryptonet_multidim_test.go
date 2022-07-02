@@ -1,4 +1,4 @@
-package simpleNet
+package cryptonet
 
 import (
 	"fmt"
@@ -12,11 +12,16 @@ import (
 	"testing"
 )
 
-//Testing SimpleNet with MultiDimentional packing for enhanced throughput
+//Testing cryptonet with MultiDimentional packing for enhanced throughput
 func Test_BatchEncrypted(t *testing.T) {
 	debug := false
+	//multithread := false
+	//poolsize := 1
+	//if multithread {
+	//	poolsize = runtime.NumCPU()
+	//}
 
-	sn := LoadSimpleNet("simplenet_packed.json")
+	sn := Loadcryptonet("cryptonet_packed.json")
 	sn.Init()
 	//crypto
 	//ckksParams := ckks.ParametersLiteral{
@@ -31,11 +36,11 @@ func Test_BatchEncrypted(t *testing.T) {
 	//8 levels neeeded
 	ckksParams := ckks2.ParametersLiteral{
 		LogN:     14,
-		LogQ:     []int{45, 35, 35, 35, 35, 35, 35, 35, 35}, //Log(PQ) <= 438 for LogN 14
+		LogQ:     []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
 		LogP:     []int{37, 37, 37},
 		Sigma:    rlwe2.DefaultSigma,
 		LogSlots: 13,
-		Scale:    float64(1 << 35),
+		Scale:    float64(1 << 30),
 	}
 
 	params, err := ckks2.NewParametersFromLiteral(ckksParams)
@@ -44,13 +49,13 @@ func Test_BatchEncrypted(t *testing.T) {
 	batchSize := 256
 	innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
 	fmt.Printf("Input Dense: Rows %d, Cols %d --> InnerDim: %d\n", batchSize, features, innerDim)
-	dataSn := data.LoadData("simplenet_data_nopad.json")
+	dataSn := data.LoadData("cryptonet_data_nopad.json")
 	err = dataSn.Init(batchSize)
 	utils.ThrowErr(err)
 	X, Y, err := dataSn.Batch()
 	Xpacked := PackBatchParallel(pu.NewDense(X), innerDim, params)
 
-	weightMatrices, biasMatrices := sn.CompressLayers(sn.BuildParams(batchSize))
+	weightMatrices, biasMatrices := sn.BuildParams(batchSize)
 	weightMatricesRescaled, biasMatricesRescaled := sn.RescaleForActivation(weightMatrices, biasMatrices)
 	kgen := ckks2.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
@@ -108,7 +113,6 @@ func Test_BatchEncrypted(t *testing.T) {
 		if err != nil || iters >= maxIters {
 			break
 		}
-
 	}
 	fmt.Println("Accuracy:", float64(corrects)/float64(tot))
 	fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))

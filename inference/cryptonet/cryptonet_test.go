@@ -1,4 +1,4 @@
-package simpleNet
+package cryptonet
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
-	"math"
 	"runtime"
 	"testing"
 )
@@ -17,7 +16,7 @@ import "github.com/tuneinsight/lattigo/v3/rlwe"
 
 var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
-	LogQ:         []int{45, 35, 35, 35, 35, 35, 35}, //Log(PQ)
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ)
 	LogP:         []int{50, 50, 50, 50},
 	Sigma:        rlwe.DefaultSigma,
 	LogSlots:     14,
@@ -26,31 +25,28 @@ var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
-	LogQ:         []int{35, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
 	LogP:         []int{42, 42},
 	Sigma:        rlwe.DefaultSigma,
 	LogSlots:     13,
 	DefaultScale: float64(1 << 30),
 })
 
-var paramsLogN13, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-	LogN:         13,
-	LogQ:         []int{29, 26, 26, 26, 26, 26, 26}, //Log(PQ) <= 218 for LogN 13
-	LogP:         []int{33},
-	Sigma:        rlwe.DefaultSigma,
-	LogSlots:     12,
-	DefaultScale: float64(1 << 26),
-})
+func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 
-func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
+	//41 in 6s with logn14
+	//83 in 10.5s with logn15
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
-	sn := LoadSimpleNet("simplenet_packed.json")
+	sn := Loadcryptonet("cryptonet_packed.json")
 	sn.Init()
 
-	params := paramsLogN13
+	params := paramsLogN14
+	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.4, true, true)
+	//params := paramsLogN15
+	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.2, true, true)
 
 	Box := cipherUtils.NewBox(params)
 
@@ -58,8 +54,6 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 	if multiThread {
 		poolSize = runtime.NumCPU()
 	}
-
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 100}, []int{100, 10}, params, 0.5, true, false)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
@@ -80,11 +74,11 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
 		Box = cipherUtils.BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
 
-		sne := sn.EncodeSimpleNet(weights, biases, splits, Box, poolSize)
+		sne := sn.Encodecryptonet(weights, biases, splits, Box, poolSize)
 
-		fmt.Println("Encoded SimpleNet...")
+		fmt.Println("Encoded cryptonet...")
 
-		dataSn := data.LoadData("simplenet_data_nopad.json")
+		dataSn := data.LoadData("cryptonet_data_nopad.json")
 		err := dataSn.Init(batchSize)
 		utils.ThrowErr(err)
 
@@ -93,7 +87,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 
 		tot := 0
 		iters := 0
-		maxIters := int(math.Ceil(float64(1024 / batchSize)))
+		maxIters := 5
 		var elapsed int64
 		var res utils.Stats
 		for true {
@@ -109,8 +103,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 			if !debug {
 				res = sne.EvalBatchEncrypted(Xenc, Y, 10)
 			} else {
-				weightsD, biasesD := sn.CompressLayers(weights, biases)
-				res = sne.EvalBatchEncrypted_Debug(Xenc, Xbatch, weightsD, biasesD, sn.ReLUApprox, Y, 10)
+				res = sne.EvalBatchEncrypted_Debug(Xenc, Xbatch, weights, biases, sn.ReLUApprox, Y, 10)
 			}
 			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
 			fmt.Println("Accuracy:", res.Accuracy)

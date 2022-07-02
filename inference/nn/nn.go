@@ -95,13 +95,13 @@ func SetDegOfInterval(intervals utils.ApproxIntervals) utils.ApproxIntervals {
 		interval.A = math.Floor(interval.A) - margin
 		interval.B = math.Floor(interval.B) + margin
 		diff := interval.B - interval.A
-		if diff <= 6 {
+		if diff <= 2 {
 			interval.Deg = 3
-		} else if diff <= 14 {
+		} else if diff <= 4 {
 			interval.Deg = 7
-		} else if diff <= 20 {
+		} else if diff <= 8 {
 			interval.Deg = 15
-		} else if diff <= 30 {
+		} else if diff <= 16 {
 			interval.Deg = 31
 		} else {
 			interval.Deg = 63
