@@ -250,7 +250,6 @@ func Test_BatchEncrypted_V2(t *testing.T) {
 	}
 
 	params, err := ckks2.NewParametersFromLiteral(ckksParams)
-
 	features := 784 //MNIST
 	batchSize := 256
 	innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
