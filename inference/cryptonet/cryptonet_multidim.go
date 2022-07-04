@@ -19,7 +19,7 @@ type PackedMatrixLinearLayer struct {
 
 type cryptonetMD struct {
 	Layers     []*PackedMatrixLinearLayer
-	PmM        *md.PackedMatrixMultiplier
+	PmM        []*md.PackedMatrixMultiplier //slice to support parallel threads
 	Activation *utils.MinMaxPolyApprox
 
 	innerDim, parallelBatches int
@@ -38,8 +38,7 @@ func PackBatchParallel(X *mat.Dense, innerDim int, params ckks2.Parameters) *md.
 
 //Converts the loaded cryptonet model in its MultiDimentional Packing representation
 //Weights and biases are assumed to be already multiplied with the constant for the activation
-//Level encoding assumes the compressed model with 2 layer and 2 activations
-func (sn *cryptonet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols int, weights []*mat.Dense, biases []*mat.Dense, params ckks2.Parameters, ecd ckks2.Encoder) *cryptonetMD {
+func (sn *cryptonet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols int, weights []*mat.Dense, biases []*mat.Dense, params ckks2.Parameters, ecd ckks2.Encoder, poolsize int) *cryptonetMD {
 	weightsMD := make([]*md.PackedMatrix, len(weights))
 	biasesMD := make([]*md.PackedMatrix, len(biases))
 
@@ -95,6 +94,9 @@ func (sn *cryptonet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols i
 	snMD.maxC = maxC
 	snMD.innerDim = innerDim
 	snMD.parallelBatches = parallelBatches
+
+	snMD.PmM = make([]*md.PackedMatrixMultiplier, poolsize)
+
 	return snMD
 }
 
@@ -106,10 +108,12 @@ func (snMD *cryptonetMD) GenerateRotations(params ckks2.Parameters) []int {
 	return rotations
 }
 
-func (snMD *cryptonetMD) InitPmMultiplier(params ckks2.Parameters, eval ckks2.Evaluator) {
-	snMD.PmM = md.NewPackedMatrixMultiplier(params, snMD.innerDim, snMD.maxR, snMD.maxC, eval)
-	for i := range snMD.Layers {
-		snMD.PmM.AddMatrixOperation(snMD.Layers[i].Mm)
+func (snMD *cryptonetMD) InitPmMultiplier(params ckks2.Parameters, eval ckks2.Evaluator, i int) {
+
+	snMD.PmM[i] = md.NewPackedMatrixMultiplier(params, snMD.innerDim, snMD.maxR, snMD.maxC, eval)
+
+	for j := range snMD.Layers {
+		snMD.PmM[i].AddMatrixOperation(snMD.Layers[j].Mm)
 	}
 }
 
@@ -126,16 +130,18 @@ func (snMD *cryptonetMD) EvalBatchEncrypted(Y []int, Xenc *md.CiphertextBatchMat
 		}
 		fmt.Println("Layer ", i+1)
 		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
-		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
+		snMD.PmM[Box.PoolIdx].MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
 		fmt.Println("Level after Mul: ", tmpA.Level())
 
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
-		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
+		snMD.PmM[Box.PoolIdx].AddPlain(tmpA, layer.B, tmpB)
 		fmt.Println("Level after Add: ", tmpB.Level())
 
 		if i != len(snMD.Layers)-1 {
-			resAfterBias = snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
+			resAfterBias = snMD.PmM[Box.PoolIdx].EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
 			fmt.Println("Level after Act: ", tmpB.Level())
+		} else {
+			resAfterBias = tmpB
 		}
 	}
 	elapsed := time.Since(start)
@@ -164,32 +170,39 @@ func (snMD *cryptonetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 	fmt.Println("Start level: ", Xenc.Level())
 	for i := range snMD.Layers {
 		layer := snMD.Layers[i]
+		interval := snMD.Activation.Interval
+		if i == len(snMD.Layers)-1 {
+			interval = 1.0
+		}
 		if i == 0 {
 			resAfterBias = Xenc
 			resAfterBiasClear = Xclear
 		}
 		fmt.Println("Layer ", i+1)
 		tmpA := md.AllocateCiphertextBatchMatrix(layer.W.Rows(), resAfterBias.Cols(), snMD.innerDim, resAfterBias.M[0].Level(), Box.Params)
-		snMD.PmM.MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
+		snMD.PmM[Box.PoolIdx].MulPlainLeft([]*md.PlaintextBatchMatrix{layer.W}, resAfterBias, snMD.innerDim, []*md.CiphertextBatchMatrix{tmpA})
 
 		fmt.Println("Level after Mul: ", tmpA.Level())
 		tmpAclear := new(mat.Dense)
 		tmpAclear.Mul(resAfterBiasClear, weights[i])
-		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpAclear, 1.0/snMD.Activation.Interval), tmpA, snMD.innerDim, snMD.parallelBatches, true, false, Box))
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpAclear, 1.0/interval), tmpA, snMD.innerDim, snMD.parallelBatches, true, false, Box))
 
 		tmpB := md.AllocateCiphertextBatchMatrix(tmpA.Rows(), tmpA.Cols(), snMD.innerDim, tmpA.M[0].Level(), Box.Params)
-		snMD.PmM.AddPlain(tmpA, layer.B, tmpB)
+		snMD.PmM[Box.PoolIdx].AddPlain(tmpA, layer.B, tmpB)
 
 		tmpBclear := new(mat.Dense)
 		fmt.Println("Level after Add: ", tmpB.Level())
 		tmpBclear.Add(tmpAclear, biases[i])
-		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpBclear, 1.0/snMD.Activation.Interval), tmpB, snMD.innerDim, snMD.parallelBatches, true, false, Box))
+		utils.ThrowErr(md.DebugMD(plainUtils.MulByConst(tmpBclear, 1.0/interval), tmpB, snMD.innerDim, snMD.parallelBatches, true, false, Box))
 
-		resAfterBias = snMD.PmM.EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
-		utils.ActivatePlain(tmpBclear, snMD.Activation)
-		fmt.Println("Level after Act: ", tmpB.Level())
-		utils.ThrowErr(md.DebugMD(tmpBclear, resAfterBias, snMD.innerDim, snMD.parallelBatches, true, false, Box))
-
+		if i != len(snMD.Layers)-1 {
+			resAfterBias = snMD.PmM[Box.PoolIdx].EvalPoly(tmpB, ckks2.NewPoly(snMD.Activation.Poly.Coeffs))
+			utils.ActivatePlain(tmpBclear, snMD.Activation)
+			fmt.Println("Level after Act: ", tmpB.Level())
+			utils.ThrowErr(md.DebugMD(tmpBclear, resAfterBias, snMD.innerDim, snMD.parallelBatches, true, false, Box))
+		} else {
+			resAfterBias = tmpB
+		}
 		resAfterBiasClear = tmpBclear
 	}
 	elapsed := time.Since(start)

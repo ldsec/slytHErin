@@ -155,7 +155,9 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels i
 	for i := range sne.Weights {
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
-		sne.Activators[i].ActivateBlocks(Xenc)
+		if i < 1 {
+			sne.Activators[i].ActivateBlocks(Xenc)
+		}
 	}
 	end := time.Since(start)
 	fmt.Println("Done ", end)

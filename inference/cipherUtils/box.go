@@ -51,8 +51,8 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 		Params:    Box.Params,
 		Encoder:   Box.Encoder.ShallowCopy(),
 		Evaluator: Box.Evaluator.ShallowCopy(),
-		Decryptor: nil,
-		Encryptor: nil,
+		Decryptor: Box.Decryptor.ShallowCopy(),
+		Encryptor: Box.Encryptor.ShallowCopy(),
 	}
 	return boxNew
 }

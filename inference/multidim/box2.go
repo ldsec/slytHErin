@@ -21,6 +21,7 @@ type Ckks2Box struct {
 	Encryptor    ckks2.Encryptor
 	Decryptor    ckks2.Decryptor
 	BootStrapper *bootstrapping2.Bootstrapper
+	PoolIdx      int //id for threads
 }
 
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks2.Parameters, btpParams *bootstrapping.Parameters) []int {

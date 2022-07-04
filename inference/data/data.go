@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"sync"
 )
 
 type Data struct {
@@ -15,6 +16,7 @@ type Data struct {
 	BatchSize    int
 	NumBatches   int
 	CurrentBatch int
+	sem          sync.Mutex
 }
 
 func LoadData(path string) *Data {
@@ -38,6 +40,8 @@ func (data *Data) Init(batchSize int) error {
 }
 
 func (data *Data) Batch() ([][]float64, []int, error) {
+	data.sem.Lock()
+	defer data.sem.Unlock()
 	if data.CurrentBatch < data.NumBatches {
 		i := data.CurrentBatch * data.BatchSize
 		j := (data.CurrentBatch + 1) * data.BatchSize

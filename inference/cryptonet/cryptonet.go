@@ -99,10 +99,14 @@ func (sn *cryptonet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.
 
 	for i := range weights {
 		wRescaled[i] = new(mat.Dense)
-		wRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), weights[i])
 		bRescaled[i] = new(mat.Dense)
-		bRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), biases[i])
-
+		if i != len(weights)-1 {
+			wRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), weights[i])
+			bRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), biases[i])
+		} else {
+			wRescaled[i] = weights[i]
+			bRescaled[i] = biases[i]
+		}
 		fmt.Printf("Layer %d:\n", i+1)
 		fmt.Printf("Dense Weight Dims (R,C): %d,%d\n", plainUtils.NumRows(wRescaled[i]), plainUtils.NumCols(wRescaled[i]))
 		fmt.Printf("Dense Bias Dims (R,C): %d,%d\n", plainUtils.NumRows(bRescaled[i]), plainUtils.NumCols(bRescaled[i]))

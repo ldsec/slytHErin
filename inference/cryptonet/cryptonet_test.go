@@ -99,7 +99,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 			}
 			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), Box)
 			utils.ThrowErr(err)
-			//res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, false)
+
 			if !debug {
 				res = sne.EvalBatchEncrypted(Xenc, Y, 10)
 			} else {
