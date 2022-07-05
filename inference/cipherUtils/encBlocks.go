@@ -60,7 +60,7 @@ type PlainWeightDiag struct {
 	InnerCols  int
 }
 
-func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*PlainInput, error) {
+func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box CkksBox) (*PlainInput, error) {
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -75,13 +75,13 @@ func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*Plai
 	for i := 0; i < rowP; i++ {
 		XPlain.Blocks[i] = make([]*ckks.Plaintext, colP)
 		for j := 0; j < colP; j++ {
-			XPlain.Blocks[i][j] = EncodeInput(level, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
+			XPlain.Blocks[i][j] = EncodeInput(level, scale, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
 		}
 	}
 	return XPlain, nil
 }
 
-func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*EncInput, error) {
+func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box CkksBox) (*EncInput, error) {
 	Xb, err := plainUtils.PartitionMatrix(Xm, rowP, colP)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -99,7 +99,7 @@ func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, Box CkksBox) (*EncInp
 	for i := 0; i < rowP; i++ {
 		XEnc.Blocks[i] = make([]*ckks.Ciphertext, colP)
 		for j := 0; j < colP; j++ {
-			XEnc.Blocks[i][j] = EncryptInput(level, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
+			XEnc.Blocks[i][j] = EncryptInput(level, scale, plainUtils.MatToArray(Xb.Blocks[i][j]), Box)
 		}
 	}
 	return XEnc, nil

@@ -58,13 +58,12 @@ func GetAvgComplexity(splits []BlockSplits) float64 {
 // the weights of the model expressed as matrices.
 // You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
 func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, filltresh float64, strategyOnBatch bool, maximizeThput bool) [][]BlockSplits {
-	sq := int(math.Ceil(math.Sqrt(float64(inputFeatures))))
 	var colPartitions []int
 	var innerCols []int
 	var batchSizes []int
 	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots())))
 
-	for d := 2; d <= sq; d++ {
+	for d := 2; d <= inputFeatures; d++ {
 		if inputFeatures%d == 0 {
 			colPartitions = append(colPartitions, d)
 			innerCols = append(innerCols, inputFeatures/d)

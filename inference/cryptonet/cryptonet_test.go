@@ -44,7 +44,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 	sn.Init()
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.4, true, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.8, true, true)
 	//params := paramsLogN15
 	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.2, true, true)
 
@@ -97,7 +97,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 				//dataset completed
 				break
 			}
-			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), Box)
+			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
 
 			if !debug {

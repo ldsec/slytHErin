@@ -5,23 +5,23 @@ import (
 	"sync"
 )
 
-func EncryptInput(level int, w [][]float64, Box CkksBox) *ckks.Ciphertext {
+func EncryptInput(level int, scale float64, w [][]float64, Box CkksBox) *ckks.Ciphertext {
 	params := Box.Params
 	ecd := Box.Encoder
 	enc := Box.Encryptor
 
 	wF := FormatInput(w)
-	pt := ckks.NewPlaintext(params, level, params.DefaultScale())
+	pt := ckks.NewPlaintext(params, level, scale)
 	ecd.EncodeSlots(wF, pt, params.LogSlots())
 	return enc.EncryptNew(pt)
 }
 
-func EncodeInput(level int, w [][]float64, Box CkksBox) *ckks.Plaintext {
+func EncodeInput(level int, scale float64, w [][]float64, Box CkksBox) *ckks.Plaintext {
 	params := Box.Params
 	ecd := Box.Encoder
 
 	wF := FormatInput(w)
-	pt := ckks.NewPlaintext(params, level, params.DefaultScale())
+	pt := ckks.NewPlaintext(params, level, scale)
 
 	ecd.EncodeSlots(wF, pt, params.LogSlots())
 	return pt

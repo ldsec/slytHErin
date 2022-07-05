@@ -38,7 +38,7 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W
 			return
 		}
 		i, j, k := task.i, task.j, task.k
-		ct := DiagMul(X.Blocks[i][k].CopyNew(), dimIn, dimMid, dimOut, W.GetBlock(j, k), true, true, box)
+		ct := DiagMul(X.Blocks[i][k].CopyNew(), dimIn, dimMid, dimOut, W.GetBlock(j, k), true, false, box)
 		if k == 0 {
 			//I am the accumulator
 			defer close(task.accumulatorChan)
@@ -93,7 +93,7 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 				for k := 0; k < s; k++ {
 					x := X.Blocks[i][k].CopyNew()
 					w := W.GetBlock(j, k)
-					ct := DiagMul(x, dimIn, dimMid, dimOut, w, true, true, Box)
+					ct := DiagMul(x, dimIn, dimMid, dimOut, w, true, false, Box)
 					if k == 0 {
 						res = ct
 					} else {
@@ -137,6 +137,32 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 	return Out
 }
 
+//To be called after multiply. Applies the rescaling and removes garbage from imaginary part of slots (from multiplication algo with complex packing)
+func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
+
+	poolCh := make(chan struct{}, Mul.poolSize)
+
+	//init channel
+	for i := 0; i < Mul.poolSize; i++ {
+		poolCh <- struct{}{}
+	}
+	for i := 0; i < X.RowP; i++ {
+		for j := 0; j < X.ColP; j++ {
+			<-poolCh //if not routines are available this is blocking
+			go func(i, j int, eval ckks.Evaluator) {
+				eval.Rescale(X.Blocks[i][j], Mul.box.Params.DefaultScale(), X.Blocks[i][j])
+				eval.Add(X.Blocks[i][j], eval.ConjugateNew(X.Blocks[i][j]), X.Blocks[i][j])
+
+				poolCh <- struct{}{} //restore 1 go routine in channel
+
+			}(i, j, Mul.box.Evaluator.ShallowCopy())
+		}
+	}
+	for i := 0; i < Mul.poolSize; i++ {
+		<-poolCh //empty channel to ensure all gorutines are done
+	}
+}
+
 //  ---------------------------------------------
 //	Operations between encrypted matrices of data
 //  |
@@ -178,10 +204,10 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.O
 	if res.Degree() > 1 {
 		eval.Relinearize(res, res)
 	}
-	eval.Rescale(res, params.DefaultScale(), res)
 
-	// Erases imaginary part
+	// rescales + erases imaginary part
 	if cleanImag {
+		eval.Rescale(res, params.DefaultScale(), res)
 		eval.Add(res, eval.ConjugateNew(res), res)
 	}
 

@@ -132,13 +132,14 @@ func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.B
 	inputRowP := splits[0].RowP
 
 	iAct := 0
+
 	for i, split := range splits[1:] {
 		sne.Weights[i], err = cU.NewPlainWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
 
-		level-- //mul
+		level-- //rescale
 
-		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, Box)
+		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, scale, Box)
 		utils.ThrowErr(err)
 
 		if iAct < 2 {
@@ -162,7 +163,10 @@ func (sne *cryptonetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels i
 	iAct := 0
 	for i := range sne.Weights {
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
+		sne.Multiplier.RemoveImagFromBlocks(Xenc)
+
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
+
 		if iAct < 2 {
 			sne.Activators[iAct].ActivateBlocks(Xenc)
 			iAct++
@@ -190,6 +194,7 @@ func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 	for i := range sne.Weights {
 
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
+		sne.Multiplier.RemoveImagFromBlocks(Xenc)
 
 		var tmp mat.Dense
 		tmp.Mul(Xclear, weights[i])
@@ -205,11 +210,12 @@ func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
 		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
-		sne.Activators[iAct].ActivateBlocks(Xenc)
-		utils.ActivatePlain(&tmp2, activation)
-		tmpB, _ = plainUtils.PartitionMatrix(&tmp2, Xenc.RowP, Xenc.ColP)
-		cU.PrintDebugBlocks(Xenc, tmpB, 1, sne.Box)
-
+		if iAct < 2 {
+			sne.Activators[iAct].ActivateBlocks(Xenc)
+			utils.ActivatePlain(&tmp2, activation)
+			tmpB, _ = plainUtils.PartitionMatrix(&tmp2, Xenc.RowP, Xenc.ColP)
+			cU.PrintDebugBlocks(Xenc, tmpB, 1, sne.Box)
+		}
 		iAct++
 		*Xclear = tmp2
 	}

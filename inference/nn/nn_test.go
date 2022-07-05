@@ -125,7 +125,7 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 				//dataset completed
 				break
 			}
-			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), Box)
+			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
 			//res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, false)
 			if !debug {
@@ -270,7 +270,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 				//dataset completed
 				break
 			}
-			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), Box)
+			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
 			//res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, false)
 			if !debug {

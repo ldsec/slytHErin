@@ -69,28 +69,7 @@ func (Btp *Bootstrapper) Bootstrap(X *EncInput) {
 //Dummy Bootstrap where cipher is freshly encrypted
 func DummyBootStrapBlocks(X *EncInput, Box CkksBox) *EncInput {
 	pt := DecInput(X, Box)
-	Xnew, err := NewEncInput(plainUtils.NewDense(pt), X.RowP, X.ColP, Box.Params.MaxLevel(), Box)
+	Xnew, err := NewEncInput(plainUtils.NewDense(pt), X.RowP, X.ColP, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box)
 	utils.ThrowErr(err)
 	return Xnew
-}
-
-//Deprecated
-func RescaleBlocks(X *EncInput, Box CkksBox) {
-	for i := 0; i < X.RowP; i++ {
-		for j := 0; j < X.ColP; j++ {
-			Box.Evaluator.Rescale(X.Blocks[i][j], Box.Params.DefaultScale(), X.Blocks[i][j])
-		}
-	}
-}
-
-//Deprecated
-func RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
-	for i := 0; i < X.RowP; i++ {
-		for j := 0; j < X.ColP; j++ {
-			Box.Evaluator.MultByConst(X.Blocks[i][j], 0.5, X.Blocks[i][j])
-			Box.Evaluator.Add(X.Blocks[i][j], Box.Evaluator.ConjugateNew(X.Blocks[i][j]), X.Blocks[i][j])
-			//Box.Evaluator.Rescale(X.Blocks[i][j], Box.Params.DefaultScale(), X.Blocks[i][j])
-		}
-	}
-	RescaleBlocks(X, Box)
 }

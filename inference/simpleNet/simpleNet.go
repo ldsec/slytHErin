@@ -133,7 +133,7 @@ func (sn *SimpleNet) EncodeSimpleNet(weights, biases []*mat.Dense, splits []cU.B
 
 		level-- //mul
 
-		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, Box)
+		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, scale, Box)
 		utils.ThrowErr(err)
 
 		sne.Activators[i], err = cU.NewActivator(sn.ReLUApprox, level, scale, leftInnerDim, split.InnerCols, Box, poolsize)
@@ -154,6 +154,7 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels i
 
 	for i := range sne.Weights {
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
+		sne.Multiplier.RemoveImagFromBlocks(Xenc)
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
 		if i < 1 {
 			sne.Activators[i].ActivateBlocks(Xenc)
@@ -179,6 +180,7 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 	for i := range sne.Weights {
 
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
+		sne.Multiplier.RemoveImagFromBlocks(Xenc)
 
 		var tmp mat.Dense
 		tmp.Mul(Xclear, weights[i])

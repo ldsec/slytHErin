@@ -240,7 +240,7 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 			}
 		}
 
-		nne.Bias[i], err = cipherUtils.NewEncInput(biases[i], inputRowP, split.ColP, level, Box)
+		nne.Bias[i], err = cipherUtils.NewEncInput(biases[i], inputRowP, split.ColP, level, Box.Params.DefaultScale(), Box)
 		utils.ThrowErr(err)
 
 		if (level < levelsOfAct || (minLevel != -1 && (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel))) && level < nne.LevelsToComplete(i, true) {
@@ -302,6 +302,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 		Xint = nne.Multiplier.Multiply(Xint, W)
+		nne.Multiplier.RemoveImagFromBlocks(Xint)
 
 		a := nne.ReLUApprox[i].A
 		b := nne.ReLUApprox[i].B
@@ -383,6 +384,7 @@ func (nne *NNEnc) EvalBatchEncrypted(Xenc *cipherUtils.EncInput, Y []int, labels
 			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
 		}
 		Xint = nne.Multiplier.Multiply(Xint, W)
+		nne.Multiplier.RemoveImagFromBlocks(Xint)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
@@ -440,6 +442,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
 		}
 		Xint = nne.Multiplier.Multiply(Xint, W)
+		nne.Multiplier.RemoveImagFromBlocks(Xint)
 
 		var a, b = 0.0, 0.0
 		var mulC, addC = 1.0, 0.0
@@ -536,6 +539,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed(Xenc *cipherUtils.EncInput, Y [
 		}
 
 		Xint = nne.Multiplier.Multiply(Xint, W)
+		nne.Multiplier.RemoveImagFromBlocks(Xint)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
