@@ -1,5 +1,10 @@
 package cipherUtils
 
+import (
+	"fmt"
+	"math"
+)
+
 func FormatWeights(w [][]float64, leftdim int) (m [][]complex128) {
 	/*
 		Format weights in diagonal form for multiplication algorithm
@@ -52,17 +57,39 @@ func FormatWeightsAsMap(w [][]float64, leftdim int) (m map[int][]float64, nonZer
 		refer to page 3: https://www.biorxiv.org/content/biorxiv/early/2022/01/11/2022.01.10.475610/DC1/embed/media-1.pdf?download=true
 	*/
 	m = make(map[int][]float64)
-	nonZeroDiags = make([]int, len(w))
 
-	for i := 0; i < len(w); i++ {
+	//complex pack
+	wRow := len(w)
+	wCol := len(w[0])
+	wPacked := make([][]complex128, int(math.Ceil(float64(wRow)/2)))
+	ip := 0
+	for i := 0; i < wCol-1; i++ {
+		wPacked[ip] = make([]complex128, wCol)
+		if i%2 == 0 {
+			if i+1 < wCol {
+				for j := 0; j < wCol; j++ {
+					wPacked[ip][j] = 0.5 * complex(w[i][j], -1*w[i+1][j])
+				}
+			} else {
+				for j := 0; j < wCol; j++ {
+					wPacked[ip][j] = 0.5 * complex(w[i][j], 0)
+				}
+			}
+			ip++
+		}
 
+	}
+	for i := range wPacked {
+		fmt.Println(i)
+		fmt.Println(wPacked[i])
+	}
+	nonZeroDiags = make([]int, len(wPacked))
+	for i := 0; i < len(wPacked); i++ {
 		d := make([]float64, leftdim*len(w[0]))
 		nonZeroDiags[i] = i
-
-		for j := 0; j < len(w[0]); j++ {
+		for j := 0; j < wCol; j++ {
 
 			cReal := w[(i+j)%len(w)][j]
-
 			for k := 0; k < leftdim; k++ {
 				d[j*leftdim+k] = cReal
 			}
@@ -73,11 +100,11 @@ func FormatWeightsAsMap(w [][]float64, leftdim int) (m map[int][]float64, nonZer
 }
 
 func FormatInput(w [][]float64) (v []float64) {
-	v = make([]float64, len(w)*len(w[0])*2)
+	v = make([]float64, len(w)*len(w[0])) //missing a 2
 
 	for i := 0; i < len(w[0]); i++ {
 		for j := 0; j < len(w); j++ {
-			v[i*len(w)+j] = w[j][i]
+			v[i*len(w)+j] = w[j][i] //transposed
 		}
 	}
 

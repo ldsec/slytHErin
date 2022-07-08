@@ -26,12 +26,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 	Box := NewBox(params)
 
 	t.Run("Test/C2P", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
 		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt)
+		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -42,12 +42,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2P/Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
 		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt)
+		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
@@ -57,12 +57,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 	})
 
 	t.Run("Test/C2C", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
 		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct)
+		resEnc := Mul.Multiply(Xenc, Wct, true)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -73,12 +73,12 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2C/Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
 		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct)
+		resEnc := Mul.Multiply(Xenc, Wct, true)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
@@ -96,8 +96,8 @@ func TestAdder_AddBias(t *testing.T) {
 	Box := NewBox(params)
 
 	t.Run("Test/Add", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), Box)
-		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Ad := NewAdder(Box, 1)
 		start := time.Now()
 		Ad.AddBias(Xenc, Bpt)
@@ -111,8 +111,8 @@ func TestAdder_AddBias(t *testing.T) {
 	})
 	t.Run("Test/Add/Multitrehad", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
-		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), Box)
-		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Ad := NewAdder(Box, runtime.NumCPU())
 		start := time.Now()
 		Ad.AddBias(Xenc, Bpt)
@@ -135,7 +135,7 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 	t.Run("Test/Activate", func(t *testing.T) {
 		// we need to rescale the input before the activation
 		Xscaled := pU.MulByConst(pU.NewDense(pU.MatToArray(X)), 1.0/activation.Interval)
-		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, 1)
 
 		start := time.Now()
@@ -151,7 +151,7 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 	t.Run("Test/Activate/MultiThread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 		Xscaled := pU.MulByConst(pU.NewDense(pU.MatToArray(X)), 1.0/activation.Interval)
-		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), Box)
+		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, runtime.NumCPU())
 
 		start := time.Now()

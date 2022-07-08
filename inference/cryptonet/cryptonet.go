@@ -32,6 +32,16 @@ type cryptonetEcd struct {
 	Box        cU.CkksBox
 }
 
+//holds encrypted model for data inference (scenario model in clear, data encrypted)
+type cryptonetEnc struct {
+	Weights    []*cU.EncWeightDiag
+	Bias       []*cU.EncInput
+	Activators []*cU.Activator
+	Multiplier *cU.Multiplier
+	Adder      *cU.Adder
+	Box        cU.CkksBox
+}
+
 /***************************
 HELPERS
  ***************************/
@@ -156,14 +166,62 @@ func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.B
 	return sne
 }
 
+func (sn *cryptonet) Encryptcryptonet(weights, biases []*mat.Dense, splits []cU.BlockSplits, Box cU.CkksBox, poolsize int) *cryptonetEnc {
+	sne := new(cryptonetEnc)
+
+	//compress layers 1 and 2 which are linear and back to back, then rescale for the activation
+	weights, biases = sn.RescaleForActivation(weights, biases)
+
+	sne.Weights = make([]*cU.EncWeightDiag, len(weights))
+	sne.Bias = make([]*cU.EncInput, len(biases))
+	sne.Activators = make([]*cU.Activator, 2)
+
+	level := Box.Params.MaxLevel()
+	scale := Box.Params.DefaultScale()
+	var err error
+
+	leftInnerDim := splits[0].InnerRows
+	inputRowP := splits[0].RowP
+
+	iAct := 0
+
+	for i, split := range splits[1:] {
+		sne.Weights[i], err = cU.NewEncWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
+		utils.ThrowErr(err)
+
+		level-- //rescale
+
+		sne.Bias[i], err = cU.NewEncInput(biases[i], inputRowP, split.ColP, level, scale, Box)
+		utils.ThrowErr(err)
+
+		if iAct < 2 {
+			sne.Activators[iAct], err = cU.NewActivator(sn.ReLUApprox, level, scale, leftInnerDim, split.InnerCols, Box, poolsize)
+			utils.ThrowErr(err)
+			iAct++
+			level -= sn.ReLUApprox.LevelsOfAct()
+		}
+	}
+	sne.Adder = cU.NewAdder(Box, poolsize)
+	sne.Multiplier = cU.NewMultiplier(Box, poolsize)
+	sne.Box = Box
+
+	return sne
+
+}
+
 func (sne *cryptonetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels int) utils.Stats {
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
 	iAct := 0
+	var prepack bool
 	for i := range sne.Weights {
-		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
-		sne.Multiplier.RemoveImagFromBlocks(Xenc)
+		if i == 0 {
+			prepack = false
+		} else {
+			prepack = true
+		}
+		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i], prepack)
 
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
 
@@ -190,12 +248,14 @@ func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 	start := time.Now()
 
 	iAct := 0
-
+	var prepack bool
 	for i := range sne.Weights {
-
-		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
-		sne.Multiplier.RemoveImagFromBlocks(Xenc)
-
+		if i == 0 {
+			prepack = false
+		} else {
+			prepack = true
+		}
+		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i], prepack)
 		var tmp mat.Dense
 		tmp.Mul(Xclear, weights[i])
 		tmpRescaled := plainUtils.MulByConst(&tmp, 1.0/activation.Interval)
@@ -223,6 +283,105 @@ func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 	fmt.Println("Done ", end)
 	res := cU.DecInput(Xenc, sne.Box)
 	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
+
+	return utils.Stats{
+		Predictions: predictions,
+		Corrects:    corrects,
+		Accuracy:    accuracy,
+		Time:        end,
+	}
+}
+
+func (sne *cryptonetEnc) EvalBatchWithModelEnc(X *cU.PlainInput, Y []int, labels int) utils.Stats {
+	fmt.Println("Starting inference...")
+	start := time.Now()
+
+	iAct := 0
+	var prepack bool
+	res := new(cU.EncInput)
+	for i := range sne.Weights {
+		if i == 0 {
+			prepack = false
+			res = sne.Multiplier.Multiply(X, sne.Weights[i], prepack)
+		} else {
+			prepack = true
+			res = sne.Multiplier.Multiply(res, sne.Weights[i], prepack)
+		}
+
+		sne.Adder.AddBias(res, sne.Bias[i])
+
+		if iAct < 2 {
+			sne.Activators[iAct].ActivateBlocks(res)
+			iAct++
+		}
+	}
+	//client masks its result
+	mask := cU.DecodeInput(cU.MaskInput(res, sne.Box), sne.Box)
+
+	//server decrypts
+	resP := cU.DecInput(res, sne.Box)
+	for i := range resP {
+		for j := range resP[i] {
+			resP[i][j] -= mask[i][j]
+		}
+	}
+
+	end := time.Since(start)
+	fmt.Println("Done ", end)
+
+	corrects, accuracy, predictions := utils.Predict(Y, labels, resP)
+
+	return utils.Stats{
+		Predictions: predictions,
+		Corrects:    corrects,
+		Accuracy:    accuracy,
+		Time:        end,
+	}
+}
+
+func (sne *cryptonetEnc) EvalBatchWithModelEnc_Debug(X *cU.PlainInput, Xclear *mat.Dense, weights, biases []*mat.Dense, activation *utils.MinMaxPolyApprox, Y []int, labels int) utils.Stats {
+	fmt.Println("Starting inference...")
+	start := time.Now()
+
+	iAct := 0
+	var prepack bool
+	res := new(cU.EncInput)
+	for i := range sne.Weights {
+		if i == 0 {
+			prepack = false
+			res = sne.Multiplier.Multiply(X, sne.Weights[i], prepack)
+		} else {
+			prepack = true
+			res = sne.Multiplier.Multiply(res, sne.Weights[i], prepack)
+		}
+
+		var tmp mat.Dense
+		tmp.Mul(Xclear, weights[i])
+		tmpRescaled := plainUtils.MulByConst(&tmp, 1.0/activation.Interval)
+		tmpB, _ := plainUtils.PartitionMatrix(tmpRescaled, X.RowP, X.ColP)
+		cU.PrintDebugBlocks(res, tmpB, 0.1, sne.Box)
+
+		sne.Adder.AddBias(res, sne.Bias[i])
+
+		var tmp2 mat.Dense
+		tmp2.Add(&tmp, biases[i])
+		tmpRescaled = plainUtils.MulByConst(&tmp2, 1.0/activation.Interval)
+		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, res.RowP, res.ColP)
+		cU.PrintDebugBlocks(res, tmpB, 0.1, sne.Box)
+
+		if iAct < 2 {
+			sne.Activators[iAct].ActivateBlocks(res)
+			utils.ActivatePlain(&tmp2, activation)
+			tmpB, _ = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
+			cU.PrintDebugBlocks(res, tmpB, 1, sne.Box)
+		}
+		iAct++
+		*Xclear = tmp2
+	}
+	end := time.Since(start)
+	fmt.Println("Done ", end)
+	resPlain := cU.DecInput(res, sne.Box)
+	corrects, accuracy, predictions := utils.Predict(Y, labels, resPlain)
 
 	return utils.Stats{
 		Predictions: predictions,

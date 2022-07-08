@@ -129,11 +129,10 @@ func (X *PlainInput) GetInnerDims() (int, int) {
 	return X.InnerRows, X.InnerCols
 }
 
+//	Given a block input matrix, decrypts and returns the underlying original matrix
+//	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
-	/*
-		Given a block input matrix, decrypts and returns the underlying original matrix
-		The sub-matrices are also transposed (remember that they are in form flatten(A.T))
-	*/
+
 	Xb := new(plainUtils.BMatrix)
 	Xb.RowP = XEnc.RowP
 	Xb.ColP = XEnc.ColP
@@ -145,6 +144,29 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 		for j := 0; j < XEnc.ColP; j++ {
 			pt := Box.Decryptor.DecryptNew(XEnc.Blocks[i][j])
 			ptArray := Box.Encoder.DecodeSlots(pt, Box.Params.LogSlots())
+			//this is flatten(x.T)
+			resReal := plainUtils.ComplexToReal(ptArray)[:XEnc.InnerRows*XEnc.InnerCols]
+			res := plainUtils.TransposeDense(mat.NewDense(XEnc.InnerCols, XEnc.InnerRows, resReal))
+			// now this is x
+			Xb.Blocks[i][j] = res
+		}
+	}
+	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
+}
+
+//	Given a block input matrix, decrypts and returns the underlying original matrix
+//	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
+func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
+	Xb := new(plainUtils.BMatrix)
+	Xb.RowP = XEnc.RowP
+	Xb.ColP = XEnc.ColP
+	Xb.InnerRows = XEnc.InnerRows
+	Xb.InnerCols = XEnc.InnerCols
+	Xb.Blocks = make([][]*mat.Dense, Xb.RowP)
+	for i := 0; i < XEnc.RowP; i++ {
+		Xb.Blocks[i] = make([]*mat.Dense, Xb.ColP)
+		for j := 0; j < XEnc.ColP; j++ {
+			ptArray := Box.Encoder.DecodeSlots(XEnc.Blocks[i][j], Box.Params.LogSlots())
 			//this is flatten(x.T)
 			resReal := plainUtils.ComplexToReal(ptArray)[:XEnc.InnerRows*XEnc.InnerCols]
 			res := plainUtils.TransposeDense(mat.NewDense(XEnc.InnerCols, XEnc.InnerRows, resReal))
@@ -242,4 +264,23 @@ func (W *PlainWeightDiag) GetPartitions() (int, int) {
 
 func (W *PlainWeightDiag) GetInnerDims() (int, int) {
 	return W.InnerRows, W.InnerCols
+}
+
+func MaskInput(Xenc *EncInput, Box CkksBox) *PlainInput {
+	mask := make([][]*ckks.Plaintext, len(Xenc.Blocks))
+	for i := range Xenc.Blocks {
+		mask[i] = make([]*ckks.Plaintext, len(Xenc.Blocks[i]))
+		for j := range Xenc.Blocks[i] {
+			m := plainUtils.SecureRandMask(Xenc.InnerRows*Xenc.InnerCols, Box.Params.DefaultScale(), Box.Params.QiFloat64(0))
+			mask[i][j] = Box.Encoder.EncodeNew(m, Xenc.Blocks[i][j].Level(), Box.Params.DefaultScale(), Box.Params.LogSlots())
+			Box.Evaluator.Add(Xenc.Blocks[i][j], mask[i][j], Xenc.Blocks[i][j])
+		}
+	}
+	return &PlainInput{
+		Blocks:    mask,
+		RowP:      Xenc.RowP,
+		ColP:      Xenc.ColP,
+		InnerRows: Xenc.InnerRows,
+		InnerCols: Xenc.InnerCols,
+	}
 }

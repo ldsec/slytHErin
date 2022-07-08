@@ -167,7 +167,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 		if complexity <= minComplexity {
 			minComplexity = complexity
 		}
-		if blockSplits[i][0].InnerRows > maxBatch {
+		if blockSplits[i][0].InnerRows > maxBatch && complexity < 128 {
 			maxBatch = blockSplits[i][0].InnerRows
 		}
 	}

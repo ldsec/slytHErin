@@ -123,7 +123,7 @@ class cryptonet(nn.Module):
   def forward(self, x):
     #x = self.pad(x, (1,1,1,1))
     x = self.conv1(x)
-    #print(x.shape)
+    print(x.shape)
     x = self.activation(x)
     #print(x.shape)
     x = self.pool1(x)

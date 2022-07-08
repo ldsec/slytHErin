@@ -29,7 +29,7 @@ func TestFindSplits_SimpleNet(t *testing.T) {
 		} else {
 			fmt.Println("[!] Strategy on tweaking weights split")
 		}
-		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, strategy, false)
+		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, 0.5, strategy, false)
 		PrintAllSplits(splits)
 	}
 }
@@ -66,7 +66,7 @@ func TestFindSplits_NN(t *testing.T) {
 		} else {
 			fmt.Println("[!] Strategy on tweaking weights split")
 		}
-		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, strategy, false)
+		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, 0.5, strategy, false)
 		for i := range splits {
 			fmt.Printf("\nPossible split %d\n", i+1)
 			for j := range splits[i] {

@@ -228,7 +228,7 @@ func Test_BatchEncrypted(t *testing.T) {
 //Testing cryptonet with MultiDimentional packing for enhanced throughput
 func Test_BatchEncrypted_V2(t *testing.T) {
 	debug := false
-	multithread := true
+	multithread := false
 	poolsize := 1
 
 	if multithread {
@@ -251,8 +251,10 @@ func Test_BatchEncrypted_V2(t *testing.T) {
 
 	params, err := ckks2.NewParametersFromLiteral(ckksParams)
 	features := 784 //MNIST
-	batchSize := 256
-	innerDim := int(math.Ceil(float64(params.N()) / (2.0 * float64(batchSize))))
+	batchSize := 8
+	alpha := 0.5 //ciphertext utilization factor. Set to 1 for max memory efficiency
+	innerDim := int(math.Ceil((float64(params.N()) * alpha) / (2.0 * float64(batchSize))))
+	innerDim = 8
 	fmt.Printf("Input Dense: Rows %d, Cols %d --> InnerDim: %d\n", batchSize, features, innerDim)
 	dataSn := data.LoadData("cryptonet_data_nopad.json")
 	err = dataSn.Init(batchSize)
@@ -355,6 +357,7 @@ func Test_BatchEncrypted_V2(t *testing.T) {
 				iters++
 				X, Y, err = dataSn.Batch()
 				Xpacked = PackBatchParallel(pu.NewDense(X), innerDim, params)
+				Xenc = batchEnc.EncodeAndEncrypt(params.MaxLevel(), params.Scale(), Xpacked)
 				if err != nil || iters >= maxIters {
 					break
 				}

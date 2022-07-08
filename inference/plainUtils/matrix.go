@@ -1,8 +1,10 @@
 package plainUtils
 
 import (
+	cryptorand "crypto/rand"
 	"gonum.org/v1/gonum/mat"
 	"math"
+	"math/big"
 	"math/rand"
 )
 
@@ -36,6 +38,29 @@ func RandMatrix(r, c int) *mat.Dense {
 	m := make([]float64, r*c)
 	for i := range m {
 		m[i] = rand.Float64()
+	}
+	return mat.NewDense(r, c, m)
+}
+
+func SecureRandMask(n int, scale float64, lvl0 float64) []float64 {
+	m := make([]float64, n)
+	bitsLvl0 := math.Floor(math.Log(lvl0))
+	bitsScale := math.Floor(math.Log(scale))
+	for i := range m {
+		r, _ := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(math.Pow(2, bitsLvl0-bitsScale))))
+		m[i] = float64(r.Uint64())
+	}
+	return m
+}
+
+//returns a matrix useful for debug. E.g if r,c = 3,3 -> returns
+// | 1 2 3 |
+// | 4 5 6 |
+// | 7 8 9 |
+func MatrixForDebug(r, c int) *mat.Dense {
+	m := make([]float64, r*c)
+	for i := range m {
+		m[i] = float64(i) + 1.0
 	}
 	return mat.NewDense(r, c, m)
 }

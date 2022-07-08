@@ -18,15 +18,18 @@ v
 *********************************************/
 
 func TestMultiplication(t *testing.T) {
-	X := pU.RandMatrix(64, 64)
-	W := pU.RandMatrix(64, 32)
+	X := pU.RandMatrix(41, 98)
+	W := pU.RandMatrix(98, 80)
+	//X := pU.MatrixForDebug(3, 3)
+	//W := pU.MatrixForDebug(3, 3)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
+	scale := params.DefaultScale()
 
 	Box := NewBox(params)
 	Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)})
 
 	t.Run("Test/C2P", func(t *testing.T) {
-		Xenc := EncryptInput(params.MaxLevel(), pU.MatToArray(X), Box)
+		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
 		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
 		ops := make([]ckks.Operand, len(Wenc))
 		for i := range Wenc {
@@ -41,7 +44,7 @@ func TestMultiplication(t *testing.T) {
 	})
 
 	t.Run("Test/C2C", func(t *testing.T) {
-		Xenc := EncryptInput(params.MaxLevel(), pU.MatToArray(X), Box)
+		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
 		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
 		ops := make([]ckks.Operand, len(Wenc))
 		for i := range Wenc {
@@ -56,6 +59,24 @@ func TestMultiplication(t *testing.T) {
 		PrintDebug(Renc, valuesWant, 0.001, Box)
 	})
 
+	t.Run("Test/P2C", func(t *testing.T) {
+		Xenc := EncodeInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
+		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
+		ops := make([]ckks.Operand, len(Wenc))
+		for i := range Wenc {
+			ops[i] = Wenc[i]
+		}
+		Xenc = PrepackClearText(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Box)
+		Renc := DiagMulPt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), ops, false, true, Box)
+		var resPlain mat.Dense
+		resPlain.Mul(X, W)
+
+		//we need to tranpose the plaintext result according to the diagonalized multiplication algo
+		valuesWant := pU.RealToComplex(pU.Vectorize(pU.MatToArray(&resPlain), false))
+		PrintDebug(Renc, valuesWant, 0.001, Box)
+
+	})
+
 }
 
 func TestBootstrap(t *testing.T) {
@@ -67,6 +88,7 @@ func TestBootstrap(t *testing.T) {
 	btpParams := bootstrapping.DefaultParametersSparse[4].BootstrappingParams
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
+	scale := params.DefaultScale()
 	if err != nil {
 		panic(err)
 	}
@@ -98,7 +120,7 @@ func TestBootstrap(t *testing.T) {
 	}
 	//relu approx
 
-	ctL := EncryptInput(params.MaxLevel(), pU.MatToArray(L), Box)
+	ctL := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(L), Box)
 
 	// Bootstrap the ciphertext (homomorphic re-encryption)
 	// It takes a ciphertext at level 0 (if not at level 0, then it will reduce it to level 0)
@@ -133,12 +155,10 @@ func TestBootstrapDistributed(t *testing.T) {
 		for _, parties := range PARTIES { //parties = 3 is fine always
 			fmt.Printf("Test: parties %d, params %d\n\n", parties, ckksParams.LogN)
 			params, _ := ckks.NewParametersFromLiteral(ckksParams)
-
 			crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 			skShares, skP, pkP, _ := distributed.DummyEncKeyGen(params, crs, parties)
 			rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
 			decP := ckks.NewDecryptor(params, skP)
-
 			Box := CkksBox{
 				Params:       params,
 				Encoder:      ckks.NewEncoder(params),                                            //public
@@ -147,7 +167,6 @@ func TestBootstrapDistributed(t *testing.T) {
 				Encryptor:    ckks.NewEncryptor(params, pkP),                                     //from parties
 				BootStrapper: nil,
 			}
-
 			//Create distributed parties
 			localhost := "127.0.0.1"
 			partiesAddr := make([]string, parties)

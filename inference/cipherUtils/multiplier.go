@@ -29,7 +29,7 @@ func NewMultiplier(Box CkksBox, poolSize int) *Multiplier {
 	return Mul
 }
 
-func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W BlocksOperand, ch chan MulTask, Out *EncInput) {
+func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut int, prepack bool, W BlocksOperand, ch chan MulTask, Out *EncInput) {
 	box := BoxShallowCopy(Mul.box)
 	for {
 		task, ok := <-ch //feed the goroutines
@@ -38,7 +38,15 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W
 			return
 		}
 		i, j, k := task.i, task.j, task.k
-		ct := DiagMul(X.Blocks[i][k].CopyNew(), dimIn, dimMid, dimOut, W.GetBlock(j, k), true, false, box)
+		ct := new(ckks.Ciphertext)
+		x := X.GetBlock(i, k)[0]
+		w := W.GetBlock(j, k)
+		switch x.(type) {
+		case *ckks.Ciphertext:
+			ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, false, box)
+		case *ckks.Plaintext:
+			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w, prepack, false, box)
+		}
 		if k == 0 {
 			//I am the accumulator
 			defer close(task.accumulatorChan)
@@ -57,26 +65,27 @@ func (Mul *Multiplier) spawnEvaluators(X *EncInput, dimIn, dimMid, dimOut int, W
 }
 
 //Multiplication between encrypted input and plaintext weight
-func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
+func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) *EncInput {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	Box := Mul.box
+	xRowP, xColP := X.GetPartitions()
 	wRowP, wColP := W.GetPartitions()
-	dimIn := X.InnerRows
+	dimIn, xInnerCols := X.GetInnerDims()
 	dimMid, dimOut := W.GetInnerDims()
 	//W is block-transposed
-	if X.ColP != wColP {
+	if xColP != wColP {
 		panic(errors.New("Block partitions not compatible for multiplication"))
 	}
-	if X.InnerCols != dimMid {
+	if xInnerCols != dimMid {
 		panic(errors.New("Inner dimentions not compatible for multiplication"))
 	}
-	q := X.RowP
+	q := xRowP
 	//r and s are swapped cause W is block-transposed
 	r := wRowP
 	s := wColP
 
 	Out := new(EncInput)
-	Out.RowP = X.RowP
+	Out.RowP = xRowP
 	Out.ColP = wRowP
 	Out.InnerRows = dimIn
 	Out.InnerCols = dimOut
@@ -91,9 +100,15 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 			for j := 0; j < r; j++ {
 				res := new(ckks.Ciphertext)
 				for k := 0; k < s; k++ {
-					x := X.Blocks[i][k].CopyNew()
+					ct := new(ckks.Ciphertext)
+					x := X.GetBlock(i, k)[0]
 					w := W.GetBlock(j, k)
-					ct := DiagMul(x, dimIn, dimMid, dimOut, w, true, false, Box)
+					switch x.(type) {
+					case *ckks.Ciphertext:
+						ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, false, Box)
+					case *ckks.Plaintext:
+						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w, prepack, false, Box)
+					}
 					if k == 0 {
 						res = ct
 					} else {
@@ -111,7 +126,7 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 		for i := 0; i < Mul.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, W, ch, Out)
+				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, prepack, W, ch, Out)
 				defer wg.Done()
 			}()
 		}
@@ -134,6 +149,7 @@ func (Mul *Multiplier) Multiply(X *EncInput, W BlocksOperand) *EncInput {
 		close(ch)
 		wg.Wait()
 	}
+	Mul.RemoveImagFromBlocks(Out)
 	return Out
 }
 
@@ -214,6 +230,83 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.O
 	return
 }
 
+func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+
+	params := Box.Params
+	eval := Box.Evaluator
+
+	// Lazy inner-product with hoisted rotations
+	res = eval.MulNew(input, weights[0])
+
+	rotations := make([]int, len(weights)-1)
+	for i := 1; i < len(weights); i++ {
+		rotations[i-1] = 2 * dimIn * i
+	}
+	inputRot := RotatePlaintext(input, rotations, Box)
+
+	for i := 1; i < len(weights); i++ {
+		eval.MulAndAdd(inputRot[i-1], weights[i], res)
+
+	}
+
+	// Rescale
+	if res.Degree() > 1 {
+		eval.Relinearize(res, res)
+	}
+
+	// rescales + erases imaginary part
+	if cleanImag {
+		eval.Rescale(res, params.DefaultScale(), res)
+		eval.Add(res, eval.ConjugateNew(res), res)
+	}
+
+	return
+}
+
+//Applies complex packing to Blocks
+func PrepackBlocks(X BlocksOperand, dimOut int, Box CkksBox) {
+	eval := Box.Evaluator
+	switch X.(type) {
+	case *EncInput:
+		Xenc := X.(*EncInput)
+		for i := 0; i < Xenc.RowP; i++ {
+			for j := 0; j < Xenc.ColP; j++ {
+				Prepack(Xenc.Blocks[i][j], Xenc.InnerRows, Xenc.InnerCols, dimOut, eval)
+			}
+		}
+	case *PlainInput:
+		//plaintext
+		Xp := X.(*PlainInput)
+		for i := range Xp.Blocks {
+			for j := range Xp.Blocks[i] {
+				X.(*PlainInput).Blocks[i][j] = PrepackClearText(Xp.Blocks[i][j], Xp.InnerRows, Xp.InnerCols, dimOut, Box)
+			}
+		}
+	}
+}
+
+func Prepack(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, eval ckks.Evaluator) {
+	img := eval.MultByiNew(input)
+	eval.Rotate(img, dimIn, img)
+	eval.Add(input, img, input)
+	replicaFactor := GetReplicaFactor(dimMid, dimOut)
+	eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
+}
+
+func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box CkksBox) *ckks.Plaintext {
+	tmp := Box.Encoder.Decode(input, Box.Params.LogSlots())
+	img := plainUtils.MulByi(plainUtils.ComplexToReal(tmp))
+	img = plainUtils.RotateComplexArray(img, dimIn)
+	for k := range tmp {
+		tmp[k] += img[k] //complex packing of cols
+	}
+	for k, kk := dimIn*(dimMid-1), 0; k < dimIn*dimMid; k, kk = k+1, kk+1 {
+		tmp[k] += img[len(img)-dimIn+kk] //add first col into last col
+	}
+	tmp = plainUtils.ReplicateComplexArray(tmp[:dimIn*dimMid], GetReplicaFactor(dimMid, dimOut))
+	return Box.Encoder.EncodeNew(tmp, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box.Params.LogSlots())
+}
+
 //HELPERS
 func GetReplicaFactor(dimMid, dimOut int) int {
 	if dimOut > dimMid {
@@ -221,4 +314,14 @@ func GetReplicaFactor(dimMid, dimOut int) int {
 	} else {
 		return 2
 	}
+}
+
+func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.Plaintext {
+	ptRot := make([]*ckks.Plaintext, len(rotations))
+	for i, rot := range rotations {
+		tmp := box.Encoder.Decode(pt, box.Params.LogSlots())
+		tmp = plainUtils.RotateComplexArray(tmp, rot)
+		ptRot[i] = box.Encoder.EncodeNew(tmp, pt.Level(), pt.Scale, box.Params.LogSlots())
+	}
+	return ptRot
 }

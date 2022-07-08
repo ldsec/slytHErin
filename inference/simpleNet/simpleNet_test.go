@@ -59,7 +59,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 		poolSize = runtime.NumCPU()
 	}
 
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 100}, []int{100, 10}, params, 0.5, true, false)
+	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 100}, []int{100, 10}, params, 0.5, false, false)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
@@ -105,6 +105,7 @@ func TestSimpleNetEcd_EvalBatchEncrypted(t *testing.T) {
 			}
 			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
+			cipherUtils.PrepackBlocks(Xenc, sne.Weights[0].InnerCols, Box.Evaluator)
 			//res := sn.EvalBatchEncryptedCompressed(Xbatch, Y, Xenc, weightsBlock, biasBlock, Box, 10, false)
 			if !debug {
 				res = sne.EvalBatchEncrypted(Xenc, Y, 10)

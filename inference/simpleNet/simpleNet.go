@@ -152,9 +152,14 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted(Xenc *cU.EncInput, Y []int, labels i
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
+	var prepack bool
 	for i := range sne.Weights {
-		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
-		sne.Multiplier.RemoveImagFromBlocks(Xenc)
+		if i == 0 {
+			prepack = false
+		} else {
+			prepack = true
+		}
+		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i], prepack)
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
 		if i < 1 {
 			sne.Activators[i].ActivateBlocks(Xenc)
@@ -177,10 +182,14 @@ func (sne *SimpleNetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
+	var prepack bool
 	for i := range sne.Weights {
-
-		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i])
-		sne.Multiplier.RemoveImagFromBlocks(Xenc)
+		if i == 0 {
+			prepack = false
+		} else {
+			prepack = true
+		}
+		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i], prepack)
 
 		var tmp mat.Dense
 		tmp.Mul(Xclear, weights[i])
