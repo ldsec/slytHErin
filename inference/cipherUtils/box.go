@@ -107,25 +107,6 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.
 	return rotations
 }
 
-func SerializeKeys(path string, sk *rlwe.SecretKey, rotKeys *rlwe.RotationKeySet) {
-	fmt.Println("Writing keys to disk: ", path)
-	dat, err := sk.MarshalBinary()
-	utils.ThrowErr(err)
-	f, err := os.Create(path + "_sk")
-	utils.ThrowErr(err)
-	_, err = f.Write(dat)
-	utils.ThrowErr(err)
-	f.Close()
-
-	dat, err = rotKeys.MarshalBinary()
-	utils.ThrowErr(err)
-	f, err = os.Create(path + "_rtks")
-	utils.ThrowErr(err)
-	_, err = f.Write(dat)
-	utils.ThrowErr(err)
-	f.Close()
-}
-
 // GenSubVectorRotationMatrix allows to generate a permutation matrix that roates subvectors independently.
 // Given a vector of size N=2^"logSlots", partitionned into N/"vectorSize" subvectors each of size "vectorSize",
 // rotates each subvector by "k" positions to the left.
@@ -189,6 +170,25 @@ func GenSubVectorRotationMatrix(params ckks.Parameters, level int, scale float64
 	}
 
 	return matrix
+}
+
+func SerializeKeys(path string, sk *rlwe.SecretKey, rotKeys *rlwe.RotationKeySet) {
+	fmt.Println("Writing keys to disk: ", path)
+	dat, err := sk.MarshalBinary()
+	utils.ThrowErr(err)
+	f, err := os.Create(path + "_sk")
+	utils.ThrowErr(err)
+	_, err = f.Write(dat)
+	utils.ThrowErr(err)
+	f.Close()
+
+	dat, err = rotKeys.MarshalBinary()
+	utils.ThrowErr(err)
+	f, err = os.Create(path + "_rtks")
+	utils.ThrowErr(err)
+	_, err = f.Write(dat)
+	utils.ThrowErr(err)
+	f.Close()
 }
 
 func DesereliazeKeys(path string) (*rlwe.SecretKey, *rlwe.RotationKeySet) {

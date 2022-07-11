@@ -320,6 +320,8 @@ func (sne *cryptonetEnc) EvalBatchWithModelEnc(X *cU.PlainInput, Y []int, labels
 
 	//server decrypts
 	resP := cU.DecInput(res, sne.Box)
+
+	//unmask
 	for i := range resP {
 		for j := range resP[i] {
 			resP[i][j] -= mask[i][j]

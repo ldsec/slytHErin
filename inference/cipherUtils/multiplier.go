@@ -263,7 +263,7 @@ func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []ckks.
 	return
 }
 
-//Applies complex packing to Blocks
+//Applies complex packing to Blocks. dimOut should be the innerCols of the first weight in the layers
 func PrepackBlocks(X BlocksOperand, dimOut int, Box CkksBox) {
 	eval := Box.Evaluator
 	switch X.(type) {
