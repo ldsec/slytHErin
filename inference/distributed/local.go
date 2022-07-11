@@ -14,9 +14,11 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
+	"google.golang.org/grpc/benchmark/latency"
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 /*
@@ -30,6 +32,12 @@ var MB = 1024 * KB
 
 //var MAX_SIZE = 10 * MB //LogN = 14
 var MAX_SIZE = 21 * MB //LogN = 15
+
+var Network = &latency.Network{
+	Kbps:    1024 * 1024, //1 Gbps
+	Latency: 200 * time.Millisecond,
+	MTU:     1500, // Ethernet
+}
 
 //HELPERS
 
@@ -129,8 +137,10 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	var err error
 	player.Addr, err = net.ResolveTCPAddr("tcp", addr)
 	utils.ThrowErr(err)
-	player.Conn, err = net.ListenTCP("tcp", player.Addr)
+	listener, err := net.Listen("tcp", player.Addr.String())
 	utils.ThrowErr(err)
+	listener = Network.Listener(listener)
+	player.Conn = listener.(*net.TCPListener)
 	return player, nil
 }
 
@@ -296,14 +306,16 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	for i := 1; i < lmst.Parties; i++ {
 		fmt.Printf("[*] Master -- Sending key swith init %d B ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		addr := lmst.PartiesAddr[i]
-		c, err := net.DialTCP("tcp", nil, addr)
+		c, err := net.Dial("tcp", addr.String())
+		utils.ThrowErr(err)
+		c, err = Network.Conn(c)
 		utils.ThrowErr(err)
 		go func(c *net.TCPConn, buf []byte) {
 			defer c.Close()
 			err = WriteTo(c, buf)
 			utils.ThrowErr(err)
 			lmst.Dispatch(c)
-		}(c, buf)
+		}(c.(*net.TCPConn), buf)
 	}
 }
 
@@ -344,14 +356,16 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 	for i := 1; i < lmst.Parties; i++ {
 		fmt.Printf("[*] Master -- Sending refresh init (len %d) ID: %d to %d. Checksum: %x\n\n", len(buf), msg.Id, i, sum)
 		addr := lmst.PartiesAddr[i]
-		c, err := net.DialTCP("tcp", nil, addr)
+		c, err := net.Dial("tcp", addr.String())
+		utils.ThrowErr(err)
+		c, err = Network.Conn(c)
 		utils.ThrowErr(err)
 		go func(c *net.TCPConn, buf []byte) {
 			defer c.Close()
 			err = WriteTo(c, buf)
 			utils.ThrowErr(err)
 			lmst.Dispatch(c)
-		}(c, buf)
+		}(c.(*net.TCPConn), buf)
 	}
 }
 
