@@ -14,6 +14,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
+	"os"
 	"runtime"
 	"strconv"
 	"testing"
@@ -295,7 +296,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 //MODEL IN CLEAR
 
 func TestEvalDataEncModelClear(t *testing.T) {
-	debug := false
+	debug := true
 	multithread := true
 	poolSize := 1
 	if multithread {
@@ -309,9 +310,10 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	nn.Init(layers, false)
 
 	// CRYPTO
-	ckksParams := bootstrapping.N15QP768H192H32.SchemeParams
-	btpParams := bootstrapping.N15QP768H192H32.BootstrappingParams
-	btpCapacity := 2 //param dependent
+	ckksParams := bootstrapping.N16QP1546H192H32.SchemeParams
+	btpParams := bootstrapping.N16QP1546H192H32.BootstrappingParams
+	//btpCapacity := 2 //param dependent
+	btpCapacity := 9
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	utils.ThrowErr(err)
 
@@ -326,7 +328,9 @@ func TestEvalDataEncModelClear(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, 0.2, true, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, 0.1, true, true)
+
+	path := fmt.Sprintf("/nn%d_centralized_logN%d", layers, params.LogN())
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
@@ -337,13 +341,24 @@ func TestEvalDataEncModelClear(t *testing.T) {
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 		fmt.Println("Batch: ", batchSize)
 		Box := cipherUtils.NewBox(params)
-		Box = cipherUtils.BoxWithEvaluators(Box, btpParams, true, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
+
+		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
+			fmt.Println("Creating rotation keys...")
+			Box = cipherUtils.BoxWithEvaluators(Box, btpParams, true, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
+			fmt.Println("Created rotation keys...")
+			cipherUtils.SerializeBox(path, Box)
+		} else {
+			Box = cipherUtils.DesereliazeBox(path, params, btpParams, true)
+		}
+
 		Btp := cipherUtils.NewBootstrapper(Box, poolSize)
 
 		weights, biases := nn.BuildParams(batchSize)
 		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
+		fmt.Println("Encoding NN...")
 		nne, err := nn.EncodeNN(weightsRescaled, biasesRescaled, splits, btpCapacity, -1, Box, poolSize)
 		utils.ThrowErr(err)
+		fmt.Println("Encoded NN...")
 		//load dataset
 		dataSn := data.LoadData("nn_data.json")
 		err = dataSn.Init(batchSize)

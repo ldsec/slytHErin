@@ -21,6 +21,8 @@ type CkksBox struct {
 	Decryptor    ckks.Decryptor
 	BootStrapper *bootstrapping.Bootstrapper
 	sk           *rlwe.SecretKey
+	rtks         *rlwe.RotationKeySet
+	evk          bootstrapping.EvaluationKeys
 	kgen         ckks.KeyGenerator
 }
 
@@ -33,7 +35,6 @@ func NewBox(params ckks.Parameters) CkksBox {
 
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
-
 	Box := CkksBox{
 		Params:       params,
 		Encoder:      ckks.NewEncoder(params),
@@ -63,15 +64,15 @@ func BoxWithEvaluators(Box CkksBox, btpParams bootstrapping.Parameters, withBtp 
 	rotations := GenRotations(rowIn, colIn, numWeights, rowsW, colsW, Box.Params, &btpParams)
 
 	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
-	rtks := Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
+	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
 		Rlk:  rlk,
-		Rtks: rtks,
+		Rtks: Box.rtks,
 	})
 	var err error
 	if withBtp {
-		evk := bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, evk)
+		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
 	return Box
@@ -88,9 +89,9 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.
 		for i := 1; i < (rowsW[w]+1)>>1; i++ {
 			rotations = append(rotations, 2*i*rowIn)
 			//extra
-			rotations = append(rotations, -(rowIn*(rowsW[w]-1))+2*rowIn*i)
-			rotations = append(rotations, -(rowIn*(rowsW[w]))+2*rowIn*i)
-			rotations = append(rotations, 2*(-(rowIn*(rowsW[w]))+2*rowIn*i))
+			//rotations = append(rotations, -(rowIn*(rowsW[w]-1))+2*rowIn*i)
+			//rotations = append(rotations, -(rowIn*(rowsW[w]))+2*rowIn*i)
+			//rotations = append(rotations, 2*(-(rowIn*(rowsW[w]))+2*rowIn*i))
 		}
 		rotations = append(rotations, rowsW[w])
 		rotations = append(rotations, -rowsW[w]*rowIn)
@@ -103,7 +104,8 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.
 		currCols = colsW[w]
 	}
 	//extra apart from rowin
-	rotations = append(rotations, []int{rowIn, -rowIn * (colIn - 1), rowIn * colIn, -rowIn * colIn}...)
+	rotations = append(rotations, rowIn)
+	//rotations = append(rotations, []int{ -rowIn * (colIn - 1), rowIn * colIn, -rowIn * colIn}...)
 	return rotations
 }
 
@@ -172,7 +174,10 @@ func GenSubVectorRotationMatrix(params ckks.Parameters, level int, scale float64
 	return matrix
 }
 
-func SerializeKeys(path string, sk *rlwe.SecretKey, rotKeys *rlwe.RotationKeySet) {
+//serializes keys to disk
+func SerializeBox(path string, Box CkksBox) {
+	sk := Box.sk
+	rotKeys := Box.rtks
 	fmt.Println("Writing keys to disk: ", path)
 	dat, err := sk.MarshalBinary()
 	utils.ThrowErr(err)
@@ -189,9 +194,44 @@ func SerializeKeys(path string, sk *rlwe.SecretKey, rotKeys *rlwe.RotationKeySet
 	_, err = f.Write(dat)
 	utils.ThrowErr(err)
 	f.Close()
+
+	if Box.BootStrapper != nil {
+		dat, err = Box.evk.Rlk.MarshalBinary()
+		utils.ThrowErr(err)
+		f, err = os.Create(path + "_btp_rlk")
+		utils.ThrowErr(err)
+		_, err = f.Write(dat)
+		utils.ThrowErr(err)
+		f.Close()
+
+		dat, err = Box.evk.Rtks.MarshalBinary()
+		utils.ThrowErr(err)
+		f, err = os.Create(path + "_btp_rtks")
+		utils.ThrowErr(err)
+		_, err = f.Write(dat)
+		utils.ThrowErr(err)
+		f.Close()
+
+		dat, err = Box.evk.SwkDtS.MarshalBinary()
+		utils.ThrowErr(err)
+		f, err = os.Create(path + "_btp_swkDtS")
+		utils.ThrowErr(err)
+		_, err = f.Write(dat)
+		utils.ThrowErr(err)
+		f.Close()
+
+		dat, err = Box.evk.SwkStD.MarshalBinary()
+		utils.ThrowErr(err)
+		f, err = os.Create(path + "_btp_swkStD")
+		utils.ThrowErr(err)
+		_, err = f.Write(dat)
+		utils.ThrowErr(err)
+		f.Close()
+	}
 }
 
-func DesereliazeKeys(path string) (*rlwe.SecretKey, *rlwe.RotationKeySet) {
+//loads serialized keys from disk into a fresh box
+func DesereliazeBox(path string, params ckks.Parameters, btpParams bootstrapping.Parameters, withBtp bool) CkksBox {
 	fmt.Println("Reading keys from disk: ", path)
 	dat, err := os.ReadFile(path + "_sk")
 	utils.ThrowErr(err)
@@ -202,5 +242,49 @@ func DesereliazeKeys(path string) (*rlwe.SecretKey, *rlwe.RotationKeySet) {
 	utils.ThrowErr(err)
 	var rotKeys rlwe.RotationKeySet
 	rotKeys.UnmarshalBinary(dat)
-	return &sk, &rotKeys
+
+	kgen := ckks.NewKeyGenerator(params)
+
+	Box := CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: kgen.GenRelinearizationKey(&sk, 2), Rtks: &rotKeys}),
+		Decryptor:    ckks.NewDecryptor(params, &sk),
+		Encryptor:    ckks.NewEncryptor(params, &sk),
+		BootStrapper: nil,
+		sk:           &sk,
+		rtks:         &rotKeys,
+		kgen:         kgen,
+	}
+	if withBtp {
+		fmt.Println("Reading btp keys")
+		dat, err := os.ReadFile(path + "_btp_rlk")
+		utils.ThrowErr(err)
+		var rlk rlwe.RelinearizationKey
+		rlk.UnmarshalBinary(dat)
+
+		dat, err = os.ReadFile(path + "_btp_rtks")
+		utils.ThrowErr(err)
+		var btpRotKeys rlwe.RotationKeySet
+		btpRotKeys.UnmarshalBinary(dat)
+
+		dat, err = os.ReadFile(path + "_btp_swkDtS")
+		utils.ThrowErr(err)
+		var keySwDtS rlwe.SwitchingKey
+		keySwDtS.UnmarshalBinary(dat)
+
+		dat, err = os.ReadFile(path + "_btp_swkStD")
+		utils.ThrowErr(err)
+		var keySwStD rlwe.SwitchingKey
+		keySwStD.UnmarshalBinary(dat)
+
+		Box.evk = bootstrapping.EvaluationKeys{
+			EvaluationKey: rlwe.EvaluationKey{Rlk: &rlk, Rtks: &btpRotKeys},
+			SwkDtS:        &keySwDtS,
+			SwkStD:        &keySwStD,
+		}
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(params, btpParams, Box.evk)
+		utils.ThrowErr(err)
+	}
+	return Box
 }

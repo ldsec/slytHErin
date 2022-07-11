@@ -321,7 +321,7 @@ func (sne *cryptonetEnc) EvalBatchWithModelEnc(X *cU.PlainInput, Y []int, labels
 	//server decrypts
 	resP := cU.DecInput(res, sne.Box)
 
-	//unmask
+	//unmask (we could do this generating a secret key at the server and a switching key to switch from server key to this ephemeral key and then make the client decrypt using the ephemral key)
 	for i := range resP {
 		for j := range resP[i] {
 			resP[i][j] -= mask[i][j]

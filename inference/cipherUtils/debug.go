@@ -24,22 +24,22 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 
 	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
 
-	fmt.Println()
-	fmt.Printf("Level: %d (logQ = %d)\n", ciphertext.Level(), params.LogQLvl(ciphertext.Level()))
-	fmt.Println("Consumed levels:", params.MaxLevel()-ciphertext.Level())
-
-	fmt.Printf("ValuesTest:")
-	for i := range valuesWant {
-		fmt.Printf(" %6.10f", valuesTest[i])
-	}
-	fmt.Println()
-
-	fmt.Printf("ValuesWant:")
-	for i := range valuesWant {
-		fmt.Printf(" %6.10f", valuesWant[i])
-	}
-	fmt.Println()
-
+	//fmt.Println()
+	//fmt.Printf("Level: %d (logQ = %d)\n", ciphertext.Level(), params.LogQLvl(ciphertext.Level()))
+	//fmt.Println("Consumed levels:", params.MaxLevel()-ciphertext.Level())
+	//
+	//fmt.Printf("ValuesTest:")
+	//for i := range valuesWant {
+	//	fmt.Printf(" %6.10f", valuesTest[i])
+	//}
+	//fmt.Println()
+	//
+	//fmt.Printf("ValuesWant:")
+	//for i := range valuesWant {
+	//	fmt.Printf(" %6.10f", valuesWant[i])
+	//}
+	//fmt.Println()
+	//
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 	fmt.Println(precStats.String())
 

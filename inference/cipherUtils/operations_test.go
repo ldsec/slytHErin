@@ -84,8 +84,8 @@ func TestBootstrap(t *testing.T) {
 	LDim := []int{64, 64}
 	L := pU.RandMatrix(LDim[0], LDim[1])
 	//crucial that parameters are conjuncted
-	ckksParams := bootstrapping.DefaultParametersSparse[4].SchemeParams
-	btpParams := bootstrapping.DefaultParametersSparse[4].BootstrappingParams
+	ckksParams := bootstrapping.N16QP1553H192H32.SchemeParams
+	btpParams := bootstrapping.N16QP1553H192H32.BootstrappingParams
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	scale := params.DefaultScale()
@@ -131,10 +131,11 @@ func TestBootstrap(t *testing.T) {
 	fmt.Println("Bootstrapping...")
 	ct2 := btp.Bootstrapp(ctL)
 	fmt.Println("Done")
+	fmt.Println("Scale", ct2.Scale-params.DefaultScale())
 
 	fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
 
-	PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), true)), 0.001, Box)
+	PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), false)), 0.01, Box)
 }
 
 /*

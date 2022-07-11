@@ -7,6 +7,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/tuneinsight/lattigo/v3 v3.0.4
 	gonum.org/v1/gonum v0.11.0
+	google.golang.org/grpc v1.47.0
 )
 
 require (

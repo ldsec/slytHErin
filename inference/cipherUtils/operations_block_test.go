@@ -166,3 +166,41 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 }
+
+func TestBootstrapper_Bootstrap(t *testing.T) {
+	X := pU.RandMatrix(64, 64)
+	ckksParams := bootstrapping.N16QP1546H192H32.SchemeParams
+	btpParams := bootstrapping.N16QP1546H192H32.BootstrappingParams
+
+	params, _ := ckks.NewParametersFromLiteral(ckksParams)
+
+	Box := NewBox(params)
+	Box = BoxWithEvaluators(Box, btpParams, true, 16, 16, 0, []int{}, []int{})
+
+	t.Run("Test/Bootstrap", func(t *testing.T) {
+
+		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+		Btp := NewBootstrapper(Box, 1)
+		start := time.Now()
+		Btp.Bootstrap(Xenc)
+		fmt.Println("Done: ", time.Since(start))
+
+		Xc := pU.NewDense(pU.MatToArray(X))
+
+		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
+	})
+	t.Run("Test/Bootstrap/MultiThread", func(t *testing.T) {
+
+		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+		Btp := NewBootstrapper(Box, runtime.NumCPU())
+		start := time.Now()
+		Btp.Bootstrap(Xenc)
+		fmt.Println("Done: ", time.Since(start))
+
+		Xc := pU.NewDense(pU.MatToArray(X))
+
+		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
+	})
+}
