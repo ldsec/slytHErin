@@ -110,6 +110,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 					for {
 						//adjust weight inner col split or batch depending on strategy
 						adjusted := true
+
 						//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
 						if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < filltresh {
 							adjusted = false
@@ -121,7 +122,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 						}
 						if !adjusted {
 							if strategyOnBatch {
-								//loop until divisor or lower then 1
+								//loop until divisor or lower than 1
 								if inColsW <= 1 {
 									isValid = false
 									break
@@ -133,7 +134,6 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 								}
 							} else {
 								//decrease batch
-								batch--
 								if batch < 1 {
 									isValid = false
 									break
@@ -147,8 +147,8 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 									}
 								}
 							}
-						}
-						if adjusted {
+						} else {
+							//is adjusted now
 							break
 						}
 					}
