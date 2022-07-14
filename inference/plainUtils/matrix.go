@@ -2,6 +2,7 @@ package plainUtils
 
 import (
 	cryptorand "crypto/rand"
+	"fmt"
 	"gonum.org/v1/gonum/mat"
 	"math"
 	"math/big"
@@ -285,4 +286,15 @@ func ApplyFuncDense(f func(v float64) float64, a *mat.Dense) *mat.Dense {
 		}
 	}
 	return m
+}
+
+func PrintDense(m *mat.Dense) {
+	v := MatToArray(m)
+	for _, r := range v {
+		fmt.Printf("|")
+		for _, c := range r {
+			fmt.Printf("%f ", c)
+		}
+		fmt.Println("|")
+	}
 }

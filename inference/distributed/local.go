@@ -103,7 +103,7 @@ type LocalPlayer struct {
 	Params ckks.Parameters
 	Id     int
 	Addr   *net.TCPAddr
-	Conn   *net.TCPListener
+	Conn   net.Listener
 }
 
 func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int) (*LocalMaster, error) {
@@ -140,7 +140,7 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	listener, err := net.Listen("tcp", player.Addr.String())
 	utils.ThrowErr(err)
 	listener = Network.Listener(listener)
-	player.Conn = listener.(*net.TCPListener)
+	player.Conn = listener.(net.Listener)
 	return player, nil
 }
 
@@ -254,7 +254,7 @@ func (lmst *LocalMaster) InitProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *
 }
 
 //reads reply from open connection to player
-func (lmst *LocalMaster) Dispatch(c *net.TCPConn) {
+func (lmst *LocalMaster) Dispatch(c net.Conn) {
 	buf, err := ReadFrom(c)
 	utils.ThrowErr(err)
 	//sum := md5.Sum(buf)
@@ -310,12 +310,12 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 		utils.ThrowErr(err)
 		c, err = Network.Conn(c)
 		utils.ThrowErr(err)
-		go func(c *net.TCPConn, buf []byte) {
+		go func(c net.Conn, buf []byte) {
 			defer c.Close()
 			err = WriteTo(c, buf)
 			utils.ThrowErr(err)
 			lmst.Dispatch(c)
-		}(c.(*net.TCPConn), buf)
+		}(c, buf)
 	}
 }
 
@@ -360,12 +360,12 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 		utils.ThrowErr(err)
 		c, err = Network.Conn(c)
 		utils.ThrowErr(err)
-		go func(c *net.TCPConn, buf []byte) {
+		go func(c net.Conn, buf []byte) {
 			defer c.Close()
 			err = WriteTo(c, buf)
 			utils.ThrowErr(err)
 			lmst.Dispatch(c)
-		}(c.(*net.TCPConn), buf)
+		}(c, buf)
 	}
 }
 

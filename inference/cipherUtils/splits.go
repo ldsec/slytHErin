@@ -13,11 +13,13 @@ type BlockSplits struct {
 }
 
 type SplitsInfo struct {
-	InputRows, InputCols int
-	InputRowP, InputColP int
+	InputRows, InputCols int //inner dims of input
+	InputRowP, InputColP int //partition of input
 	NumWeights           int
-	RowsOfWeights        []int
+	RowsOfWeights        []int //inner rows of weights
 	ColsOfWeights        []int
+	RowPOfWeights        []int //row partition of weights
+	ColPOfWeights        []int
 }
 
 func GetFillRatio(rows, cols, replicaFactor int, slotsAvailable float64) float64 {
@@ -57,13 +59,13 @@ func GetAvgComplexity(splits []BlockSplits) float64 {
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
 // the weights of the model expressed as matrices.
 // You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
-func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters, filltresh float64, strategyOnBatch bool, maximizeThput bool) [][]BlockSplits {
+func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters) [][]BlockSplits {
 	var colPartitions []int
 	var innerCols []int
 	var batchSizes []int
 	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots())))
 
-	for d := 2; d <= inputFeatures; d++ {
+	for d := 1; d <= inputFeatures; d++ {
 		if inputFeatures%d == 0 {
 			colPartitions = append(colPartitions, d)
 			innerCols = append(innerCols, inputFeatures/d)
@@ -86,74 +88,106 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	var blockSplits [][]BlockSplits
 
 	for i := range batchSizes {
-		batch := batchSizes[i]
-		colP := colPartitions[i]
-		inCols := innerCols[i]
-		currCols := inCols
-		currColP := colP
-		isValid := true
+		for filltresh := 1.0; filltresh >= 0.0; filltresh = filltresh - 0.1 {
+			for _, strategyOnBatch := range []bool{true, false} {
+				batch := batchSizes[i]
+				colP := colPartitions[i]
+				inCols := innerCols[i]
+				currCols := inCols
+				currColP := colP
+				isValid := true
 
-		blockSplit := make([]BlockSplits, len(weightRows)+1) //input + weights
+				blockSplit := make([]BlockSplits, len(weightRows)+1) //input + weights
 
-		for w := range weightRows {
-			inRowsW := weightRows[w] / currColP
-			inColsW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(inRowsW))), weightCols[w])
-			for weightCols[w]%inColsW != 0 {
-				inColsW--
-			}
-			for {
-				//adjust weight inner col split or batch depending on strategy
-				adjusted := true
-				//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
-				if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < filltresh {
-					adjusted = false
-				}
-
-				//check if replication of input can be stored
-				if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < filltresh {
-					adjusted = false
-				}
-				if !adjusted {
-					if strategyOnBatch {
-						// find nearest divisors of weight column
+				for w := range weightRows {
+					inRowsW := weightRows[w] / currColP
+					inColsW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(inRowsW))), weightCols[w])
+					for weightCols[w]%inColsW != 0 {
 						inColsW--
-						//loop until divisor of lower then 1
-						for weightCols[w]%inColsW != 0 && inColsW > 1 {
-							inColsW--
+					}
+					for {
+						//adjust weight inner col split or batch depending on strategy
+						adjusted := true
+						//check if weight submatrix can be stored and that the fillratio > threshold (also taking into account the max possible size of this weight)
+						if inRowsW*inColsW > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, 1, float64(plainUtils.Min(int(slotsAvailable), weightRows[w]*weightCols[w]))) < filltresh {
+							adjusted = false
 						}
+
+						//check if replication of input can be stored
+						if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < filltresh {
+							adjusted = false
+						}
+						if !adjusted {
+							if strategyOnBatch {
+								// find nearest divisors of weight column
+								inColsW--
+								//loop until divisor of lower then 1
+								for weightCols[w]%inColsW != 0 && inColsW > 1 {
+									inColsW--
+								}
+							} else {
+								//decrease batch
+								batch--
+							}
+						}
+						if adjusted {
+							break
+						}
+						if strategyOnBatch {
+							if inColsW <= 1 {
+								isValid = false
+								break
+							}
+						} else {
+							if batch < 1 {
+								isValid = false
+								break
+							}
+						}
+					}
+					blockSplit[w+1] = BlockSplits{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
+					currColP = weightCols[w] / inColsW
+					currCols = inColsW
+					//repack
+					if w < len(weightRows)-1 && currColP != 1 {
+						nextReplicaFactor := GetReplicaFactor(weightRows[w+1], weightCols[w+1])
+
+						//fmt.Println("Repacking...")
+						possibleNewColP := make([]int, currColP)
+						f := 0
+						for div := 1; div < currColP; div++ {
+							if currColP%div == 0 {
+								possibleNewColP[f] = div
+								f++
+							}
+						}
+						possibleNewColP = possibleNewColP[:f]
+						for f := len(possibleNewColP) - 1; f >= 0; f-- {
+							tmpColP := possibleNewColP[f]
+							tmpCols := currCols * currColP / tmpColP
+							if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
+								//fmt.Println("Repacking done...")
+								//fmt.Println("ColP was: ", currColP)
+								currColP = tmpColP
+								currCols = tmpCols
+								//fmt.Println("ColP now: ", currColP)
+								break
+							}
+						}
+					}
+				}
+
+				if isValid {
+					var rowP int
+					if inputRows == -1 {
+						rowP = 1
 					} else {
-						//decrease batch
-						batch--
+						rowP = inputRows / batch
 					}
-				}
-				if adjusted {
-					break
-				}
-				if strategyOnBatch {
-					if inColsW <= 1 {
-						isValid = false
-						break
-					}
-				} else {
-					if batch < 1 {
-						isValid = false
-						break
-					}
+					blockSplit[0] = BlockSplits{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
+					blockSplits = append(blockSplits, blockSplit)
 				}
 			}
-			blockSplit[w+1] = BlockSplits{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
-			currColP = weightCols[w] / inColsW
-			currCols = inColsW
-		}
-		if isValid {
-			var rowP int
-			if inputRows == -1 {
-				rowP = 1
-			} else {
-				rowP = inputRows / batch
-			}
-			blockSplit[0] = BlockSplits{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
-			blockSplits = append(blockSplits, blockSplit)
 		}
 	}
 	if len(blockSplits) == 0 {
@@ -174,14 +208,8 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	var filteredSplits [][]BlockSplits
 
 	for i := 0; i < len(blockSplits); i++ {
-		if maximizeThput {
-			if blockSplits[i][0].InnerRows == maxBatch {
-				filteredSplits = append(filteredSplits, blockSplits[i])
-			}
-		} else {
-			if GetAvgComplexity(blockSplits[i]) == minComplexity {
-				filteredSplits = append(filteredSplits, blockSplits[i])
-			}
+		if blockSplits[i][0].InnerRows == maxBatch || GetAvgComplexity(blockSplits[i]) == minComplexity {
+			filteredSplits = append(filteredSplits, blockSplits[i])
 		}
 	}
 	if len(filteredSplits) > 1 {
@@ -206,9 +234,13 @@ func ExctractInfo(splits []BlockSplits) SplitsInfo {
 	info.NumWeights = len(splits) - 1
 	info.RowsOfWeights = make([]int, info.NumWeights)
 	info.ColsOfWeights = make([]int, info.NumWeights)
+	info.RowPOfWeights = make([]int, info.NumWeights)
+	info.ColPOfWeights = make([]int, info.NumWeights)
 	for i, split := range splits[1:] {
 		info.RowsOfWeights[i] = split.InnerRows
 		info.ColsOfWeights[i] = split.InnerCols
+		info.RowPOfWeights[i] = split.RowP
+		info.ColPOfWeights[i] = split.ColP
 	}
 	return info
 }

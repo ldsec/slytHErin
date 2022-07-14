@@ -136,6 +136,9 @@ func SetDegOfInterval(intervals utils.ApproxIntervals) utils.ApproxIntervals {
 			interval.Deg = 31
 		} else {
 			interval.Deg = 63
+			if i == 1 { //layer 2
+				interval.Deg = 31
+			}
 		}
 		fmt.Printf("Layer %d Approx: A = %f, B=%f --> deg = %d\n", i+1, interval.A, interval.B, interval.Deg)
 		intervalsNew[i] = interval
@@ -180,7 +183,6 @@ func (nn *NN) Init(layers int, distributedBtp bool) {
 			nn.ReLUApprox[i] = utils.InitActivationCheby("soft relu", interval.A, interval.B, interval.Deg)
 		}
 	}
-
 }
 
 func (nn *NN) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
@@ -619,7 +621,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
 		utils.ThrowErr(err)
 		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, nne.Box)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 10, nne.Box)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
@@ -629,7 +631,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
 		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
 		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, nne.Box)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 10, nne.Box)
 
 		level = Xint.Blocks[0][0].Level()
 		if i != len(nne.Weights)-1 {
@@ -654,7 +656,7 @@ func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInpu
 			nne.Activators[i].ActivateBlocks(Xint)
 			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
 			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.1, nne.Box)
+			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 10, nne.Box)
 		} else {
 			XintPlain = &tmp2
 		}
@@ -808,7 +810,6 @@ func (nne *NNEcd) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
 		utils.ThrowErr(err)
 		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, Box)
 
 		//bias
 		nne.Adder.AddBias(Xint, B)
@@ -819,6 +820,7 @@ func (nne *NNEcd) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
 		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
 		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
+		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.9, Box)
 
 		//activation
 		if i != len(nne.Weights)-1 {
@@ -838,7 +840,7 @@ func (nne *NNEcd) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, 
 
 			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
 			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.1, Box)
+			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.9, Box)
 		} else {
 			XintPlain = &tmp2
 		}

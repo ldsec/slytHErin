@@ -22,16 +22,24 @@ func TestFindSplits_SimpleNet(t *testing.T) {
 	}
 
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
-	for _, strategy := range []bool{true, false} {
-		fmt.Printf("\n\n\n")
-		if strategy {
-			fmt.Println("[!] Strategy on increasing Batch")
-		} else {
-			fmt.Println("[!] Strategy on tweaking weights split")
-		}
-		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, 0.5, strategy, false)
-		PrintAllSplits(splits)
-	}
+
+	splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params)
+	PrintAllSplits(splits)
+
+}
+
+func TestFindSplits_CryptoNet(t *testing.T) {
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{42, 42},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 30),
+	})
+
+	splits := FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
+	PrintAllSplits(splits)
 }
 
 func TestFindSplits_NN(t *testing.T) {
@@ -59,27 +67,20 @@ func TestFindSplits_NN(t *testing.T) {
 		RingType:     ring.Standard,
 	}
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
-	for _, strategy := range []bool{true, false} {
-		fmt.Printf("\n\n\n")
-		if strategy {
-			fmt.Println("[!] Strategy on increasing Batch")
-		} else {
-			fmt.Println("[!] Strategy on tweaking weights split")
-		}
-		splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params, 0.5, strategy, false)
-		for i := range splits {
-			fmt.Printf("\nPossible split %d\n", i+1)
-			for j := range splits[i] {
-				var splittingWhat string
-				if j == 0 {
-					splittingWhat = "Input"
-				} else {
-					splittingWhat = fmt.Sprintf("Weight %d", j)
-				}
-				split := splits[i][j]
-				fmt.Println("Splits for ", splittingWhat)
-				fmt.Printf("InR: %d InC: %d RP: %d CP: %d\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
+
+	splits := FindSplits(-1, inputFeatures, weightRows, weightCols, params)
+	for i := range splits {
+		fmt.Printf("\nPossible split %d\n", i+1)
+		for j := range splits[i] {
+			var splittingWhat string
+			if j == 0 {
+				splittingWhat = "Input"
+			} else {
+				splittingWhat = fmt.Sprintf("Weight %d", j)
 			}
+			split := splits[i][j]
+			fmt.Println("Splits for ", splittingWhat)
+			fmt.Printf("InR: %d InC: %d RP: %d CP: %d\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
 		}
 	}
 }

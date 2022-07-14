@@ -83,7 +83,7 @@ func EncodeWeightsAsMap(level int, w [][]float64, leftdim int, Box CkksBox) (ptW
 	params := Box.Params
 	ecd := Box.Encoder
 
-	wF, nonZeroDiags := FormatWeightsAsMap(w, leftdim)
+	wF, nonZeroDiags := FormatWeightsAsMap(w, leftdim, true)
 
 	ptW = make([]*ckks.Plaintext, len(nonZeroDiags))
 	var wg sync.WaitGroup

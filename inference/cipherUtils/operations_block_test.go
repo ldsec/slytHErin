@@ -18,7 +18,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	W := pU.RandMatrix(64, 32)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
-	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params, 0.4, true, false)
+	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
 	if len(splits) == 0 {
 		panic(errors.New("No splits found"))
 	}
@@ -28,7 +28,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
+		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
@@ -44,7 +44,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols})
+		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
@@ -59,7 +59,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2C", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
+		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct, true)
@@ -75,7 +75,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wct.InnerRows}, []int{Wct.InnerCols})
+		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct, true)
@@ -175,7 +175,7 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
 
 	Box := NewBox(params)
-	Box = BoxWithEvaluators(Box, btpParams, true, 16, 16, 0, []int{}, []int{})
+	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, btpParams)
 
 	t.Run("Test/Bootstrap", func(t *testing.T) {
 
@@ -204,3 +204,104 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 }
+
+func TestRepack(t *testing.T) {
+	rows := 64
+	cols := 64
+	rowP := 8
+	colP := 4
+	newColP := 2
+	X := pU.MatrixForDebug(rows, cols)
+	W := pU.RandMatrix(cols, 10)
+	pU.PrintDense(X)
+	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
+	Box := NewBox(params)
+	rotations := make([]int, colP-1)
+	for i := 1; i < colP; i++ {
+		rotations[i-1] = -(rows / rowP) * (cols / colP) * i
+	}
+	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+
+	Xenc, _ := NewEncInput(X, rowP, colP, params.MaxLevel(), params.DefaultScale(), Box)
+	Xrepack := RepackCols(Xenc, newColP, Box)
+
+	repack, _ := pU.PartitionMatrix(X, rowP, newColP)
+	pU.PrintBlocks(repack)
+	PrintDebugBlocks(Xrepack, repack, 0.0001, Box)
+
+	Wpt, err := NewPlainWeightDiag(W, newColP, 1, Xrepack.InnerRows, params.MaxLevel(), Box)
+	utils.ThrowErr(err)
+
+	Box = BoxWithRotations(Box, GenRotations(Xrepack.InnerRows, Xrepack.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), true, bootstrapping.Parameters{})
+	Mul := NewMultiplier(Box, runtime.NumCPU())
+	start := time.Now()
+	resEnc := Mul.Multiply(Xrepack, Wpt, true)
+	fmt.Println("Done: ", time.Since(start))
+
+	var res mat.Dense
+	res.Mul(X, W)
+	resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
+	PrintDebugBlocks(resEnc, resPt, 0.01, Box)
+}
+
+//helpers
+/*
+//Repack version with repacking also of rows (needs masking)
+func Repack(X *EncInput, rowP, colP int, eval ckks.Evaluator) *EncInput {
+	rows := X.RowP * X.InnerRows
+	cols := X.ColP * X.InnerCols
+	if rows%rowP != 0 || cols%colP != 0 || X.RowP%rowP != 0 || X.ColP%colP != 0 {
+		panic(errors.New("Target Partition not compatible with given Block Matrix"))
+	}
+	if X.RowP*X.ColP == 1 {
+		fmt.Println("Repacking: Nothing to do")
+		return X
+	}
+
+	Xnew := &EncInput{
+		Blocks:    nil,
+		RowP:      rowP,
+		ColP:      colP,
+		InnerRows: rows / rowP,
+		InnerCols: cols / colP,
+	}
+
+	innerBlocks := X.RowP / rowP
+	buffer := make([][]*ckks.Ciphertext, rowP)
+	if innerBlocks != 1 {
+		for i := 0; i < X.ColP; i++ {
+			//for each col partition
+			for part := 0; part < rowP; part++ {
+				//for each block in this part of this colP, extract the columns
+				buffer[part] = make([]*ckks.Ciphertext, X.ColP)
+				colsExt := make([]*ckks.Ciphertext, X.InnerCols)
+				for j := part * innerBlocks; j < part*rowP+innerBlocks; j++ {
+					colsExt[j] = ExtractCols(X.Blocks[j][i], X.InnerRows, X.InnerCols)
+				}
+
+				//collate the columns of each block of this part
+				accumulator := X.Blocks[part*innerBlocks][i]
+				for col := 0; col < X.InnerCols; col++ {
+					for j := part * innerBlocks; j < part*rowP+innerBlocks; j++ {
+						//accumulator += cols[j][col]
+					}
+				}
+				buffer[part][i] = accumulator
+			}
+		}
+	}
+	innerBlocks = X.ColP / colP
+	if innerBlocks != 1 {
+		for i := 0; i < rowP; i++ {
+			//for each row, unite blocks
+			for part := 0; part < colP; part++ {
+				accumulator := buffer[i][part*innerBlocks]
+				for j := part*innerBlocks + 1; j < part*rowP+innerBlocks; j++ {
+					eval.Add(accumulator, eval.RotateNew(X.Blocks[i][j], -X.InnerRows*cols), accumulator)
+				}
+			}
+		}
+	}
+
+}
+*/

@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"math"
@@ -70,12 +71,18 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 	Box := Mul.box
 	xRowP, xColP := X.GetPartitions()
 	wRowP, wColP := W.GetPartitions()
-	dimIn, xInnerCols := X.GetInnerDims()
 	dimMid, dimOut := W.GetInnerDims()
+
 	//W is block-transposed
 	if xColP != wColP {
-		panic(errors.New("Block partitions not compatible for multiplication"))
+		switch X.(type) {
+		case *EncInput:
+			X = RepackCols(X.(*EncInput), wColP, Mul.box)
+		default:
+			panic(errors.New("Block matrices not compatible for multiplication"))
+		}
 	}
+	dimIn, xInnerCols := X.GetInnerDims()
 	if xInnerCols != dimMid {
 		panic(errors.New("Inner dimentions not compatible for multiplication"))
 	}
@@ -307,6 +314,58 @@ func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box Ckks
 	return Box.Encoder.EncodeNew(tmp, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box.Params.LogSlots())
 }
 
+//Repacks block matrix column partitions to have newColP = colP
+func RepackCols(X *EncInput, colP int, Box CkksBox) *EncInput {
+	cols := X.ColP * X.InnerCols
+	if cols%colP != 0 || X.ColP%colP != 0 {
+		panic(errors.New("Target Partition not compatible with given Block Matrix"))
+	}
+	if X.InnerRows*(cols/colP)*2 > Box.Params.LogSlots() {
+		errors.New("New inner dimention is too big. Must be <= Slots / 2")
+	}
+	if X.ColP == 1 {
+		fmt.Println("Repacking: Nothing to do")
+		return X
+	}
+
+	eval := Box.Evaluator
+
+	buffer := make([][]*ckks.Ciphertext, X.RowP)
+	innerBlocks := X.ColP / colP
+
+	var wg sync.WaitGroup
+
+	if innerBlocks != 1 {
+		for i := 0; i < X.RowP; i++ {
+			//for each row, unite blocks
+			buffer[i] = make([]*ckks.Ciphertext, colP)
+			//fmt.Println("Row ", i)
+			for part := 0; part < colP; part++ {
+				wg.Add(1)
+				go func(i, part int, eval ckks.Evaluator) {
+					defer wg.Done()
+					accumulator := X.Blocks[i][part*innerBlocks].CopyNew()
+					//fmt.Println("Accumulator is at ", i, " - ", part*innerBlocks, "up to ", part*innerBlocks+innerBlocks)
+					for j := part*innerBlocks + 1; j < part*innerBlocks+innerBlocks; j++ {
+						eval.Add(accumulator, eval.RotateNew(X.Blocks[i][j], -X.InnerRows*X.InnerCols*(j%innerBlocks)), accumulator)
+					}
+					buffer[i][part] = accumulator
+				}(i, part, eval.ShallowCopy())
+			}
+		}
+		wg.Wait()
+		return &EncInput{
+			Blocks:    buffer,
+			RowP:      X.RowP,
+			ColP:      colP,
+			InnerRows: X.InnerRows,
+			InnerCols: cols / colP,
+		}
+	} else {
+		return X
+	}
+}
+
 //HELPERS
 func GetReplicaFactor(dimMid, dimOut int) int {
 	if dimOut > dimMid {
@@ -316,6 +375,7 @@ func GetReplicaFactor(dimMid, dimOut int) int {
 	}
 }
 
+//returns array of Plaintexts, where ith plaintext is rotated by rot[i] to the left
 func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.Plaintext {
 	ptRot := make([]*ckks.Plaintext, len(rotations))
 	for i, rot := range rotations {
@@ -324,4 +384,12 @@ func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.P
 		ptRot[i] = box.Encoder.EncodeNew(tmp, pt.Level(), pt.Scale, box.Params.LogSlots())
 	}
 	return ptRot
+}
+
+func GenRotationsForRepackCols(innerR, innerC, colP int) []int {
+	rotations := make([]int, colP-1)
+	for i := 1; i < colP; i++ {
+		rotations[i-1] = -innerR * innerC * i
+	}
+	return rotations
 }

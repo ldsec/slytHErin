@@ -7,6 +7,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
+	"math/rand"
 	"testing"
 )
 
@@ -26,7 +27,8 @@ func TestMultiplication(t *testing.T) {
 	scale := params.DefaultScale()
 
 	Box := NewBox(params)
-	Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)})
+	rotations := GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, []int{1}, []int{1}, params, nil)
+	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
 
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
@@ -82,10 +84,18 @@ func TestMultiplication(t *testing.T) {
 func TestBootstrap(t *testing.T) {
 	//Test Bootstrap operation following lattigo examples
 	LDim := []int{64, 64}
-	L := pU.RandMatrix(LDim[0], LDim[1])
-	//crucial that parameters are conjuncted
-	ckksParams := bootstrapping.N16QP1553H192H32.SchemeParams
-	btpParams := bootstrapping.N16QP1553H192H32.BootstrappingParams
+	//L := pU.RandMatrix(LDim[0], LDim[1])
+	v := make([]float64, LDim[0]*LDim[1])
+	for i := 0; i < LDim[0]*LDim[1]; i++ {
+		v[i] = rand.Float64()
+	}
+	L := mat.NewDense(LDim[0], LDim[1], v)
+
+	//ckksParams := bootstrapping.N16QP1553H192H32.SchemeParams
+	//btpParams := bootstrapping.N16QP1553H192H32.BootstrappingParams
+
+	ckksParams := bootstrapping.N16QP1546H192H32.SchemeParams
+	btpParams := bootstrapping.N16QP1546H192H32.BootstrappingParams
 
 	params, err := ckks.NewParametersFromLiteral(ckksParams)
 	scale := params.DefaultScale()
@@ -129,13 +139,13 @@ func TestBootstrap(t *testing.T) {
 	// To equalize the scale, the function evaluator.SetScale(ciphertext, parameters.Scale) can be used at the expense of one level.
 	fmt.Println()
 	fmt.Println("Bootstrapping...")
+	fmt.Println("Scale:", ctL.Scale-params.DefaultScale())
 	ct2 := btp.Bootstrapp(ctL)
 	fmt.Println("Done")
 	fmt.Println("Scale", ct2.Scale-params.DefaultScale())
 
-	fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
-
-	PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), false)), 0.01, Box)
+	//fmt.Println("Precision of ciphertext vs. Bootstrapp(ciphertext)")
+	//PrintDebug(ct2, pU.RealToComplex(pU.Vectorize(pU.MatToArray(L), false)), 0.01, Box)
 }
 
 /*

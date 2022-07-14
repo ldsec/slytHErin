@@ -45,7 +45,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 	sn.Init()
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.2, true, true)
+	possibleSplits := cipherUtils.FindSplits(40, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 
 	//params := paramsLogN15
 	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)
@@ -74,7 +74,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 
 		weights, biases := sn.BuildParams(batchSize)
 
-		Box = cipherUtils.BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
+		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
 		sne := sn.Encodecryptonet(weights, biases, splits, Box, poolSize)
 
@@ -132,7 +132,7 @@ func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
 	sn.Init()
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.2, true, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 
 	//params := paramsLogN15
 	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)
@@ -161,7 +161,7 @@ func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
 
 		weights, biases := sn.BuildParams(batchSize)
 
-		Box = cipherUtils.BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights)
+		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
 		sne := sn.Encryptcryptonet(weights, biases, splits, Box, poolSize)
 

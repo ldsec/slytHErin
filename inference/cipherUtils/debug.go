@@ -24,32 +24,22 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 
 	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
 
-	//fmt.Println()
-	//fmt.Printf("Level: %d (logQ = %d)\n", ciphertext.Level(), params.LogQLvl(ciphertext.Level()))
-	//fmt.Println("Consumed levels:", params.MaxLevel()-ciphertext.Level())
-	//
-	//fmt.Printf("ValuesTest:")
-	//for i := range valuesWant {
-	//	fmt.Printf(" %6.10f", valuesTest[i])
-	//}
-	//fmt.Println()
-	//
-	//fmt.Printf("ValuesWant:")
-	//for i := range valuesWant {
-	//	fmt.Printf(" %6.10f", valuesWant[i])
-	//}
-	//fmt.Println()
-	//
+	fmt.Printf("ValuesTest:")
+	for i := range valuesWant {
+		fmt.Printf(" %6.10f", valuesTest[i])
+	}
+	fmt.Println()
+
+	fmt.Printf("ValuesWant:")
+	for i := range valuesWant {
+		fmt.Printf(" %6.10f", valuesWant[i])
+	}
+	fmt.Println()
+
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 	fmt.Println(precStats.String())
 
-	fmt.Println("L2 Distance:")
 	dist := plainUtils.Distance(plainUtils.ComplexToReal(valuesTest), plainUtils.ComplexToReal(valuesWant))
-	fmt.Println(dist)
-	fmt.Println()
-	fmt.Println("Difference with expected Scale:")
-	fmt.Println(Box.Params.DefaultScale() - ciphertext.Scale)
-	fmt.Println()
 
 	maxTest := 0.0
 	maxWant := 0.0
@@ -62,9 +52,6 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 			maxWant = math.Abs(vW[i])
 		}
 	}
-	fmt.Println("Max value:")
-	fmt.Printf("Test: %.8f\n", maxTest)
-	fmt.Printf("Want: %.8f\n\n", maxWant)
 
 	//compare L1 distance between values
 	for i := range valuesWant {
@@ -95,14 +82,15 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box C
 			stats.MaxPrec += stat.MaxPrec
 			stats.MinPrec += stat.MinPrec
 			stats.AvgPrec += stat.AvgPrec
-			stats.MaxValue += stat.MaxValue
+			if stats.MaxValue < stat.MaxValue {
+				stats.MaxValue = stat.MaxValue
+			}
 			stats.L2Dist += stat.L2Dist
 		}
 	}
 	stats.MaxPrec /= float64(X.RowP * X.ColP)
 	stats.MinPrec /= float64(X.RowP * X.ColP)
 	stats.AvgPrec /= float64(X.RowP * X.ColP)
-	stats.MaxValue /= float64(X.RowP * X.ColP)
 	stats.L2Dist /= float64(X.RowP * X.ColP)
 
 	fmt.Println("[!] Final Stats:")
@@ -111,6 +99,27 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box C
 	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
 	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
 	fmt.Printf("L2 Dist: %f\n", stats.L2Dist)
+	stats.MaxPrec /= float64(X.RowP * X.ColP)
+	stats.MinPrec /= float64(X.RowP * X.ColP)
+	stats.AvgPrec /= float64(X.RowP * X.ColP)
+	stats.L2Dist /= float64(X.RowP * X.ColP)
+
+	params := Box.Params
+
+	fmt.Println()
+	fmt.Printf("Level: %d (logQ = %d)\n", X.Blocks[0][0].Level(), params.LogQLvl(X.Blocks[0][0].Level()))
+	fmt.Println("Consumed levels:", params.MaxLevel()-X.Blocks[0][0].Level())
+	fmt.Println("Difference with Scale: ", X.Blocks[0][0].Scale-params.DefaultScale())
+
+	fmt.Println("[!] Final Stats:")
+	fmt.Printf("MAX Prec: %f\n", stats.MaxPrec)
+	fmt.Printf("MIN Prec: %f\n", stats.MinPrec)
+	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
+	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
+	fmt.Printf("L2 Dist: %f\n", stats.L2Dist)
+
+	fmt.Println("----------------------------------------------------------------------------------------")
+	return
 
 	fmt.Println("----------------------------------------------------------------------------------------")
 	return

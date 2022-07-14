@@ -151,7 +151,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	//NN20
 	//5 parties -> 146 batch in 229s
 	//10 parties ->
-	debug := false
+	debug := true
 	multithread := true
 	poolSize := 1
 	if multithread {
@@ -204,7 +204,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		weightCols[i] = 92
 	}
 	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(292, 784, weightRows, weightCols, params, 0.2, true, true)
+	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, 0.2, true, true)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
@@ -303,7 +303,7 @@ func TestEvalDataEncModelClear(t *testing.T) {
 		poolSize = runtime.NumCPU()
 	}
 	fmt.Printf("Running on %d threads\n", poolSize)
-	layers := 20 //20 or 50
+	layers := 50 //20 or 50
 
 	nn := LoadNN("nn" + strconv.Itoa(layers) + "_packed.json")
 
@@ -330,8 +330,8 @@ func TestEvalDataEncModelClear(t *testing.T) {
 	weightCols[layers] = 10
 	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params, 0.1, true, true)
 
+	//path := fmt.Sprintf("/nn%d_centralized_logN%d_logQP%d", layers, params.LogN(), params.LogQ()+params.LogP())
 	path := fmt.Sprintf("/nn%d_centralized_logN%d", layers, params.LogN())
-
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}

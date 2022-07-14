@@ -2,6 +2,7 @@ package plainUtils
 
 import (
 	"errors"
+	"fmt"
 	"gonum.org/v1/gonum/mat"
 	"math"
 	"sync"
@@ -169,6 +170,15 @@ func ApplyFunc(Bm *BMatrix, f func(x float64) float64) {
 				return f(v)
 			}
 			Bm.Blocks[i][j].Apply(fn, Bm.Blocks[i][j])
+		}
+	}
+}
+
+func PrintBlocks(bm *BMatrix) {
+	for i := range bm.Blocks {
+		for j := range bm.Blocks[i] {
+			fmt.Println("Block ", i, " ", j)
+			PrintDense(bm.Blocks[i][j])
 		}
 	}
 }

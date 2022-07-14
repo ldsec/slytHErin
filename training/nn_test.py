@@ -137,7 +137,7 @@ if __name__=="__main__":
         intervals.append([0, 0])
 
 
-    batchsize = 1024
+    batchsize = 128
     dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
     corrects = 0
 

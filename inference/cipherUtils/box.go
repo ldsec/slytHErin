@@ -60,8 +60,9 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 }
 
 //returns Box with Evaluator and Bootstrapper if needed
-func BoxWithEvaluators(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool, rowIn, colIn, numWeights int, rowsW, colsW []int) CkksBox {
-	rotations := GenRotations(rowIn, colIn, numWeights, rowsW, colsW, Box.Params, &btpParams)
+func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool, splits []BlockSplits) CkksBox {
+	info := ExctractInfo(splits)
+	rotations := GenRotations(info.InputRows, info.InputCols, info.NumWeights, info.RowsOfWeights, info.ColsOfWeights, info.RowPOfWeights, info.ColPOfWeights, Box.Params, &btpParams)
 
 	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
 	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
@@ -78,7 +79,25 @@ func BoxWithEvaluators(Box CkksBox, btpParams bootstrapping.Parameters, withBtp 
 	return Box
 }
 
-func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
+//returns Box with Evaluator and Bootstrapper if needed
+func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams bootstrapping.Parameters) CkksBox {
+
+	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
+	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
+	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
+		Rlk:  rlk,
+		Rtks: Box.rtks,
+	})
+	var err error
+	if withBtp {
+		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
+		utils.ThrowErr(err)
+	}
+	return Box
+}
+
+func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
 	if btpParams != nil {
 		rotations = btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
@@ -88,24 +107,27 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW []int, params ckks.
 	for w := 0; w < numWeights; w++ {
 		for i := 1; i < (rowsW[w]+1)>>1; i++ {
 			rotations = append(rotations, 2*i*rowIn)
-			//extra
-			//rotations = append(rotations, -(rowIn*(rowsW[w]-1))+2*rowIn*i)
-			//rotations = append(rotations, -(rowIn*(rowsW[w]))+2*rowIn*i)
-			//rotations = append(rotations, 2*(-(rowIn*(rowsW[w]))+2*rowIn*i))
 		}
 		rotations = append(rotations, rowsW[w])
 		rotations = append(rotations, -rowsW[w]*rowIn)
 		rotations = append(rotations, -2*rowsW[w]*rowIn)
-
 		if rowsW[w] < colsW[w] {
 			replicationFactor = plainUtils.Max(int(math.Ceil(float64(colsW[w]/rowsW[w]))), 3)
 			rotations = append(rotations, params.RotationsForReplicateLog(rowIn*currCols, replicationFactor)...)
 		}
 		currCols = colsW[w]
+		//check repack
+		if w < numWeights-1 {
+			if currCols != rowsW[w+1] {
+				//repack
+				rotations = append(rotations, GenRotationsForRepackCols(rowIn, currCols, colPW[w])...)
+				currCols = rowsW[w+1]
+			}
+		}
 	}
-	//extra apart from rowin
+
 	rotations = append(rotations, rowIn)
-	//rotations = append(rotations, []int{ -rowIn * (colIn - 1), rowIn * colIn, -rowIn * colIn}...)
+
 	return rotations
 }
 
