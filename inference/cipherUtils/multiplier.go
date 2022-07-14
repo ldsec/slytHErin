@@ -314,7 +314,7 @@ func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box Ckks
 	return Box.Encoder.EncodeNew(tmp, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box.Params.LogSlots())
 }
 
-//Repacks block matrix column partitions to have newColP = colP
+//Repacks block matrix column partitions to have newColP = colP. Does not involve multiplication or rescaling
 func RepackCols(X *EncInput, colP int, Box CkksBox) *EncInput {
 	cols := X.ColP * X.InnerCols
 	if cols%colP != 0 || X.ColP%colP != 0 {
@@ -327,6 +327,7 @@ func RepackCols(X *EncInput, colP int, Box CkksBox) *EncInput {
 		fmt.Println("Repacking: Nothing to do")
 		return X
 	}
+	fmt.Println("Repacking...")
 
 	eval := Box.Evaluator
 

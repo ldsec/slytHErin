@@ -65,10 +65,10 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	var batchSizes []int
 	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots())))
 
-	for d := 1; d <= inputFeatures; d++ {
+	sq := int(math.Ceil(math.Sqrt(float64(inputFeatures))))
+	for d := 1; d <= sq; d++ {
+		//look for all possible ways to divide the input features
 		if inputFeatures%d == 0 {
-			colPartitions = append(colPartitions, d)
-			innerCols = append(innerCols, inputFeatures/d)
 			batch := int(math.Floor(slotsAvailable / (2 * float64(inputFeatures/d))))
 			if inputRows != -1 {
 				batch = utils.MinInt(batch, inputRows)
@@ -79,6 +79,8 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 			}
 			if batch*(inputFeatures/d)*2 <= int(slotsAvailable) {
 				batchSizes = append(batchSizes, batch)
+				colPartitions = append(colPartitions, d)
+				innerCols = append(innerCols, inputFeatures/d)
 			}
 		}
 	}
@@ -88,7 +90,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	var blockSplits [][]BlockSplits
 
 	for i := range batchSizes {
-		for filltresh := 1.0; filltresh >= 0.0; filltresh = filltresh - 0.1 {
+		for filltresh := 0.9; filltresh >= 0.0; filltresh = filltresh - 0.1 {
 			for _, strategyOnBatch := range []bool{true, false} {
 				batch := batchSizes[i]
 				colP := colPartitions[i]
@@ -119,31 +121,39 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 						}
 						if !adjusted {
 							if strategyOnBatch {
-								// find nearest divisors of weight column
-								inColsW--
-								//loop until divisor of lower then 1
+								//loop until divisor or lower then 1
+								if inColsW <= 1 {
+									isValid = false
+									break
+								} else {
+									inColsW--
+								}
 								for weightCols[w]%inColsW != 0 && inColsW > 1 {
 									inColsW--
 								}
 							} else {
 								//decrease batch
 								batch--
+								if batch < 1 {
+									isValid = false
+									break
+								} else if batch > 1 {
+									batch--
+								}
+								if inputRows != -1 {
+									for inputRows%batch != 0 && batch >= 1 {
+										//resize to input rows divider
+										batch--
+									}
+								}
 							}
 						}
 						if adjusted {
 							break
 						}
-						if strategyOnBatch {
-							if inColsW <= 1 {
-								isValid = false
-								break
-							}
-						} else {
-							if batch < 1 {
-								isValid = false
-								break
-							}
-						}
+					}
+					if !isValid {
+						break
 					}
 					blockSplit[w+1] = BlockSplits{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
 					currColP = weightCols[w] / inColsW
@@ -176,7 +186,6 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 						}
 					}
 				}
-
 				if isValid {
 					var rowP int
 					if inputRows == -1 {
