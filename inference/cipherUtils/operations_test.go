@@ -19,8 +19,8 @@ v
 *********************************************/
 
 func TestMultiplication(t *testing.T) {
-	X := pU.RandMatrix(1, 4)
-	W := pU.RandMatrix(4, 10)
+	X := pU.RandMatrix(40, 90)
+	W := pU.RandMatrix(90, 50)
 	//X := pU.MatrixForDebug(3, 3)
 	//W := pU.MatrixForDebug(3, 3)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)

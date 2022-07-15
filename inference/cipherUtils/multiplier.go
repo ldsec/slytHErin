@@ -369,47 +369,51 @@ func RepackCols(X *EncInput, colP int, Box CkksBox) {
 
 		blocks := make([][]*ckks.Ciphertext, X.RowP)
 		newInnerCols := (X.InnerCols * X.ColP) / colP
-		//mask := make([]float64, X.InnerRows*newInnerCols)
-		//for i := range mask {
-		//	mask[i] = 1.0
-		//}
-		//maskEcd := Box.Encoder.EncodeNew(mask, X.Blocks[0][0].Level(), Box.Params.QiFloat64(X.Blocks[0][0].Level()), Box.Params.LogSlots())
+
+		mask := make([]float64, X.InnerRows*newInnerCols)
+		for i := range mask {
+			mask[i] = 1.0
+		}
+		maskEcd := Box.Encoder.EncodeNew(mask, X.Blocks[0][0].Level(), Box.Params.QiFloat64(X.Blocks[0][0].Level()), Box.Params.LogSlots())
 
 		for i := 0; i < X.RowP; i++ {
 			blocks[i] = make([]*ckks.Ciphertext, colP)
-			wg.Add(1)
-			go func(i int, eval ckks.Evaluator) {
-				defer wg.Done()
-				buffer := X.Blocks[i][0]
-				buffered := X.InnerCols
-				filled := buffered
-				completedBlocks := 0
+			buffer := X.Blocks[i][0]
+			buffered := X.InnerCols
+			filled := buffered
+			completedBlocks := 0
+			j := 1
 
-				j := 1
+			for completedBlocks < colP {
+				if filled < newInnerCols {
+					if j < X.ColP {
+						wg.Add(1)
+						go func(i, j, completedBlocks int, eval ckks.Evaluator, buffer *ckks.Ciphertext, filled int) {
 
-				for completedBlocks < colP {
-					if filled < newInnerCols {
-						if j < X.ColP {
+							defer wg.Done()
 							blocks[i][completedBlocks] = eval.AddNew(buffer, eval.RotateNew(X.Blocks[i][j], -filled*X.InnerRows))
+							//cleanup
+							eval.Mul(blocks[i][completedBlocks], maskEcd, blocks[i][completedBlocks])
+							eval.Rescale(blocks[i][completedBlocks], X.Blocks[0][0].Scale, blocks[i][completedBlocks])
+						}(i, j, completedBlocks, eval.ShallowCopy(), buffer.CopyNew(), filled)
 
-							//wg.Add(1)
-							//go func(completedBlocks int, eval ckks.Evaluator) {
-							//	//cleanup
-							//	defer wg.Done()
-							//	eval.Mul(blocks[i][completedBlocks], maskEcd, blocks[i][completedBlocks])
-							//	eval.Rescale(blocks[i][completedBlocks], X.Blocks[0][0].Scale, blocks[i][completedBlocks])
-							//}(completedBlocks, eval.ShallowCopy())
-
+						completedBlocks++
+						if filled != 0 {
 							eval.Rotate(X.Blocks[i][j], (newInnerCols-filled)*X.InnerRows, buffer)
 							buffered = X.InnerCols - (newInnerCols - filled)
 							filled = buffered
-							completedBlocks++
+							j++
+						}
+						if buffered == 0 && j+1 < X.ColP {
+							//buffer next block if available
+							buffer = X.Blocks[i][j]
+							buffered = X.InnerCols
+							filled = buffered
 							j++
 						}
 					}
 				}
-			}(i, eval.ShallowCopy())
-
+			}
 		}
 		wg.Wait()
 		X.Blocks = blocks

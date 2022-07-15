@@ -144,6 +144,13 @@ func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.B
 	iAct := 0
 
 	for i, split := range splits[1:] {
+		if i > 0 {
+			//check masking for repacking
+			if split.RowP != splits[i].ColP && splits[i].ColP%split.RowP != 0 {
+				level--
+			}
+		}
+		fmt.Println("Layer ", i+1, "level ", level)
 		sne.Weights[i], err = cU.NewPlainWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
 
@@ -186,6 +193,13 @@ func (sn *cryptonet) Encryptcryptonet(weights, biases []*mat.Dense, splits []cU.
 	iAct := 0
 
 	for i, split := range splits[1:] {
+		if i > 0 {
+			//check masking for repacking
+			if split.RowP != splits[i].ColP && splits[i].ColP%split.RowP != 0 {
+				level--
+			}
+		}
+		fmt.Println("Layer ", i+1, "level ", level)
 		sne.Weights[i], err = cU.NewEncWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
 

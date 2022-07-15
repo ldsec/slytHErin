@@ -25,7 +25,7 @@ var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
-	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
 	LogP:         []int{42, 42},
 	Sigma:        rlwe.DefaultSigma,
 	LogSlots:     13,
@@ -45,7 +45,7 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 	sn.Init()
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(40, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
+	possibleSplits := cipherUtils.FindSplits(28, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 
 	//params := paramsLogN15
 	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)

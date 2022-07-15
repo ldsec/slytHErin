@@ -55,6 +55,22 @@ func GetAvgComplexity(splits []BlockSplits) float64 {
 	return float64(complexity) / float64(len(splits)-1)
 }
 
+//Compute tha max multiplication complexity of a series of splits
+func GetMaxComplexity(splits []BlockSplits) float64 {
+	complexity := 0
+	maxComplexity := complexity
+	n := splits[0].RowP
+	for i := 0; i < len(splits)-1; i++ {
+		m := splits[i].ColP
+		l := splits[i+1].ColP
+		complexity = n * m * l
+		if complexity > maxComplexity {
+			maxComplexity = complexity
+		}
+	}
+	return float64(maxComplexity)
+}
+
 // Finds all possible splits for the current model, given the number
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
 // the weights of the model expressed as matrices.
@@ -163,17 +179,24 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 						nextReplicaFactor := GetReplicaFactor(weightRows[w+1], weightCols[w+1])
 
 						//fmt.Println("Repacking...")
-						possibleNewColP := make([]int, currColP)
+						possibleNewColP := make([]int, currCols)
 						f := 0
-						for div := 1; div < currColP; div++ {
-							if currColP%div == 0 {
-								possibleNewColP[f] = div
-								f++
+						for div := 1; div <= currCols; div++ {
+							if currCols%div == 0 {
+								if currCols/div < currColP {
+									possibleNewColP[f] = currCols / div
+									f++
+								}
 							}
 						}
 						possibleNewColP = possibleNewColP[:f]
 						for f := len(possibleNewColP) - 1; f >= 0; f-- {
 							tmpColP := possibleNewColP[f]
+							if float64(tmpColP)/float64(currColP) >= 0.75 || currColP-tmpColP < 4 {
+								// skip if this partition doesn't reduce by at least 25% the blocks
+								// or if in any case we don't save much blocks (much = 4)
+								continue
+							}
 							tmpCols := currCols * currColP / tmpColP
 							if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
 								//fmt.Println("Repacking done...")
@@ -202,35 +225,31 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	if len(blockSplits) == 0 {
 		return blockSplits
 	}
-	maxBatch := blockSplits[0][0].InnerRows
-	minComplexity := GetAvgComplexity(blockSplits[0])
+	maxRatio := float64(blockSplits[0][0].InnerRows) / GetMaxComplexity(blockSplits[0])
 
 	for i := 0; i < len(blockSplits); i++ {
-		complexity := GetAvgComplexity(blockSplits[i])
-		if complexity <= minComplexity {
-			minComplexity = complexity
-		}
-		if blockSplits[i][0].InnerRows > maxBatch && complexity < 128 {
-			maxBatch = blockSplits[i][0].InnerRows
+		complexity := GetMaxComplexity(blockSplits[i])
+		if float64(blockSplits[i][0].InnerRows)/complexity > maxRatio {
+			maxRatio = float64(blockSplits[i][0].InnerRows) / complexity
 		}
 	}
 	var filteredSplits [][]BlockSplits
 
 	for i := 0; i < len(blockSplits); i++ {
-		if blockSplits[i][0].InnerRows == maxBatch || GetAvgComplexity(blockSplits[i]) == minComplexity {
+		if float64(blockSplits[i][0].InnerRows)/GetMaxComplexity(blockSplits[i]) == maxRatio {
 			filteredSplits = append(filteredSplits, blockSplits[i])
 		}
 	}
 	if len(filteredSplits) > 1 {
-		minRowP := filteredSplits[0][0].RowP
-		idxMinRowP := 0
+		minColP := filteredSplits[0][0].ColP
+		idxMinColP := 0
 		for i := range filteredSplits {
-			if filteredSplits[i][0].RowP < minRowP {
-				minRowP = filteredSplits[i][0].RowP
-				idxMinRowP = i
+			if filteredSplits[i][0].RowP < minColP {
+				minColP = filteredSplits[i][0].ColP
+				idxMinColP = i
 			}
 		}
-		filteredSplits = [][]BlockSplits{filteredSplits[idxMinRowP]}
+		filteredSplits = [][]BlockSplits{filteredSplits[idxMinColP]}
 	}
 	return filteredSplits
 }

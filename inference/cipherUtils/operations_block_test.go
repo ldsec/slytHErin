@@ -206,20 +206,20 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 }
 
 func TestRepack(t *testing.T) {
-	rows := 10
-	cols := 36
-	rowP := 5
-	colP := 6
-	newColP := 4
-	X := pU.MatrixForDebug(rows, cols)
-	W := pU.RandMatrix(cols, 10)
+	rows := 40
+	cols := 720
+	rowP := 1
+	colP := 10
+	newColP := 8
+	X := pU.RandMatrix(rows, cols)
+	W := pU.RandMatrix(cols, 100)
 	pU.PrintDense(X)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	Box := NewBox(params)
 	rotations := GenRotationsForRepackCols(rows/rowP, cols, cols/colP, newColP)
 	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
 
-	Xenc, err := NewEncInput(X, rowP, newColP, params.MaxLevel(), params.DefaultScale(), Box)
+	Xenc, err := NewEncInput(X, rowP, colP, params.MaxLevel(), params.DefaultScale(), Box)
 	utils.ThrowErr(err)
 	RepackCols(Xenc, newColP, Box)
 
@@ -227,7 +227,7 @@ func TestRepack(t *testing.T) {
 	pU.PrintBlocks(repack)
 	PrintDebugBlocks(Xenc, repack, 0.0001, Box)
 
-	Wpt, err := NewPlainWeightDiag(W, newColP, 1, Xenc.InnerRows, params.MaxLevel()-1, Box)
+	Wpt, err := NewPlainWeightDiag(W, newColP, 2, Xenc.InnerRows, params.MaxLevel()-1, Box)
 	utils.ThrowErr(err)
 
 	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, bootstrapping.Parameters{})
