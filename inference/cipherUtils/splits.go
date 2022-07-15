@@ -134,7 +134,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 								}
 							} else {
 								//decrease batch
-								if batch < 1 {
+								if batch <= 1 {
 									isValid = false
 									break
 								} else if batch > 1 {

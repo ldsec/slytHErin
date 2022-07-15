@@ -14,8 +14,8 @@ import (
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(63, 64)
-	W := pU.RandMatrix(64, 32)
+	X := pU.RandMatrix(1, 12)
+	W := pU.RandMatrix(12, 10)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
@@ -206,36 +206,34 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 }
 
 func TestRepack(t *testing.T) {
-	rows := 64
-	cols := 64
-	rowP := 8
-	colP := 4
-	newColP := 2
+	rows := 10
+	cols := 36
+	rowP := 5
+	colP := 6
+	newColP := 4
 	X := pU.MatrixForDebug(rows, cols)
 	W := pU.RandMatrix(cols, 10)
 	pU.PrintDense(X)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	Box := NewBox(params)
-	rotations := make([]int, colP-1)
-	for i := 1; i < colP; i++ {
-		rotations[i-1] = -(rows / rowP) * (cols / colP) * i
-	}
+	rotations := GenRotationsForRepackCols(rows/rowP, cols, cols/colP, newColP)
 	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
 
-	Xenc, _ := NewEncInput(X, rowP, colP, params.MaxLevel(), params.DefaultScale(), Box)
-	Xrepack := RepackCols(Xenc, newColP, Box)
+	Xenc, err := NewEncInput(X, rowP, newColP, params.MaxLevel(), params.DefaultScale(), Box)
+	utils.ThrowErr(err)
+	RepackCols(Xenc, newColP, Box)
 
 	repack, _ := pU.PartitionMatrix(X, rowP, newColP)
 	pU.PrintBlocks(repack)
-	PrintDebugBlocks(Xrepack, repack, 0.0001, Box)
+	PrintDebugBlocks(Xenc, repack, 0.0001, Box)
 
-	Wpt, err := NewPlainWeightDiag(W, newColP, 1, Xrepack.InnerRows, params.MaxLevel(), Box)
+	Wpt, err := NewPlainWeightDiag(W, newColP, 1, Xenc.InnerRows, params.MaxLevel()-1, Box)
 	utils.ThrowErr(err)
 
-	Box = BoxWithRotations(Box, GenRotations(Xrepack.InnerRows, Xrepack.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), true, bootstrapping.Parameters{})
+	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, bootstrapping.Parameters{})
 	Mul := NewMultiplier(Box, runtime.NumCPU())
 	start := time.Now()
-	resEnc := Mul.Multiply(Xrepack, Wpt, true)
+	resEnc := Mul.Multiply(Xenc, Wpt, true)
 	fmt.Println("Done: ", time.Since(start))
 
 	var res mat.Dense

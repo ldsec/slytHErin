@@ -77,7 +77,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 	if xColP != wColP {
 		switch X.(type) {
 		case *EncInput:
-			X = RepackCols(X.(*EncInput), wColP, Mul.box)
+			RepackCols(X.(*EncInput), wColP, Mul.box)
 		default:
 			panic(errors.New("Block matrices not compatible for multiplication"))
 		}
@@ -315,28 +315,30 @@ func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box Ckks
 }
 
 //Repacks block matrix column partitions to have newColP = colP. Does not involve multiplication or rescaling
-func RepackCols(X *EncInput, colP int, Box CkksBox) *EncInput {
+func RepackCols(X *EncInput, colP int, Box CkksBox) {
 	cols := X.ColP * X.InnerCols
-	if cols%colP != 0 || X.ColP%colP != 0 {
+	if cols%colP != 0 {
 		panic(errors.New("Target Partition not compatible with given Block Matrix"))
 	}
-	if X.InnerRows*(cols/colP)*2 > Box.Params.LogSlots() {
-		errors.New("New inner dimention is too big. Must be <= Slots / 2")
+	if X.InnerRows*(cols/colP)*2 > Box.Params.Slots() {
+		panic(errors.New("New inner dimention is too big. Must be <= Slots / 2"))
 	}
-	if X.ColP == 1 {
+	if X.ColP == 1 || X.ColP == colP {
 		fmt.Println("Repacking: Nothing to do")
-		return X
+		return
 	}
 	fmt.Println("Repacking...")
 
 	eval := Box.Evaluator
 
-	buffer := make([][]*ckks.Ciphertext, X.RowP)
-	innerBlocks := X.ColP / colP
+	if X.ColP%colP == 0 {
+		// new partition is a divisor of current
 
-	var wg sync.WaitGroup
+		buffer := make([][]*ckks.Ciphertext, X.RowP)
+		innerBlocks := X.ColP / colP
 
-	if innerBlocks != 1 {
+		var wg sync.WaitGroup
+
 		for i := 0; i < X.RowP; i++ {
 			//for each row, unite blocks
 			buffer[i] = make([]*ckks.Ciphertext, colP)
@@ -355,22 +357,72 @@ func RepackCols(X *EncInput, colP int, Box CkksBox) *EncInput {
 			}
 		}
 		wg.Wait()
-		return &EncInput{
-			Blocks:    buffer,
-			RowP:      X.RowP,
-			ColP:      colP,
-			InnerRows: X.InnerRows,
-			InnerCols: cols / colP,
-		}
+
+		X.Blocks = buffer
+		X.ColP = colP
+		X.InnerCols = cols / colP
+		return
+
 	} else {
-		return X
+		//new partition is not a divisor of current partition
+		var wg sync.WaitGroup
+
+		blocks := make([][]*ckks.Ciphertext, X.RowP)
+		newInnerCols := (X.InnerCols * X.ColP) / colP
+		//mask := make([]float64, X.InnerRows*newInnerCols)
+		//for i := range mask {
+		//	mask[i] = 1.0
+		//}
+		//maskEcd := Box.Encoder.EncodeNew(mask, X.Blocks[0][0].Level(), Box.Params.QiFloat64(X.Blocks[0][0].Level()), Box.Params.LogSlots())
+
+		for i := 0; i < X.RowP; i++ {
+			blocks[i] = make([]*ckks.Ciphertext, colP)
+			wg.Add(1)
+			go func(i int, eval ckks.Evaluator) {
+				defer wg.Done()
+				buffer := X.Blocks[i][0]
+				buffered := X.InnerCols
+				filled := buffered
+				completedBlocks := 0
+
+				j := 1
+
+				for completedBlocks < colP {
+					if filled < newInnerCols {
+						if j < X.ColP {
+							blocks[i][completedBlocks] = eval.AddNew(buffer, eval.RotateNew(X.Blocks[i][j], -filled*X.InnerRows))
+
+							//wg.Add(1)
+							//go func(completedBlocks int, eval ckks.Evaluator) {
+							//	//cleanup
+							//	defer wg.Done()
+							//	eval.Mul(blocks[i][completedBlocks], maskEcd, blocks[i][completedBlocks])
+							//	eval.Rescale(blocks[i][completedBlocks], X.Blocks[0][0].Scale, blocks[i][completedBlocks])
+							//}(completedBlocks, eval.ShallowCopy())
+
+							eval.Rotate(X.Blocks[i][j], (newInnerCols-filled)*X.InnerRows, buffer)
+							buffered = X.InnerCols - (newInnerCols - filled)
+							filled = buffered
+							completedBlocks++
+							j++
+						}
+					}
+				}
+			}(i, eval.ShallowCopy())
+
+		}
+		wg.Wait()
+		X.Blocks = blocks
+		X.ColP = colP
+		X.InnerCols = cols / colP
+		return
 	}
 }
 
 //HELPERS
 func GetReplicaFactor(dimMid, dimOut int) int {
 	if dimOut > dimMid {
-		return plainUtils.Max(int(math.Ceil(float64(dimOut)/float64(dimMid))), 3)
+		return plainUtils.Max(int(math.Ceil(float64(dimOut)/float64(dimMid)))+1, 3)
 	} else {
 		return 2
 	}
@@ -387,10 +439,15 @@ func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.P
 	return ptRot
 }
 
-func GenRotationsForRepackCols(innerR, innerC, colP int) []int {
-	rotations := make([]int, colP-1)
+func GenRotationsForRepackCols(innerR, cols, innerC, colP int) []int {
+	var rotations []int
 	for i := 1; i < colP; i++ {
-		rotations[i-1] = -innerR * innerC * i
+		rotations = append(rotations, -innerR*innerC*i)
+	}
+	newInnerC := cols / colP
+	for i := 1; i < newInnerC; i++ {
+		rotations = append(rotations, -i*innerR)
+		rotations = append(rotations, (newInnerC-i)*innerR)
 	}
 	return rotations
 }

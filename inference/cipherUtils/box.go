@@ -120,7 +120,7 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 		if w < numWeights-1 {
 			if currCols != rowsW[w+1] {
 				//repack
-				rotations = append(rotations, GenRotationsForRepackCols(rowIn, currCols, colPW[w])...)
+				rotations = append(rotations, GenRotationsForRepackCols(rowIn, currCols*colPW[w], currCols, rowPW[w+1])...)
 				currCols = rowsW[w+1]
 			}
 		}

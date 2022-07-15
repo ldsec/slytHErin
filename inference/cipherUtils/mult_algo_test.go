@@ -43,14 +43,14 @@ func TestMultiplicationAlgoC2P(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	Box := NewBox(params)
-	Box = BoxWithEvaluators(Box, bootstrapping.Parameters{}, false, pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)})
+	Box = BoxWithRotations(Box, GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, []int{}, []int{}, params, nil), false, bootstrapping.Parameters{})
 
 	t.Run("Test/C2P/Test", func(t *testing.T) {
 		input := EncryptInput(params.MaxLevel(), params.DefaultScale(), pU.MatToArray((X)), Box)
 		Wd, _ := FormatWeightsAsMap(pU.MatToArray(W), pU.NumRows(X), false)
 		Wlt := ckks.GenLinearTransformBSGS(Box.Encoder, Wd, params.MaxLevel(), params.QiFloat64(input.Level()), 2.0, params.LogSlots())
 		start := time.Now()
-		rotations := GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params, &bootstrapping.Parameters{})
+		rotations := GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, []int{}, []int{}, params, &bootstrapping.Parameters{})
 		rotations = append(rotations, Wlt.Rotations()...)
 		Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
 
