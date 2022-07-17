@@ -14,11 +14,12 @@ import (
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(1, 12)
-	W := pU.RandMatrix(12, 10)
+	X := pU.RandMatrix(40, 720)
+	W := pU.RandMatrix(720, 100)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+	PrintAllSplits(splits)
 	if len(splits) == 0 {
 		panic(errors.New("No splits found"))
 	}
@@ -206,7 +207,7 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 }
 
 func TestRepack(t *testing.T) {
-	rows := 40
+	rows := 1
 	cols := 720
 	rowP := 1
 	colP := 10
@@ -221,18 +222,22 @@ func TestRepack(t *testing.T) {
 
 	Xenc, err := NewEncInput(X, rowP, colP, params.MaxLevel(), params.DefaultScale(), Box)
 	utils.ThrowErr(err)
+	start := time.Now()
 	RepackCols(Xenc, newColP, Box)
+	done := time.Since(start)
 
 	repack, _ := pU.PartitionMatrix(X, rowP, newColP)
 	pU.PrintBlocks(repack)
 	PrintDebugBlocks(Xenc, repack, 0.0001, Box)
+
+	fmt.Println("Done repack: ", done)
 
 	Wpt, err := NewPlainWeightDiag(W, newColP, 2, Xenc.InnerRows, params.MaxLevel()-1, Box)
 	utils.ThrowErr(err)
 
 	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, bootstrapping.Parameters{})
 	Mul := NewMultiplier(Box, runtime.NumCPU())
-	start := time.Now()
+	start = time.Now()
 	resEnc := Mul.Multiply(Xenc, Wpt, true)
 	fmt.Println("Done: ", time.Since(start))
 

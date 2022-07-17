@@ -38,14 +38,14 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 	//41 in 6.14s with logn14
 	//83 in 10.5s with logn15
 
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	sn := Loadcryptonet("cryptonet_packed.json")
 	sn.Init()
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(28, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
+	possibleSplits := cipherUtils.FindSplits(40, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 
 	//params := paramsLogN15
 	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)

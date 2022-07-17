@@ -7,6 +7,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"math"
 	"sync"
+	"time"
 )
 
 //Deals with multipication between encrypted or plaintext encoded block matrices
@@ -77,7 +78,9 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 	if xColP != wColP {
 		switch X.(type) {
 		case *EncInput:
+			start := time.Now()
 			RepackCols(X.(*EncInput), wColP, Mul.box)
+			fmt.Println("Done repack: ", time.Since(start))
 		default:
 			panic(errors.New("Block matrices not compatible for multiplication"))
 		}

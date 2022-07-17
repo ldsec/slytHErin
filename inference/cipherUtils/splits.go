@@ -174,42 +174,49 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 					blockSplit[w+1] = BlockSplits{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
 					currColP = weightCols[w] / inColsW
 					currCols = inColsW
+
 					//repack
 					if w < len(weightRows)-1 && currColP != 1 {
-						nextReplicaFactor := GetReplicaFactor(weightRows[w+1], weightCols[w+1])
+						nextInnerRowW := weightRows[w+1] / currColP
+						nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w])
+						nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
 
-						//fmt.Println("Repacking...")
-						possibleNewColP := make([]int, currCols)
-						f := 0
-						for div := 1; div <= currCols; div++ {
-							if currCols%div == 0 {
-								if currCols/div < currColP {
-									possibleNewColP[f] = currCols / div
-									f++
+						//repack only if matrices are big 'enough'
+						if float64(batch*currCols*nextReplicaFactor) > 0.5*slotsAvailable && float64(nextInnerRowW*nextInnerColW) > 0.5*slotsAvailable {
+							//fmt.Println("Repacking...")
+							possibleNewColP := make([]int, currCols)
+							f := 0
+							for div := 1; div <= currCols; div++ {
+								if currCols%div == 0 {
+									if currCols/div < currColP {
+										possibleNewColP[f] = currCols / div
+										f++
+									}
 								}
 							}
-						}
-						possibleNewColP = possibleNewColP[:f]
-						for f := len(possibleNewColP) - 1; f >= 0; f-- {
-							tmpColP := possibleNewColP[f]
-							if float64(tmpColP)/float64(currColP) >= 0.75 || currColP-tmpColP < 4 {
-								// skip if this partition doesn't reduce by at least 25% the blocks
-								// or if in any case we don't save much blocks (much = 4)
-								continue
-							}
-							tmpCols := currCols * currColP / tmpColP
-							if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
-								//fmt.Println("Repacking done...")
-								//fmt.Println("ColP was: ", currColP)
-								currColP = tmpColP
-								currCols = tmpCols
-								//fmt.Println("ColP now: ", currColP)
-								break
+							possibleNewColP = possibleNewColP[:f]
+
+							for f := len(possibleNewColP) - 1; f >= 0; f-- {
+								tmpColP := possibleNewColP[f]
+								nextInnerRowW := weightRows[w+1] / tmpColP
+								nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w])
+								nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
+
+								tmpCols := currCols * currColP / tmpColP
+								if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
+									//fmt.Println("Repacking done...")
+									//fmt.Println("ColP was: ", currColP)
+									currColP = tmpColP
+									currCols = tmpCols
+									//fmt.Println("ColP now: ", currColP)
+									break
+								}
 							}
 						}
 					}
 				}
 				if isValid {
+					//save this split
 					var rowP int
 					if inputRows == -1 {
 						rowP = 1

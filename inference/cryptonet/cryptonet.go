@@ -111,8 +111,8 @@ func (sn *cryptonet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.
 		wRescaled[i] = new(mat.Dense)
 		bRescaled[i] = new(mat.Dense)
 		if i != len(weights)-1 {
-			wRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), weights[i])
-			bRescaled[i].Scale(float64(1.0/sn.ReLUApprox.Interval), biases[i])
+			wRescaled[i] = plainUtils.MulByConst(weights[i], float64(1.0/sn.ReLUApprox.Interval))
+			bRescaled[i] = plainUtils.MulByConst(biases[i], float64(1.0/sn.ReLUApprox.Interval))
 		} else {
 			wRescaled[i] = weights[i]
 			bRescaled[i] = biases[i]
@@ -127,11 +127,10 @@ func (sn *cryptonet) RescaleForActivation(weights, biases []*mat.Dense) ([]*mat.
 func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.BlockSplits, Box cU.CkksBox, poolsize int) *cryptonetEcd {
 	sne := new(cryptonetEcd)
 
-	//compress layers 1 and 2 which are linear and back to back, then rescale for the activation
-	weights, biases = sn.RescaleForActivation(weights, biases)
+	weightsR, biasesR := sn.RescaleForActivation(weights, biases)
 
-	sne.Weights = make([]*cU.PlainWeightDiag, len(weights))
-	sne.Bias = make([]*cU.PlainInput, len(biases))
+	sne.Weights = make([]*cU.PlainWeightDiag, len(weightsR))
+	sne.Bias = make([]*cU.PlainInput, len(biasesR))
 	sne.Activators = make([]*cU.Activator, 2)
 
 	level := Box.Params.MaxLevel()
@@ -151,12 +150,12 @@ func (sn *cryptonet) Encodecryptonet(weights, biases []*mat.Dense, splits []cU.B
 			}
 		}
 		fmt.Println("Layer ", i+1, "level ", level)
-		sne.Weights[i], err = cU.NewPlainWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
+		sne.Weights[i], err = cU.NewPlainWeightDiag(weightsR[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
 
 		level-- //rescale
 
-		sne.Bias[i], err = cU.NewPlainInput(biases[i], inputRowP, split.ColP, level, scale, Box)
+		sne.Bias[i], err = cU.NewPlainInput(biasesR[i], inputRowP, split.ColP, level, scale, Box)
 		utils.ThrowErr(err)
 
 		if iAct < 2 {
@@ -177,7 +176,7 @@ func (sn *cryptonet) Encryptcryptonet(weights, biases []*mat.Dense, splits []cU.
 	sne := new(cryptonetEnc)
 
 	//compress layers 1 and 2 which are linear and back to back, then rescale for the activation
-	weights, biases = sn.RescaleForActivation(weights, biases)
+	weightsR, biasesR := sn.RescaleForActivation(weights, biases)
 
 	sne.Weights = make([]*cU.EncWeightDiag, len(weights))
 	sne.Bias = make([]*cU.EncInput, len(biases))
@@ -200,12 +199,12 @@ func (sn *cryptonet) Encryptcryptonet(weights, biases []*mat.Dense, splits []cU.
 			}
 		}
 		fmt.Println("Layer ", i+1, "level ", level)
-		sne.Weights[i], err = cU.NewEncWeightDiag(weights[i], split.RowP, split.ColP, leftInnerDim, level, Box)
+		sne.Weights[i], err = cU.NewEncWeightDiag(weightsR[i], split.RowP, split.ColP, leftInnerDim, level, Box)
 		utils.ThrowErr(err)
 
 		level-- //rescale
 
-		sne.Bias[i], err = cU.NewEncInput(biases[i], inputRowP, split.ColP, level, scale, Box)
+		sne.Bias[i], err = cU.NewEncInput(biasesR[i], inputRowP, split.ColP, level, scale, Box)
 		utils.ThrowErr(err)
 
 		if iAct < 2 {
@@ -271,24 +270,35 @@ func (sne *cryptonetEcd) EvalBatchEncrypted_Debug(Xenc *cU.EncInput, Xclear *mat
 		}
 		Xenc = sne.Multiplier.Multiply(Xenc, sne.Weights[i], prepack)
 		var tmp mat.Dense
+		rescale := 1.0
+		if i < len(weights)-1 {
+			rescale = rescale / activation.Interval
+		}
+		timer := time.Now()
 		tmp.Mul(Xclear, weights[i])
-		tmpRescaled := plainUtils.MulByConst(&tmp, 1.0/activation.Interval)
+		finish := time.Since(timer)
+
+		tmpRescaled := plainUtils.MulByConst(&tmp, rescale)
 		tmpB, _ := plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
-		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
 		sne.Adder.AddBias(Xenc, sne.Bias[i])
 
 		var tmp2 mat.Dense
 		tmp2.Add(&tmp, biases[i])
-		tmpRescaled = plainUtils.MulByConst(&tmp2, 1.0/activation.Interval)
+		tmpRescaled = plainUtils.MulByConst(&tmp2, rescale)
 		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, Xenc.RowP, Xenc.ColP)
 		cU.PrintDebugBlocks(Xenc, tmpB, 0.1, sne.Box)
 
+		fmt.Println("Mul layer ", i+1, ": ", finish)
+
 		if iAct < 2 {
+			timer = time.Now()
 			sne.Activators[iAct].ActivateBlocks(Xenc)
+			finish = time.Since(timer)
 			utils.ActivatePlain(&tmp2, activation)
 			tmpB, _ = plainUtils.PartitionMatrix(&tmp2, Xenc.RowP, Xenc.ColP)
 			cU.PrintDebugBlocks(Xenc, tmpB, 1, sne.Box)
+			fmt.Println("Act layer ", i+1, ": ", finish)
 		}
 		iAct++
 		*Xclear = tmp2
@@ -372,8 +382,13 @@ func (sne *cryptonetEnc) EvalBatchWithModelEnc_Debug(X *cU.PlainInput, Xclear *m
 		}
 
 		var tmp mat.Dense
+		rescale := 1.0
+		if i < len(weights)-1 {
+			rescale = rescale / activation.Interval
+		}
+
 		tmp.Mul(Xclear, weights[i])
-		tmpRescaled := plainUtils.MulByConst(&tmp, 1.0/activation.Interval)
+		tmpRescaled := plainUtils.MulByConst(&tmp, rescale)
 		tmpB, _ := plainUtils.PartitionMatrix(tmpRescaled, X.RowP, X.ColP)
 		cU.PrintDebugBlocks(res, tmpB, 0.1, sne.Box)
 
@@ -381,7 +396,7 @@ func (sne *cryptonetEnc) EvalBatchWithModelEnc_Debug(X *cU.PlainInput, Xclear *m
 
 		var tmp2 mat.Dense
 		tmp2.Add(&tmp, biases[i])
-		tmpRescaled = plainUtils.MulByConst(&tmp2, 1.0/activation.Interval)
+		tmpRescaled = plainUtils.MulByConst(&tmp2, rescale)
 		tmpB, _ = plainUtils.PartitionMatrix(tmpRescaled, res.RowP, res.ColP)
 		cU.PrintDebugBlocks(res, tmpB, 0.1, sne.Box)
 
