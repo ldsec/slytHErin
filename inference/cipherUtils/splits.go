@@ -1,6 +1,9 @@
 package cipherUtils
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -13,13 +16,15 @@ type BlockSplits struct {
 }
 
 type SplitsInfo struct {
-	InputRows, InputCols int //inner dims of input
-	InputRowP, InputColP int //partition of input
-	NumWeights           int
-	RowsOfWeights        []int //inner rows of weights
-	ColsOfWeights        []int
-	RowPOfWeights        []int //row partition of weights
-	ColPOfWeights        []int
+	InputRows     int   `json:"input_rows,omitempty"`
+	InputCols     int   `json:"input_cols,omitempty"` //inner dims of input
+	InputRowP     int   `json:"input_row_p,omitempty"`
+	InputColP     int   `json:"input_col_p,omitempty"` //partition of input
+	NumWeights    int   `json:"num_weights,omitempty"`
+	RowsOfWeights []int `json:"rows_of_weights,omitempty"` //inner rows of weights
+	ColsOfWeights []int `json:"cols_of_weights,omitempty"`
+	RowPOfWeights []int `json:"row_p_of_weights,omitempty"` //row partition of weights
+	ColPOfWeights []int `json:"col_p_of_weights,omitempty"`
 }
 
 func GetFillRatio(rows, cols, replicaFactor int, slotsAvailable float64) float64 {
@@ -178,7 +183,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 					//repack
 					if w < len(weightRows)-1 && currColP != 1 {
 						nextInnerRowW := weightRows[w+1] / currColP
-						nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w])
+						nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w+1])
 						nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
 
 						//repack only if matrices are big 'enough'
@@ -261,7 +266,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	return filteredSplits
 }
 
-func ExctractInfo(splits []BlockSplits) SplitsInfo {
+func ExctractInfo(splits []BlockSplits) (SplitsInfo, string) {
 	info := SplitsInfo{}
 	info.InputRows = splits[0].InnerRows
 	info.InputCols = splits[0].InnerCols
@@ -277,7 +282,11 @@ func ExctractInfo(splits []BlockSplits) SplitsInfo {
 		info.RowPOfWeights[i] = split.RowP
 		info.ColPOfWeights[i] = split.ColP
 	}
-	return info
+	buf, _ := json.Marshal(info)
+	hasher := sha1.New()
+	hasher.Write(buf)
+	code := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	return info, code
 }
 
 func PrintAllSplits(splits [][]BlockSplits) {

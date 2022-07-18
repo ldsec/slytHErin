@@ -236,7 +236,7 @@ func Test_BatchEncrypted_V2(t *testing.T) {
 	}
 	fmt.Println("VCPUs: ", poolsize)
 
-	sn := Loadcryptonet("cryptonet_packed.json")
+	sn := LoadCryptonet("cryptonet_packed.json")
 	sn.Init()
 	//crypto
 	//8 levels neeeded

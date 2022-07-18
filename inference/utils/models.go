@@ -1,6 +1,10 @@
 package utils
 
-import "time"
+import (
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"gonum.org/v1/gonum/mat"
+	"time"
+)
 
 /*
 	Define layer type for the various models
@@ -25,19 +29,32 @@ type Layer struct {
 	Bias   Bias   `json:"bias"`
 }
 
-type ApproxInterval struct {
-	A   float64 `json:"a"`
-	B   float64 `json:"b"`
-	Deg int
-}
-type ApproxIntervals struct {
-	Intervals []ApproxInterval `json:"intervals"`
-}
 type Stats struct {
 	Predictions []int
 	Corrects    int
 	Accuracy    float64
 	Time        time.Duration
+}
+
+// Returns a matrix M s.t X x M = conv(x,layer), or a dense layer
+func BuildKernelMatrix(k Kernel) *mat.Dense {
+
+	res := mat.NewDense(k.Rows, k.Cols, nil)
+	for i := 0; i < k.Rows; i++ {
+		for j := 0; j < k.Cols; j++ {
+			res.Set(i, j, k.W[i*k.Cols+j])
+		}
+	}
+	return res
+}
+
+// Compute a matrix containing the bias of the layer, to be added to the result of a Kernel multiplication
+func BuildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
+	res := mat.NewDense(batchSize, cols, nil)
+	for i := 0; i < batchSize; i++ {
+		res.SetRow(i, plainUtils.Pad(b.B, cols-len(b.B)))
+	}
+	return res
 }
 
 func Predict(Y []int, labels int, result [][]float64) (int, float64, []int) {

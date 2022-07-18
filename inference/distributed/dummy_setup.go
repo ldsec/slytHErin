@@ -1,11 +1,15 @@
 package distributed
 
 import (
+	"fmt"
+	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
 	"github.com/tuneinsight/lattigo/v3/drlwe"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
+	"os"
+	"strconv"
 )
 
 /*
@@ -95,4 +99,51 @@ func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, share
 	rlk := ckks.NewRelinearizationKey(params)
 	P0.GenRelinearizationKey(P0.share1, P0.share2, rlk)
 	return rlk
+}
+
+func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet, path string) {
+	fmt.Println("Writing keys to disk: ", path)
+	dat, err := sk.MarshalBinary()
+	utils.ThrowErr(err)
+	f, err := os.Create(path + "_sk")
+	utils.ThrowErr(err)
+	_, err = f.Write(dat)
+	utils.ThrowErr(err)
+	f.Close()
+
+	for i, sks := range skshares {
+		dat, err := sks.MarshalBinary()
+		utils.ThrowErr(err)
+		f, err := os.Create(path + "_P" + strconv.Itoa(i+1) + "_sk")
+		utils.ThrowErr(err)
+		_, err = f.Write(dat)
+		utils.ThrowErr(err)
+		f.Close()
+	}
+
+	dat, err = rtks.MarshalBinary()
+	utils.ThrowErr(err)
+	f, err = os.Create(path + "_rtks")
+	utils.ThrowErr(err)
+	_, err = f.Write(dat)
+	utils.ThrowErr(err)
+	f.Close()
+}
+
+func DeserializeKeys(path string, parties int) (sk *rlwe.SecretKey, skShares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet) {
+	fmt.Println("Reading keys from disk: ", path)
+	dat, err := os.ReadFile(path + "_sk")
+	utils.ThrowErr(err)
+	sk.UnmarshalBinary(dat)
+
+	dat, err = os.ReadFile(path + "_rtks")
+	utils.ThrowErr(err)
+	rtks.UnmarshalBinary(dat)
+
+	for i := 0; i < parties; i++ {
+		dat, err := os.ReadFile(path + "_P" + strconv.Itoa(i+1) + "_sk")
+		utils.ThrowErr(err)
+		skShares[i].UnmarshalBinary(dat)
+	}
+	return
 }

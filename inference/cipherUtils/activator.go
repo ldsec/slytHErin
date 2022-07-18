@@ -25,15 +25,15 @@ type EvalFunc func(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox)
 
 //Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
 //output of the previous linear layer
-func NewActivator(activation interface{}, level int, scale float64, innerRows, innerCols int, Box CkksBox, poolSize int) (*Activator, error) {
+func NewActivator(activation *utils.ChebyPolyApprox, level int, scale float64, innerRows, innerCols int, Box CkksBox, poolSize int) (*Activator, error) {
 	Act := new(Activator)
 	Act.poolSize = poolSize
 	poly := new(ckks.Polynomial)
-	switch activation.(type) {
-	case *utils.MinMaxPolyApprox:
-		//if poly is MinMax Approx we extract the const term and add it later so to use a more efficient poly eval without encoder
-		term0 := activation.(*utils.MinMaxPolyApprox).Poly.Coeffs[0]
-		poly = activation.(*utils.MinMaxPolyApprox).Poly
+	switch activation.ChebyBase {
+	case false:
+		//if not cheby base we extract the const term and add it later so to use a more efficient poly eval without encoder
+		term0 := activation.Poly.Coeffs[0]
+		poly = activation.Poly
 		Act.isCheby = false
 		term0vec := make([]complex128, innerRows*innerCols)
 		for i := range term0vec {
@@ -57,10 +57,10 @@ func NewActivator(activation interface{}, level int, scale float64, innerRows, i
 		Act.box = Box
 		return Act, nil
 
-	case *utils.ChebyPolyApprox:
+	case true:
 		Act.isCheby = true
 		Act.poly = ActivationPoly{}
-		Act.poly.polynomial = activation.(*utils.ChebyPolyApprox).Poly
+		Act.poly.polynomial = activation.Poly
 		Act.box = Box
 		return Act, nil
 	default:

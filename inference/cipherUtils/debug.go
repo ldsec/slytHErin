@@ -70,7 +70,13 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 
 func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
 	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
-	stats := DebugStats{}
+	stats := DebugStats{
+		MinPrec:  60,
+		AvgPrec:  0,
+		MaxPrec:  0,
+		MaxValue: 0,
+		L2Dist:   0,
+	}
 	for i := 0; i < X.RowP; i++ {
 		for j := 0; j < X.ColP; j++ {
 			//because the plaintext in X.Blocks is the matrix transposed and flattened, transpose the plaintext
@@ -79,8 +85,13 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box C
 
 			pt := plainUtils.MatToArray(ptm)
 			stat := PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), thresh, Box)
-			stats.MaxPrec += stat.MaxPrec
-			stats.MinPrec += stat.MinPrec
+
+			if stats.MaxPrec < stat.MaxPrec {
+				stats.MaxPrec = stat.MaxPrec
+			}
+			if stats.MinPrec > stat.MinPrec {
+				stats.MinPrec = stat.MinPrec
+			}
 			stats.AvgPrec += stat.AvgPrec
 			if stats.MaxValue < stat.MaxValue {
 				stats.MaxValue = stat.MaxValue
@@ -88,19 +99,6 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box C
 			stats.L2Dist += stat.L2Dist
 		}
 	}
-	stats.MaxPrec /= float64(X.RowP * X.ColP)
-	stats.MinPrec /= float64(X.RowP * X.ColP)
-	stats.AvgPrec /= float64(X.RowP * X.ColP)
-	stats.L2Dist /= float64(X.RowP * X.ColP)
-
-	fmt.Println("[!] Final Stats:")
-	fmt.Printf("MAX Prec: %f\n", stats.MaxPrec)
-	fmt.Printf("MIN Prec: %f\n", stats.MinPrec)
-	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
-	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
-	fmt.Printf("L2 Dist: %f\n", stats.L2Dist)
-	stats.MaxPrec /= float64(X.RowP * X.ColP)
-	stats.MinPrec /= float64(X.RowP * X.ColP)
 	stats.AvgPrec /= float64(X.RowP * X.ColP)
 	stats.L2Dist /= float64(X.RowP * X.ColP)
 
@@ -116,7 +114,7 @@ func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box C
 	fmt.Printf("MIN Prec: %f\n", stats.MinPrec)
 	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
 	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
-	fmt.Printf("L2 Dist: %f\n", stats.L2Dist)
+	fmt.Printf("AVG L2 Dist: %f\n", stats.L2Dist)
 
 	fmt.Println("----------------------------------------------------------------------------------------")
 	return

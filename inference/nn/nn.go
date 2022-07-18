@@ -5,16 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
-	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"io/ioutil"
 	"math"
 	"os"
-	"time"
 )
 
 /*
@@ -104,7 +100,16 @@ func (nne *NNEcd) LevelsToComplete(currLayer int, afterMul bool) int {
 }
 
 // loads json file with weights
-func LoadNN(path string) *NN {
+func LoadNN(layers int, HEtrain bool) *NN {
+
+	var path string
+	var suffix string
+	if HEtrain {
+		suffix = "_poly"
+	} else {
+		suffix = ""
+	}
+	path = fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	jsonFile, err := os.Open(path)
 	if err != nil {
@@ -146,12 +151,21 @@ func SetDegOfInterval(intervals utils.ApproxIntervals) utils.ApproxIntervals {
 	return utils.ApproxIntervals{intervalsNew}
 }
 
-//init activations
-func (nn *NN) Init(layers int, distributedBtp bool) {
+//init activations. Set HEtrain if model is the one for train under HE
+func (nn *NN) Init(layers int, distributedBtp bool, HEtrain bool) {
 
 	nn.Layers = layers
 	nn.ReLUApprox = make([]*utils.ChebyPolyApprox, layers)
-	jsonFile, err := os.Open(fmt.Sprintf("nn_%d_intervals.json", layers))
+	var suffix string
+	var act string
+	if HEtrain {
+		suffix = "_poly"
+		act = "silu"
+	} else {
+		suffix = ""
+		act = "soft relu"
+	}
+	jsonFile, err := os.Open(fmt.Sprintf("nn%d%s_intervals.json", layers, suffix))
 	if err != nil { //|| !distributedBtp {
 		if err != nil {
 			fmt.Println("Couldn't open intervals file")
@@ -160,16 +174,16 @@ func (nn *NN) Init(layers int, distributedBtp bool) {
 		if layers == 20 {
 			if distributedBtp {
 				//distributed
-				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params.a, NN20Params.b, NN20Params.deg)
+				nn.ReLUApprox[0] = utils.InitActivationCheby(act, NN20Params.a, NN20Params.b, NN20Params.deg)
 			} else {
-				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+				nn.ReLUApprox[0] = utils.InitActivationCheby(act, NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
 			}
 		} else if layers == 50 {
 			if distributedBtp {
 				//distributed
-				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN50Params.a, NN50Params.b, NN50Params.deg)
+				nn.ReLUApprox[0] = utils.InitActivationCheby(act, NN50Params.a, NN50Params.b, NN50Params.deg)
 			} else {
-				nn.ReLUApprox[0] = utils.InitActivationCheby("soft relu", NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
+				nn.ReLUApprox[0] = utils.InitActivationCheby(act, NN20Params_CentralizedBtp.a, NN20Params_CentralizedBtp.b, NN20Params_CentralizedBtp.deg)
 			}
 		}
 	} else {
@@ -180,7 +194,7 @@ func (nn *NN) Init(layers int, distributedBtp bool) {
 		intervals = SetDegOfInterval(intervals)
 		for i := range intervals.Intervals {
 			interval := intervals.Intervals[i]
-			nn.ReLUApprox[i] = utils.InitActivationCheby("soft relu", interval.A, interval.B, interval.Deg)
+			nn.ReLUApprox[i] = utils.InitActivationCheby(act, interval.A, interval.B, interval.Deg)
 		}
 	}
 }
@@ -206,19 +220,11 @@ func (nn *NN) BuildParams(batchSize int) ([]*mat.Dense, []*mat.Dense) {
 func (nn *NN) RescaleWeightsForActivation(weights, biases []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
 	scaledW := make([]*mat.Dense, len(weights))
 	scaledB := make([]*mat.Dense, len(biases))
-	for i := range weights {
-		//change to cheby base
-		var a, b = 0.0, 0.0
-		var mulC, addC = 1.0, 0.0
-		if i != len(weights)-1 {
-			a = nn.ReLUApprox[i].A
-			b = nn.ReLUApprox[i].B
-			mulC = 2 / (b - a)
-			addC = (-a - b) / (b - a)
-		}
-		scaledW[i] = plainUtils.MulByConst(weights[i], mulC)
-		scaledB[i] = plainUtils.AddConst(plainUtils.MulByConst(biases[i], mulC), addC)
+	for i := range weights[:len(weights)-1] {
+		//skip last as no activation
+		scaledW[i], scaledB[i] = nn.ReLUApprox[i].Rescale(weights[i], biases[i])
 	}
+	scaledW[len(weights)-1], scaledB[len(weights)-1] = weights[len(weights)-1], biases[len(weights)-1]
 	return scaledW, scaledB
 }
 
@@ -226,7 +232,7 @@ func (nn *NN) RescaleWeightsForActivation(weights, biases []*mat.Dense) ([]*mat.
 func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.BlockSplits, btpCapacity int, minLevel int, Box cipherUtils.CkksBox, poolsize int) (*NNEnc, error) {
 
 	layers := nn.Layers
-	splitInfo := cipherUtils.ExctractInfo(splits)
+	splitInfo, _ := cipherUtils.ExctractInfo(splits)
 	innerRows := splitInfo.InputRows
 	inputRowP := splitInfo.InputRowP
 	nne := new(NNEnc)
@@ -322,7 +328,7 @@ func (nn *NN) EncryptNN(weights, biases []*mat.Dense, splits []cipherUtils.Block
 func (nn *NN) EncodeNN(weights, biases []*mat.Dense, splits []cipherUtils.BlockSplits, btpCapacity int, minLevel int, Box cipherUtils.CkksBox, poolsize int) (*NNEcd, error) {
 
 	layers := nn.Layers
-	splitInfo := cipherUtils.ExctractInfo(splits)
+	splitInfo, _ := cipherUtils.ExctractInfo(splits)
 	innerRows := splitInfo.InputRows
 	inputRowP := splitInfo.InputRowP
 	nne := new(NNEcd)
@@ -412,520 +418,4 @@ func (nn *NN) EncodeNN(weights, biases []*mat.Dense, splits []cipherUtils.BlockS
 	nne.Adder = cipherUtils.NewAdder(Box, poolsize)
 	fmt.Println("Done...")
 	return nne, nil
-}
-
-/*
-	|
-	| MODEL ENCRYPTED
-	|
-	V
-*/
-func (nne *NNEnc) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, Xclear *mat.Dense, weights, biases []*mat.Dense, activation func(float64) float64, labels int, Btp *cipherUtils.Bootstrapper) utils.Stats {
-	Xint := Xenc
-	XintPlain := Xclear
-	Box := nne.Box
-
-	now := time.Now()
-	var prepack bool
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level == 0 {
-			fmt.Println("Level 0, Bootstrapping...")
-			fmt.Println("pre boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			Btp.Bootstrap(Xint)
-			fmt.Println("after boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-		}
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-
-		mulC := 1.0
-		addC := 0.0
-		if i == nne.Layers {
-			//base switch
-			a := nne.ReLUApprox[i].A
-			b := nne.ReLUApprox[i].B
-			mulC = 2 / (b - a)
-			addC = (-a - b) / (b - a)
-		}
-		var tmp mat.Dense
-		tmp.Mul(XintPlain, weights[i])
-		tmpRescaled := plainUtils.MulByConst(&tmp, mulC)
-		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		utils.ThrowErr(err)
-		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.1, Box)
-
-		//bias
-		nne.Adder.AddBias(Xint, B)
-		utils.ThrowErr(err)
-
-		var tmp2 mat.Dense
-		tmp2.Add(&tmp, biases[i])
-		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
-		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
-		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-
-		//activation
-		if i != len(nne.Weights)-1 {
-			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox[i].LevelsOfAct() {
-				fmt.Println("Bootstrapping for Activation")
-				fmt.Println("pre boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-				Btp.Bootstrap(Xint)
-				fmt.Println("after boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			}
-			fmt.Printf("Activation ")
-
-			nne.Activators[i].ActivateBlocks(Xint)
-
-			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
-			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.1, Box)
-		} else {
-			XintPlain = &tmp2
-		}
-	}
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-
-	res := cipherUtils.DecInput(Xint, Box)
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	correctsP, accuracyP, _ := utils.Predict(Y, labels, plainUtils.MatToArray(XintPlain))
-	fmt.Println("Corrects: Enc/Plain :", corrects, " / ", correctsP)
-	fmt.Println("Accuracy: Enc/Plain :", accuracy, " / ", accuracyP)
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
-}
-
-func (nne *NNEnc) EvalBatchEncrypted(Xenc *cipherUtils.EncInput, Y []int, labels int, Btp *cipherUtils.Bootstrapper) utils.Stats {
-	Xint := Xenc
-
-	now := time.Now()
-
-	var prepack bool
-
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level == 0 {
-			fmt.Println("Level 0, Bootstrapping...")
-			fmt.Println("pre boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			Btp.Bootstrap(Xint)
-			fmt.Println("after boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-		}
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-
-		//bias
-		nne.Adder.AddBias(Xint, B)
-
-		//activation
-		if i != len(nne.Weights)-1 {
-			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox[i].LevelsOfAct() {
-				fmt.Println("Bootstrapping for Activation")
-				fmt.Println("pre boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-				Btp.Bootstrap(Xint)
-				fmt.Println("after boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			}
-			fmt.Printf("Activation ")
-
-			nne.Activators[i].ActivateBlocks(Xint)
-		}
-	}
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-
-	res := cipherUtils.DecInput(Xint, nne.Box)
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
-}
-
-func (nne *NNEnc) EvalBatchEncrypted_Distributed_Debug(Xenc *cipherUtils.EncInput, Y []int, Xclear *mat.Dense, weights, biases []*mat.Dense, activation func(float64) float64, labels int, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
-	minLevel int,
-	master *distributed.LocalMaster) utils.Stats {
-
-	Xint := Xenc
-	XintPlain := Xclear
-
-	now := time.Now()
-
-	var prepack bool
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level <= minLevel && level < nne.LevelsToComplete(i, false) { //minLevel for Bootstrapping
-			if level < minLevel {
-				utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
-			}
-			fmt.Println("MinLevel, Bootstrapping...")
-			master.StartProto(distributed.REFRESH, Xint, pkQ, minLevel)
-			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
-		}
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-
-		var a, b = 0.0, 0.0
-		var mulC, addC = 1.0, 0.0
-		if i != len(weights)-1 {
-			a = nne.ReLUApprox[i].A
-			b = nne.ReLUApprox[i].B
-			mulC = 2 / (b - a)
-			addC = (-a - b) / (b - a)
-		}
-		var tmp mat.Dense
-		tmp.Mul(XintPlain, weights[i])
-		tmpRescaled := plainUtils.MulByConst(&tmp, mulC)
-		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		utils.ThrowErr(err)
-		fmt.Printf("Mul ")
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 10, nne.Box)
-
-		//bias
-		nne.Adder.AddBias(Xint, B)
-
-		var tmp2 mat.Dense
-		tmp2.Add(&tmp, biases[i])
-		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
-		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
-		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 10, nne.Box)
-
-		level = Xint.Blocks[0][0].Level()
-		if i != len(nne.Weights)-1 {
-			if (level < nne.ReLUApprox[i].LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox[i].LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
-				if level < minLevel {
-					utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
-				}
-				if level < nne.ReLUApprox[i].LevelsOfAct() {
-					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox[i].LevelsOfAct())
-				} else if level == minLevel {
-					fmt.Println("Min Level , Bootstrapping...")
-				} else {
-					fmt.Println("Activation would set level below threshold, Pre-emptive Bootstraping...")
-					fmt.Println("Curr level: ", level)
-					fmt.Println("Drop to: ", minLevel)
-					fmt.Println("Diff: ", level-minLevel)
-				}
-				master.StartProto(distributed.REFRESH, Xint, pkQ, minLevel)
-			}
-			fmt.Println("Activation")
-			//activation
-			nne.Activators[i].ActivateBlocks(Xint)
-			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
-			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 10, nne.Box)
-		} else {
-			XintPlain = &tmp2
-		}
-	}
-	fmt.Println("Key Switch to querier public key")
-	master.StartProto(distributed.CKSWITCH, Xint, pkQ, minLevel)
-
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-
-	Box := nne.Box
-	Box.Decryptor = decQ
-	res := cipherUtils.DecInput(Xint, Box)
-
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	correctsP, accuracyP, _ := utils.Predict(Y, labels, plainUtils.MatToArray(XintPlain))
-	fmt.Println("Corrects: Enc/Plain :", corrects, " / ", correctsP)
-	fmt.Println("Accuracy: Enc/Plain :", accuracy, " / ", accuracyP)
-
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
-}
-
-func (nne *NNEnc) EvalBatchEncrypted_Distributed(Xenc *cipherUtils.EncInput, Y []int, labels int, pkQ *rlwe.PublicKey, decQ ckks.Decryptor,
-	minLevel int,
-	master *distributed.LocalMaster) utils.Stats {
-
-	Xint := Xenc
-
-	now := time.Now()
-	var prepack bool
-
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level <= minLevel && level < nne.LevelsToComplete(i, false) { //minLevel for Bootstrapping
-			if level < minLevel {
-				utils.ThrowErr(errors.New(fmt.Sprintf("level below minlevel for bootstrapping: layer %d, level %d", i+1, level)))
-			}
-			fmt.Println("MinLevel, Bootstrapping...")
-			master.StartProto(distributed.REFRESH, Xint, pkQ, minLevel)
-			fmt.Println("Level after bootstrapping: ", Xint.Blocks[0][0].Level())
-		}
-
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-		//bias
-		nne.Adder.AddBias(Xint, B)
-
-		level = Xint.Blocks[0][0].Level()
-		if i != len(nne.Weights)-1 {
-			if (level < nne.ReLUApprox[i].LevelsOfAct() || level <= minLevel || level-nne.ReLUApprox[i].LevelsOfAct() < minLevel) && level < nne.LevelsToComplete(i, true) {
-				if level < minLevel {
-					utils.ThrowErr(errors.New("level below minlevel for bootstrapping"))
-				}
-				if level < nne.ReLUApprox[i].LevelsOfAct() {
-					fmt.Printf("Level < %d before activation , Bootstrapping...\n", nne.ReLUApprox[i].LevelsOfAct())
-				} else if level == minLevel {
-					fmt.Println("Min Level , Bootstrapping...")
-				} else {
-					fmt.Println("Activation would set level below threshold, Pre-emptive Bootstraping...")
-					fmt.Println("Curr level: ", level)
-					fmt.Println("Drop to: ", minLevel)
-					fmt.Println("Diff: ", level-minLevel)
-				}
-				master.StartProto(distributed.REFRESH, Xint, pkQ, minLevel)
-			}
-			fmt.Println("Activation")
-			//activation
-			nne.Activators[i].ActivateBlocks(Xint)
-		}
-	}
-	fmt.Println("Key Switch to querier public key")
-	master.StartProto(distributed.CKSWITCH, Xint, pkQ, minLevel)
-
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-	Box := nne.Box
-	Box.Decryptor = decQ
-	res := cipherUtils.DecInput(Xint, Box)
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
-}
-
-/*
-	|
-	| MODEL IN CLEAR
-	|
-	V
-*/
-
-//Centralized
-func (nne *NNEcd) EvalBatchEncrypted_Debug(Xenc *cipherUtils.EncInput, Y []int, Xclear *mat.Dense, weights, biases []*mat.Dense, activation func(float64) float64, labels int, Btp *cipherUtils.Bootstrapper) utils.Stats {
-	Xint := Xenc
-	XintPlain := Xclear
-	Box := nne.Box
-
-	now := time.Now()
-	var prepack bool
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level == 0 {
-			fmt.Println("Level 0, Bootstrapping...")
-			fmt.Println("pre boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-			Btp.Bootstrap(Xint)
-			fmt.Println("after boot")
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-		}
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-
-		mulC := 1.0
-		addC := 0.0
-		if i != nne.Layers {
-			//switch base but last layer
-			a := nne.ReLUApprox[i].A
-			b := nne.ReLUApprox[i].B
-			mulC = 2 / (b - a)
-			addC = (-a - b) / (b - a)
-		}
-		var tmp mat.Dense
-		tmp.Mul(XintPlain, weights[i])
-		tmpRescaled := plainUtils.MulByConst(&tmp, mulC)
-		tmpBlocks, err := plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		utils.ThrowErr(err)
-		fmt.Printf("Mul ")
-
-		//bias
-		nne.Adder.AddBias(Xint, B)
-		utils.ThrowErr(err)
-
-		var tmp2 mat.Dense
-		tmp2.Add(&tmp, biases[i])
-		tmpRescaled = plainUtils.MulByConst(&tmp2, mulC)
-		tmpRescaled = plainUtils.AddConst(tmpRescaled, addC)
-		tmpBlocks, err = plainUtils.PartitionMatrix(tmpRescaled, Xint.RowP, Xint.ColP)
-		cipherUtils.PrintDebugBlocks(Xint, tmpBlocks, 0.9, Box)
-
-		//activation
-		if i != len(nne.Weights)-1 {
-			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox[i].LevelsOfAct() {
-				fmt.Println("Bootstrapping for Activation")
-				fmt.Println("pre boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-				Btp.Bootstrap(Xint)
-				fmt.Println("after boot")
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-
-			}
-			fmt.Println("Activation ")
-
-			nne.Activators[i].ActivateBlocks(Xint)
-
-			XintPlain = plainUtils.ApplyFuncDense(activation, &tmp2)
-			XintPlainBlocks, _ := plainUtils.PartitionMatrix(XintPlain, Xint.RowP, Xint.ColP)
-			cipherUtils.PrintDebugBlocks(Xint, XintPlainBlocks, 0.9, Box)
-		} else {
-			XintPlain = &tmp2
-		}
-	}
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-
-	res := cipherUtils.DecInput(Xint, Box)
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	correctsP, accuracyP, _ := utils.Predict(Y, labels, plainUtils.MatToArray(XintPlain))
-	fmt.Println("Corrects: Enc/Plain :", corrects, " / ", correctsP)
-	fmt.Println("Accuracy: Enc/Plain :", accuracy, " / ", accuracyP)
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
-}
-
-//Centralized
-func (nne *NNEcd) EvalBatchEncrypted(Xenc *cipherUtils.EncInput, Y []int, labels int, Btp *cipherUtils.Bootstrapper) utils.Stats {
-	Xint := Xenc
-
-	now := time.Now()
-
-	var prepack bool
-
-	for i := range nne.Weights {
-		W := nne.Weights[i]
-		B := nne.Bias[i]
-
-		fmt.Printf("======================> Layer %d\n", i+1)
-		level := Xint.Blocks[0][0].Level()
-		if level == 0 {
-			fmt.Println("Level 0, Bootstrapping...")
-			Btp.Bootstrap(Xint)
-			fmt.Println("after boot")
-			fmt.Println(Xint.Blocks[0][0].Scale - nne.Box.Params.DefaultScale())
-			fmt.Println("Level: ", Xint.Blocks[0][0].Level())
-			//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-		}
-		if i == 0 {
-			prepack = false
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		} else {
-			prepack = true
-			Xint = nne.Multiplier.Multiply(Xint, W, prepack)
-		}
-		fmt.Println(Xint.Blocks[0][0].Scale - nne.Box.Params.DefaultScale())
-
-		//bias
-		nne.Adder.AddBias(Xint, B)
-		fmt.Println(Xint.Blocks[0][0].Scale - nne.Box.Params.DefaultScale())
-		fmt.Println("Level: ", Xint.Blocks[0][0].Level())
-
-		//activation
-		if i != len(nne.Weights)-1 {
-			level = Xint.Blocks[0][0].Level()
-			if level < nne.ReLUApprox[i].LevelsOfAct() {
-				fmt.Println("Bootstrapping for Activation")
-				fmt.Println("pre boot")
-				fmt.Println("Level: ", Xint.Blocks[0][0].Level())
-				//cipherUtils.PrintDebugBlocks(Xint, XintPlain, Box)
-				Btp.Bootstrap(Xint)
-				fmt.Println("after boot")
-				fmt.Println("Level: ", Xint.Blocks[0][0].Level())
-				fmt.Println(Xint.Blocks[0][0].Scale - nne.Box.Params.DefaultScale())
-			}
-			fmt.Println("Activation ")
-
-			nne.Activators[i].ActivateBlocks(Xint)
-			fmt.Println("Level: ", Xint.Blocks[0][0].Level())
-			fmt.Println(Xint.Blocks[0][0].Scale - nne.Box.Params.DefaultScale())
-		}
-	}
-	elapsed := time.Since(now)
-	fmt.Println("Done", elapsed)
-
-	res := cipherUtils.DecInput(Xint, nne.Box)
-	corrects, accuracy, predictions := utils.Predict(Y, labels, res)
-	return utils.Stats{
-		Predictions: predictions,
-		Corrects:    corrects,
-		Accuracy:    accuracy,
-		Time:        elapsed,
-	}
 }

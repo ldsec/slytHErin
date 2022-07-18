@@ -20,7 +20,7 @@ type PackedMatrixLinearLayer struct {
 type cryptonetMD struct {
 	Layers     []*PackedMatrixLinearLayer
 	PmM        []*md.PackedMatrixMultiplier //slice to support parallel threads
-	Activation *utils.MinMaxPolyApprox
+	Activation *utils.ChebyPolyApprox
 
 	innerDim, parallelBatches int
 	maxR, maxC                int
@@ -38,7 +38,7 @@ func PackBatchParallel(X *mat.Dense, innerDim int, params ckks2.Parameters) *md.
 
 //Converts the loaded cryptonet model in its MultiDimentional Packing representation
 //Weights and biases are assumed to be already multiplied with the constant for the activation
-func (sn *cryptonet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols int, weights []*mat.Dense, biases []*mat.Dense, params ckks2.Parameters, ecd ckks2.Encoder, poolsize int) *cryptonetMD {
+func (sn *Cryptonet) ConvertToMDPack(parallelBatches, innerDim, inRows, inCols int, weights []*mat.Dense, biases []*mat.Dense, params ckks2.Parameters, ecd ckks2.Encoder, poolsize int) *cryptonetMD {
 	weightsMD := make([]*md.PackedMatrix, len(weights))
 	biasesMD := make([]*md.PackedMatrix, len(biases))
 
@@ -170,7 +170,7 @@ func (snMD *cryptonetMD) EvalBatchEncrypted_Debug(Y []int, Xenc *md.CiphertextBa
 	fmt.Println("Start level: ", Xenc.Level())
 	for i := range snMD.Layers {
 		layer := snMD.Layers[i]
-		interval := snMD.Activation.Interval
+		interval := snMD.Activation.B - snMD.Activation.A
 		if i == len(snMD.Layers)-1 {
 			interval = 1.0
 		}

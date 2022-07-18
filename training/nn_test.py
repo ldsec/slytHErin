@@ -54,7 +54,7 @@ def soft_relu_approx_np(X):
     return X.numpy()
 
 
-def linear_eval(X, Y, serialized):
+def linear_eval(X, Y, serialized, activation):
     """
         Evaluates the HE friendly pipeline
     """
@@ -71,7 +71,8 @@ def linear_eval(X, Y, serialized):
         dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
         bias.append(np.array(d['bias']['b']))
 
-    act = soft_relu_np
+
+    act = activation
 
     X = X @ conv
 
@@ -116,12 +117,23 @@ def linear_eval(X, Y, serialized):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="nn20, nn50, nn100",type=str)
+    parser.add_argument("--activation", help="poly", nargs='?', const="", type=str)
     args = parser.parse_args()
     device = 'cpu'
     if "nn" not in args.model:
         print("call --model nn20, nn50 or nn100")
         exit()
-    with open(f'./models/{args.model}_packed.json', 'r') as f:
+    try:
+        if "poly" in args.activation:
+            args.activation = "_"+args.activation
+            activation = silu_np
+        else:
+            activation = soft_relu_np
+    except:
+        activation = soft_relu_np
+
+    print(f"Model: {args.model}{args.activation}")
+    with open(f'./models/{args.model}{args.activation}_packed.json', 'r') as f:
         serialized = json.load(f)
     if args.model == "nn20":
         layers = 20
@@ -137,13 +149,13 @@ if __name__=="__main__":
         intervals.append([0, 0])
 
 
-    batchsize = 128
+    batchsize = 512
     dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
     corrects = 0
 
     tot = 0.0
     for X,Y in dataHandler.test_dl:
-        corrects += linear_eval(X.double(),Y.double(),serialized)
+        corrects += linear_eval(X.double(),Y.double(),serialized, activation)
         tot += batchsize
 
     print("Accuracy:")
@@ -157,7 +169,7 @@ if __name__=="__main__":
 
     ## dump intervals
     intervals_json = {'intervals':[{'a': x[0], 'b':x[1]} for x in intervals]}
-    with open(f'./models/nn_{layers}_intervals.json', 'w') as f:
+    with open(f'./models/{args.model}{args.activation}_intervals.json', 'w') as f:
         json.dump(intervals_json, f)
 
 

@@ -38,7 +38,7 @@ func TestFindSplits_CryptoNet(t *testing.T) {
 		DefaultScale: float64(1 << 30),
 	})
 
-	splits := FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
+	splits := FindSplits(40, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 	PrintAllSplits(splits)
 }
 
