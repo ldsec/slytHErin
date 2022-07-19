@@ -130,6 +130,7 @@ if __name__=="__main__":
         else:
             activation = soft_relu_np
     except:
+        args.activation = ""
         activation = soft_relu_np
 
     print(f"Model: {args.model}{args.activation}")

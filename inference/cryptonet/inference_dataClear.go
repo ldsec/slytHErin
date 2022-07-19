@@ -96,9 +96,30 @@ func (cne *CryptonetEnc) EvalBatchWithModelEnc_Debug(X *cU.PlainInput, Xclear *m
 		iAct++
 		*Xclear = tmp2
 	}
+	//client masks its result
+	//mask := cU.DecodeInput(cU.MaskInput(res, cne.Box), cne.Box)
+	//
+	////server decrypts
+	//resP := cU.DecInput(res, cne.Box)
+	//
+	//for i := range resP {
+	//	for j := range resP[i] {
+	//		resP[i][j] -= mask[i][j]
+	//	}
+	//}
+	fmt.Println("Level before masked decryption:", res.Blocks[0][0].Level())
+
+	mask := cU.MaskInputV2(res, cne.Box, 128)
+
+	//server decrypts
+	resP := cU.DecInputNoDecode(res, cne.Box)
+
+	//unmask
+	cU.UnmaskInput(resP, mask, cne.Box)
 	end := time.Since(start)
 	fmt.Println("Done ", end)
-	resPlain := cU.DecInput(res, cne.Box)
+	//resPlain := cU.DecInput(res, cne.Box)
+	resPlain := cU.DecodeInput(resP, cne.Box)
 	corrects, accuracy, predictions := utils.Predict(Y, labels, resPlain)
 
 	return utils.Stats{

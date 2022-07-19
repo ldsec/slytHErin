@@ -6,8 +6,10 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"gonum.org/v1/gonum/mat"
 	"math"
+	"math/big"
 )
 
 type BlocksOperand interface {
@@ -154,6 +156,24 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
+//Decrypts input without decoding nor further transformation
+func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
+
+	Xb := new(PlainInput)
+	Xb.RowP = XEnc.RowP
+	Xb.ColP = XEnc.ColP
+	Xb.InnerRows = XEnc.InnerRows
+	Xb.InnerCols = XEnc.InnerCols
+	Xb.Blocks = make([][]*ckks.Plaintext, Xb.RowP)
+	for i := 0; i < XEnc.RowP; i++ {
+		Xb.Blocks[i] = make([]*ckks.Plaintext, Xb.ColP)
+		for j := 0; j < XEnc.ColP; j++ {
+			Xb.Blocks[i][j] = Box.Decryptor.DecryptNew(XEnc.Blocks[i][j])
+		}
+	}
+	return Xb
+}
+
 //	Given a block input matrix, decrypts and returns the underlying original matrix
 //	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
@@ -282,5 +302,94 @@ func MaskInput(Xenc *EncInput, Box CkksBox) *PlainInput {
 		ColP:      Xenc.ColP,
 		InnerRows: Xenc.InnerRows,
 		InnerCols: Xenc.InnerCols,
+	}
+}
+
+func MaskInputV2(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
+	ringQ := Box.Params.RingQ()
+	level := Xenc.Blocks[0][0].Level()
+	scale := Xenc.Blocks[0][0].Scale
+	logBound := lambda //+ int(math.Ceil(math.Log2(scale)))
+
+	levelQ := level
+
+	// Get the upperbound on the norm
+	// Ensures that bound >= 2^{128+logbound}
+	bound := ring.NewUint(1)
+	bound.Lsh(bound, uint(logBound))
+
+	boundMax := ring.NewUint(ringQ.Modulus[0])
+	for i := 1; i < levelQ+1; i++ {
+		boundMax.Mul(boundMax, ring.NewUint(ringQ.Modulus[i]))
+	}
+
+	var sign int
+
+	sign = bound.Cmp(boundMax)
+
+	if sign == 1 || bound.Cmp(boundMax) == 1 {
+		panic("ciphertext level is not large enough for refresh correctness")
+	}
+
+	boundHalf := new(big.Int).Rsh(bound, 1)
+
+	dslots := 1 << Box.Params.LogSlots()
+	//if ringQ.Type() == ring.Standard {
+	//	dslots *= 2
+	//}
+
+	// Generate the mask in Z[Y] for Y = X^{N/(2*slots)}
+	maskBlocks := make([][]*ckks.Plaintext, Xenc.RowP)
+	for i := 0; i < Xenc.RowP; i++ {
+		maskBlocks[i] = make([]*ckks.Plaintext, Xenc.ColP)
+		for j := 0; j < Xenc.ColP; j++ {
+			maskBigint := make([]*big.Int, dslots)
+			maskBigintNeg := make([]*big.Int, dslots)
+			for i := 0; i < dslots; i++ {
+				maskBigint[i] = ring.RandInt(bound)
+				sign = maskBigint[i].Cmp(boundHalf)
+				if sign == 1 || sign == 0 {
+					maskBigint[i].Sub(maskBigint[i], bound)
+				}
+				maskBigintNeg[i] = new(big.Int)
+				maskBigintNeg[i] = maskBigintNeg[i].Neg(maskBigint[i])
+			}
+			maskPoly := ringQ.NewPoly()
+			ringQ.SetCoefficientsBigintLvl(levelQ, maskBigint[:dslots], maskPoly)
+			ckks.NttAndMontgomeryLvl(levelQ, Box.Params.LogSlots(), ringQ, false, maskPoly)
+			maskPt := ckks.NewPlaintext(Box.Params, level, scale)
+			maskPt.Value = maskPoly
+			maskPt.Value.IsNTT = true
+			maskBlocks[i][j] = maskPt
+
+			maskPoly = ringQ.NewPoly()
+			ringQ.SetCoefficientsBigintLvl(levelQ, maskBigintNeg[:dslots], maskPoly)
+			ckks.NttAndMontgomeryLvl(levelQ, Box.Params.LogSlots(), ringQ, false, maskPoly)
+			maskPtNeg := ckks.NewPlaintext(Box.Params, level, scale)
+			maskPtNeg.Value = maskPoly
+			maskPtNeg.Value.IsNTT = true
+
+			Box.Evaluator.Add(Xenc.Blocks[i][j], maskPtNeg, Xenc.Blocks[i][j])
+		}
+	}
+	return &PlainInput{
+		Blocks:    maskBlocks,
+		RowP:      Xenc.RowP,
+		ColP:      Xenc.ColP,
+		InnerRows: Xenc.InnerRows,
+		InnerCols: Xenc.InnerCols,
+	}
+}
+
+func UnmaskInput(Xmask, mask *PlainInput, Box CkksBox) {
+	//ephemeral secret key
+	kgen := ckks.NewKeyGenerator(Box.Params)
+	skEph := kgen.GenSecretKey()
+	for i := 0; i < Xmask.RowP; i++ {
+		for j := 0; j < Xmask.ColP; j++ {
+			ct := Box.Encryptor.WithKey(skEph).EncryptNew(Xmask.Blocks[i][j])
+			Box.Evaluator.Add(ct, mask.Blocks[i][j], ct)
+			Box.Decryptor.WithKey(skEph).Decrypt(ct, Xmask.Blocks[i][j])
+		}
 	}
 }

@@ -61,7 +61,7 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 
 //returns Box with Evaluator and Bootstrapper if needed
 func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool, splits []BlockSplits) CkksBox {
-	info := ExctractInfo(splits)
+	info, _ := ExctractInfo(splits)
 	rotations := GenRotations(info.InputRows, info.InputCols, info.NumWeights, info.RowsOfWeights, info.ColsOfWeights, info.RowPOfWeights, info.ColPOfWeights, Box.Params, &btpParams)
 
 	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)

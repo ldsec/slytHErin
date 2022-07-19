@@ -41,6 +41,8 @@ if __name__ == '__main__':
         try:
             if "poly" in args.activation:
                 args.activation = "_" + args.activation
+        except:
+            args.activation = ""
         finally:
 
             j_name = f"{args.model}{args.activation}_packed.json"

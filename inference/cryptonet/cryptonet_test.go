@@ -25,8 +25,17 @@ var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
-	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
-	LogP:         []int{42, 42},
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{60, 60},
+	Sigma:        rlwe.DefaultSigma,
+	LogSlots:     13,
+	DefaultScale: float64(1 << 30),
+})
+
+var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	LogN:         14,
+	LogQ:         []int{60, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{44, 44},
 	Sigma:        rlwe.DefaultSigma,
 	LogSlots:     13,
 	DefaultScale: float64(1 << 30),
@@ -133,7 +142,7 @@ func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
 	cn := LoadCryptonet("cryptonet_packed.json")
 	cn.Init()
 
-	params := paramsLogN14
+	params := paramsLogN14Mask
 	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 
 	//params := paramsLogN15
