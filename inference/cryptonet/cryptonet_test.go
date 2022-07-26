@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/data"
+	"github.com/ldsec/dnn-inference/inference/network"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
@@ -42,22 +43,18 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 })
 
 //Model in clear - data encrypted
-func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
-
-	//logN 14 -> 7.6s for 41
-	//83 in 10.5s with logn15
+func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
-	cn := LoadCryptonet("cryptonet_packed.json")
-	cn.Init()
+	loader := new(CNLoader)
+	cn := loader.Load("cryptonet_packed.json")
 
 	params := paramsLogN14
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
-
-	//params := paramsLogN15
-	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)
+	features := 28 * 28
+	rows, cols := cn.GetDimentions()
+	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
 
 	Box := cipherUtils.NewBox(params)
 
@@ -80,12 +77,11 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
 
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-
-		weights, biases := cn.BuildParams(batchSize)
+		cn.Init(batchSize)
 
 		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
-		cne := cn.EncodeCryptonet(weights, biases, splits, Box, poolSize)
+		cne := network.NewHENetwork(cn, splits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
 
 		fmt.Println("Encoded Cryptonet...")
 
@@ -93,14 +89,12 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 		err := datacn.Init(batchSize)
 		utils.ThrowErr(err)
 
-		corrects := 0
-		accuracy := 0.0
+		result := utils.NewStats(batchSize)
+		resultExp := utils.NewStats(batchSize)
 
-		tot := 0
 		iters := 0
 		maxIters := 5
-		var elapsed int64
-		var res utils.Stats
+
 		for true {
 			X, Y, err := datacn.Batch()
 			Xbatch := plainUtils.NewDense(X)
@@ -110,43 +104,47 @@ func TestCryptonetEcd_EvalBatchEncrypted(t *testing.T) {
 			}
 			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xenc, cne.Weights[0].InnerCols, Box)
+			cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
 
 			if !debug {
-				res = cne.EvalBatchEncrypted(Xenc, Y, 10)
+				resHE, end := cne.Eval(Xenc)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
-				wR, bR := cn.RescaleForActivation(weights, biases)
-				res = cne.EvalBatchEncrypted_Debug(Xenc, Xbatch, wR, bR, cn.ReLUApprox, Y, 10)
+				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, cn, 1.0)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				utils.Predict(Y, 10, resClear)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
-			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
-			fmt.Println("Accuracy:", res.Accuracy)
-			corrects += res.Corrects
-			accuracy += res.Accuracy
-			tot += batchSize
-			elapsed += res.Time.Milliseconds()
 			iters++
-			fmt.Println()
 		}
-		fmt.Println("Accuracy:", accuracy/float64(iters))
-		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
+		result.PrintResult()
+		if debug {
+			fmt.Println("Expected")
+			resultExp.PrintResult()
+		}
 	}
 }
 
 //Model encrypted - data in clear
-func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
+func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
-	//logN 14 -> 9.36 for 41
-	var debug = true       //set to true for debug mode
+	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
-	cn := LoadCryptonet("cryptonet_packed.json")
-	cn.Init()
+	loader := new(CNLoader)
+	cn := loader.Load("cryptonet_packed.json")
 
 	params := paramsLogN14Mask
-	possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
-
-	//params := paramsLogN15
-	//possibleSplits := cipherUtils.FindSplits(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params, 0.0, true, true)
+	features := 28 * 28
+	rows, cols := cn.GetDimentions()
+	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
 
 	Box := cipherUtils.NewBox(params)
 
@@ -169,27 +167,24 @@ func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
 
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-
-		weights, biases := cn.BuildParams(batchSize)
+		cn.Init(batchSize)
 
 		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
-		cne := cn.EncryptCryptonet(weights, biases, splits, Box, poolSize)
+		cne := network.NewHENetwork(cn, splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
 
-		fmt.Println("Encrypted Cryptonet...")
+		fmt.Println("Encoded Cryptonet...")
 
 		datacn := data.LoadData("cryptonet_data_nopad.json")
 		err := datacn.Init(batchSize)
 		utils.ThrowErr(err)
 
-		corrects := 0
-		accuracy := 0.0
+		result := utils.NewStats(batchSize)
+		resultExp := utils.NewStats(batchSize)
 
-		tot := 0
 		iters := 0
 		maxIters := 5
-		var elapsed int64
-		var res utils.Stats
+
 		for true {
 			X, Y, err := datacn.Batch()
 			Xbatch := plainUtils.NewDense(X)
@@ -199,24 +194,43 @@ func TestCryptonetEnc_EvalBatchWithModelEnc(t *testing.T) {
 			}
 			Xp, err := cipherUtils.NewPlainInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xp, cne.Weights[0].InnerCols, Box)
+			cipherUtils.PrepackBlocks(Xp, splitInfo.ColsOfWeights[0], Box)
 
 			if !debug {
-				res = cne.EvalBatchWithModelEnc(Xp, Y, 10)
+				resHE, end := cne.Eval(Xp)
+
+				mask := cipherUtils.MaskInputV2(resHE, Box, 128)
+
+				resMasked := cipherUtils.DecInputNoDecode(resHE, Box)
+
+				cipherUtils.UnmaskInput(resMasked, mask, Box)
+
+				fmt.Println("End ", end)
+				resClear := cipherUtils.DecodeInput(resMasked, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
-				wR, bR := cn.RescaleForActivation(weights, biases)
-				res = cne.EvalBatchWithModelEnc_Debug(Xp, Xbatch, wR, bR, cn.ReLUApprox, Y, 10)
+				resHE, resExp, end := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
+
+				mask := cipherUtils.MaskInputV2(resHE, Box, 128)
+
+				resMasked := cipherUtils.DecInputNoDecode(resHE, Box)
+
+				cipherUtils.UnmaskInput(resMasked, mask, Box)
+
+				fmt.Println("End ", end)
+				resClear := cipherUtils.DecodeInput(resMasked, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
-			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
-			fmt.Println("Accuracy:", res.Accuracy)
-			corrects += res.Corrects
-			accuracy += res.Accuracy
-			tot += batchSize
-			elapsed += res.Time.Milliseconds()
 			iters++
-			fmt.Println()
 		}
-		fmt.Println("Accuracy:", accuracy/float64(iters))
-		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
+		result.PrintResult()
+		if debug {
+			fmt.Println("Expected")
+			resultExp.PrintResult()
+		}
 	}
 }

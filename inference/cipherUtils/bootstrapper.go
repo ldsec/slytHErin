@@ -2,11 +2,31 @@ package cipherUtils
 
 import "C"
 import (
+	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"sync"
 )
 
+type IBootstrapper interface {
+	Bootstrap(input *EncInput)
+}
+
+//distributed bootstrapper
+type DistributedBtp struct {
+	master   *distributed.LocalMaster
+	minLevel int
+}
+
+func NewDistributedBootstrapper(master *distributed.LocalMaster, minLevel int) *DistributedBtp {
+	return &DistributedBtp{master: master, minLevel: minLevel}
+}
+
+func (Btp *DistributedBtp) Bootstrap(X *EncInput) {
+	Btp.master.StartProto(distributed.REFRESH, X, nil, Btp.minLevel)
+}
+
+//centralized bootstrapper
 type Bootstrapper struct {
 	poolSize int
 	box      CkksBox

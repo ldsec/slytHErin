@@ -1,9 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"gonum.org/v1/gonum/mat"
-	"time"
 )
 
 /*
@@ -30,15 +30,51 @@ type Layer struct {
 }
 
 type Stats struct {
-	Predictions []int
-	Corrects    int
-	Accuracy    float64
-	Time        time.Duration
+	Iters    int
+	Batch    int
+	Corrects int
+	Accuracy float64
+	Time     int64
+}
+
+func NewStats(batch int) Stats {
+	return Stats{Batch: batch}
+}
+
+func (s *Stats) Accumulate(other Stats) {
+	s.Iters++
+	s.Corrects += other.Corrects
+	s.Accuracy += other.Accuracy
+	s.Time += other.Time
+}
+
+func (s *Stats) PrintResult() {
+	fmt.Println("Results: ")
+	fmt.Printf("Accuracy: %f\n", s.Accuracy/float64(s.Iters))
+	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects/s.Iters*s.Batch)
+	fmt.Printf("Avg Time for Eval: %f\n", float64(s.Time)/float64(s.Iters))
+}
+
+// Returns weight and bias of layer
+func (l *Layer) Build(batchsize int) (*mat.Dense, *mat.Dense) {
+	w := buildKernelMatrix(l.Weight)
+	b := buildBiasMatrix(l.Bias, plainUtils.NumCols(w), batchsize)
+	return w, b
+}
+
+func (l *Layer) BuildWeight() *mat.Dense {
+	w := buildKernelMatrix(l.Weight)
+	return w
+}
+
+func (l *Layer) BuildBias(batchsize int) *mat.Dense {
+	w := buildKernelMatrix(l.Weight)
+	b := buildBiasMatrix(l.Bias, plainUtils.NumCols(w), batchsize)
+	return b
 }
 
 // Returns a matrix M s.t X x M = conv(x,layer), or a dense layer
-func BuildKernelMatrix(k Kernel) *mat.Dense {
-
+func buildKernelMatrix(k Kernel) *mat.Dense {
 	res := mat.NewDense(k.Rows, k.Cols, nil)
 	for i := 0; i < k.Rows; i++ {
 		for j := 0; j < k.Cols; j++ {
@@ -49,7 +85,7 @@ func BuildKernelMatrix(k Kernel) *mat.Dense {
 }
 
 // Compute a matrix containing the bias of the layer, to be added to the result of a Kernel multiplication
-func BuildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
+func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
 	res := mat.NewDense(batchSize, cols, nil)
 	for i := 0; i < batchSize; i++ {
 		res.SetRow(i, plainUtils.Pad(b.B, cols-len(b.B)))

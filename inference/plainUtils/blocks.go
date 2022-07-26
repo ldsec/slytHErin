@@ -8,8 +8,8 @@ import (
 	"sync"
 )
 
+//block matrix
 type BMatrix struct {
-	//block matrix
 	Blocks               [][]*mat.Dense
 	RowP, ColP           int //num of partitions
 	InnerRows, InnerCols int //size of sub-matrixes
@@ -30,11 +30,12 @@ func TransposeBlocks(Bm *BMatrix) *BMatrix {
 	}
 	return Tm
 }
+
+/*
+	Partitions m into a rowPxcolP Block Matrix
+	where each sub-matrix is row(m)/rowP x col(m)/colP
+*/
 func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
-	/*
-		Partitions m into a rowPxcolP Block Matrix
-		where each sub-matrix is row(m)/rowP x col(m)/colP
-	*/
 	rowM, colM := m.Dims()
 	if colM%colP != 0 {
 		return nil, errors.New("Cannot Split Matrix in Blocks!")
@@ -70,8 +71,8 @@ func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 	return &BMatrix{Blocks: Bm, RowP: rowP, ColP: colP, InnerRows: rowS, InnerCols: colS}, nil
 }
 
+//Reconstruct a matrix from block representation
 func ExpandBlocks(Bm *BMatrix) *mat.Dense {
-	//Reconstruct a matrix from block representation
 	m := mat.NewDense(Bm.RowP*Bm.InnerRows, Bm.ColP*Bm.InnerCols, nil)
 	for i := 0; i < NumRows(m); i++ {
 		outerI := i / Bm.InnerRows

@@ -95,7 +95,7 @@ func InitActivationCheby(act string, a, b float64, deg int) *ChebyPolyApprox {
 }
 
 // applies the activation function elementwise. Needs rescaling first
-func ActivatePlain(X *mat.Dense, activation *ChebyPolyApprox) {
+func (activation *ChebyPolyApprox) ActivatePlain(X *mat.Dense) {
 	rows, cols := X.Dims()
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {

@@ -12,34 +12,41 @@ import (
 	"math/big"
 )
 
+// Interface for generic block matrix. In can be a plaintext or ciphertext matrix
 type BlocksOperand interface {
 	GetBlock(i, j int) []ckks.Operand
 	GetPartitions() (int, int)
 	GetInnerDims() (int, int)
+	Level() int
+	Scale() float64
 }
 
+//Encrypted block matrix, to be used for input or bias layer
 type EncInput struct {
 	BlocksOperand
-	//stores an encrypted input block matrix
 	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                  //num of partitions
 	InnerRows  int                  //rows of sub-matrix
 	InnerCols  int
 }
+
+//Plaintext block matrix, to be used for input or bias layer
 type PlainInput struct {
 	BlocksOperand
-	//stores a plaintext input block matrix --> this is used for addition ops
 	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                 //num of partitions
 	InnerRows  int                 //rows of sub-matrix
 	InnerCols  int
 }
 
+//Encrypted matrix in diagonal form
 type EncDiagMat struct {
 	BlocksOperand
 	//store an encrypted weight matrix in diagonal form
 	Diags []*ckks.Ciphertext //enc diagonals
 }
+
+//Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
 	BlocksOperand
 	Blocks     [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
@@ -49,10 +56,14 @@ type EncWeightDiag struct {
 	InnerRows  int //rows of matrix
 	InnerCols  int
 }
+
+//Plaintext matrix in diagonal form
 type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
 	Diags []*ckks.Plaintext //diagonals
 }
+
+//Plaintext block matrix, weight of dense or convolutional layer
 type PlainWeightDiag struct {
 	Blocks     [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP int
@@ -119,6 +130,14 @@ func (X *EncInput) GetInnerDims() (int, int) {
 	return X.InnerRows, X.InnerCols
 }
 
+func (X *EncInput) Level() int {
+	return X.GetBlock(0, 0)[0].Level()
+}
+
+func (X *EncInput) Scale() float64 {
+	return X.GetBlock(0, 0)[0].ScalingFactor()
+}
+
 func (X *PlainInput) GetBlock(i, j int) []ckks.Operand {
 	return []ckks.Operand{X.Blocks[i][j]}
 }
@@ -129,6 +148,14 @@ func (X *PlainInput) GetPartitions() (int, int) {
 
 func (X *PlainInput) GetInnerDims() (int, int) {
 	return X.InnerRows, X.InnerCols
+}
+
+func (X *PlainInput) Level() int {
+	return X.GetBlock(0, 0)[0].Level()
+}
+
+func (X *PlainInput) Scale() float64 {
+	return X.GetBlock(0, 0)[0].ScalingFactor()
 }
 
 //	Given a block input matrix, decrypts and returns the underlying original matrix
@@ -156,7 +183,8 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-//Decrypts input without decoding nor further transformation
+//Decrypts input without decoding nor further transformation, i.e applies transformation:
+//Block_ct(i,j) --> Block_pt(i,j)
 func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
 
 	Xb := new(PlainInput)
@@ -270,6 +298,14 @@ func (W *EncWeightDiag) GetInnerDims() (int, int) {
 	return W.InnerRows, W.InnerCols
 }
 
+func (W *EncWeightDiag) Level() int {
+	return W.GetBlock(0, 0)[0].Level()
+}
+
+func (W *EncWeightDiag) Scale() float64 {
+	return W.GetBlock(0, 0)[0].ScalingFactor()
+}
+
 func (W *PlainWeightDiag) GetBlock(i, j int) []ckks.Operand {
 	v := make([]ckks.Operand, len(W.Blocks[i][j].Diags))
 	for k := range v {
@@ -286,6 +322,15 @@ func (W *PlainWeightDiag) GetInnerDims() (int, int) {
 	return W.InnerRows, W.InnerCols
 }
 
+func (W *PlainWeightDiag) Level() int {
+	return W.GetBlock(0, 0)[0].Level()
+}
+
+func (W *PlainWeightDiag) Scale() float64 {
+	return W.GetBlock(0, 0)[0].ScalingFactor()
+}
+
+//masks input
 func MaskInput(Xenc *EncInput, Box CkksBox) *PlainInput {
 	mask := make([][]*ckks.Plaintext, len(Xenc.Blocks))
 	for i := range Xenc.Blocks {
@@ -305,6 +350,7 @@ func MaskInput(Xenc *EncInput, Box CkksBox) *PlainInput {
 	}
 }
 
+//mask input with lambda bit security
 func MaskInputV2(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
 	ringQ := Box.Params.RingQ()
 	level := Xenc.Blocks[0][0].Level()
@@ -381,6 +427,7 @@ func MaskInputV2(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
 	}
 }
 
+//removes mask from MaskInputV2
 func UnmaskInput(Xmask, mask *PlainInput, Box CkksBox) {
 	//ephemeral secret key
 	kgen := ckks.NewKeyGenerator(Box.Params)

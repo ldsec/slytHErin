@@ -15,20 +15,30 @@ type ActivationPoly struct {
 }
 
 type Activator struct {
-	poly     ActivationPoly
-	box      CkksBox //pool of evaluators to be used
-	isCheby  bool
-	poolSize int
+	poly             []ActivationPoly
+	box              CkksBox //pool of evaluators to be used
+	isCheby          bool
+	poolSize         int
+	NumOfActivations int
 }
 
 type EvalFunc func(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox)
 
 //Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
 //output of the previous linear layer
-func NewActivator(activation *utils.ChebyPolyApprox, level int, scale float64, innerRows, innerCols int, Box CkksBox, poolSize int) (*Activator, error) {
+func NewActivator(numOfActivations int, Box CkksBox, poolSize int) (*Activator, error) {
 	Act := new(Activator)
 	Act.poolSize = poolSize
+	Act.NumOfActivations = numOfActivations
+	Act.poly = make([]ActivationPoly, Act.NumOfActivations)
+	Act.box = Box
+	return Act, nil
+}
+
+func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int) {
 	poly := new(ckks.Polynomial)
+	i := layer
+	Box := Act.box
 	switch activation.ChebyBase {
 	case false:
 		//if not cheby base we extract the const term and add it later so to use a more efficient poly eval without encoder
@@ -39,12 +49,12 @@ func NewActivator(activation *utils.ChebyPolyApprox, level int, scale float64, i
 		for i := range term0vec {
 			term0vec[i] = term0
 		}
-		Act.poly = ActivationPoly{}
+		Act.poly[i] = ActivationPoly{}
 		if poly.Depth() > level {
-			return nil, errors.New("Not enough levels for poly depth")
+			panic(errors.New("Not enough levels for poly depth"))
 		}
-		Act.poly.term0VecEcd = ckks.NewPlaintext(Box.Params, level-poly.Depth(), scale)
-		Box.Encoder.EncodeSlots(term0vec, Act.poly.term0VecEcd, Box.Params.LogSlots())
+		Act.poly[i].term0VecEcd = ckks.NewPlaintext(Box.Params, level-poly.Depth(), scale)
+		Box.Encoder.EncodeSlots(term0vec, Act.poly[i].term0VecEcd, Box.Params.LogSlots())
 
 		//copy the polynomial with the 0 const term without affecting the original poly
 		polyCp := new(ckks.Polynomial)
@@ -52,23 +62,23 @@ func NewActivator(activation *utils.ChebyPolyApprox, level int, scale float64, i
 		polyCp.Coeffs = make([]complex128, len(poly.Coeffs))
 		copy(polyCp.Coeffs, poly.Coeffs)
 		polyCp.Coeffs[0] = complex(0, 0)
-		Act.poly.polynomial = polyCp
-
-		Act.box = Box
-		return Act, nil
+		Act.poly[i].polynomial = polyCp
 
 	case true:
 		Act.isCheby = true
-		Act.poly = ActivationPoly{}
-		Act.poly.polynomial = activation.Poly
-		Act.box = Box
-		return Act, nil
+		Act.poly[i] = ActivationPoly{}
+		Act.poly[i].polynomial = activation.Poly
 	default:
-		return nil, errors.New("Activation of Activators is not a known type")
+		panic(errors.New("Activation of Activator is not a known type"))
 	}
 }
 
-func (Act *Activator) spawnEvaluators(f EvalFunc, X *EncInput, ch chan []int) {
+// returns levels needed for activation at layer
+func (Act *Activator) LevelsOfAct(layer int) int {
+	return Act.poly[layer].polynomial.Depth()
+}
+
+func (Act *Activator) spawnEvaluators(f EvalFunc, poly ActivationPoly, X *EncInput, ch chan []int) {
 	for {
 		coords, ok := <-ch //feed the goroutines
 		if !ok {
@@ -76,23 +86,27 @@ func (Act *Activator) spawnEvaluators(f EvalFunc, X *EncInput, ch chan []int) {
 			return
 		}
 		i, j := coords[0], coords[1]
-		f(X, i, j, Act.poly, Act.box)
+		f(X, i, j, poly, Act.box)
 	}
 }
 
 //Evaluates a polynomial on the ciphertext
-func (Act *Activator) ActivateBlocks(X *EncInput) {
+func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
+	if layer >= Act.NumOfActivations {
+		//no more act -> identity
+		return
+	}
 	var f EvalFunc
 	if !Act.isCheby {
-		f = EvalPolyBlocks
+		f = evalPolyBlocks
 	} else {
-		f = EvalPolyBlocksVector
+		f = evalPolyBlocksVector
 	}
 	if Act.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				f(X, i, j, Act.poly, Act.box)
+				f(X, i, j, Act.poly[layer], Act.box)
 			}
 		}
 	} else if Act.poolSize > 1 {
@@ -102,7 +116,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput) {
 		for i := 0; i < Act.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Act.spawnEvaluators(f, X, ch)
+				Act.spawnEvaluators(f, Act.poly[layer], X, ch)
 				defer wg.Done()
 			}()
 		}
@@ -118,7 +132,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput) {
 }
 
 //Evaluates a polynomial on the ciphertext
-func EvalPolyBlocks(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
+func evalPolyBlocks(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
 	eval := Box.Evaluator.ShallowCopy()
 	ct, _ := eval.EvaluatePoly(X.Blocks[i][j], poly.polynomial, X.Blocks[i][j].Scale)
 	eval.Add(ct, poly.term0VecEcd, ct)
@@ -126,7 +140,7 @@ func EvalPolyBlocks(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
 }
 
 //Evaluates a polynomial on the ciphertext using ckks.Evaluator.EvaluatePolyVector. This should be called via Activator.ActivateBlocks
-func EvalPolyBlocksVector(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
+func evalPolyBlocksVector(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
 	//build map of all slots with legit values
 	eval := Box.Evaluator.ShallowCopy()
 	ecd := Box.Encoder.ShallowCopy()
