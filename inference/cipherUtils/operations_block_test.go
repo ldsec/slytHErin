@@ -136,13 +136,14 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		// we need to rescale the input before the activation
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, 1)
+		Act, _ := NewActivator(1, Box, 1)
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc)
+		Act.ActivateBlocks(Xenc, 0)
 		fmt.Println("Done: ", time.Since(start))
 
-		utils.ActivatePlain(Xscaled, activation) //this automatically rescales the input before activating
+		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
 
 		resPt, _ := pU.PartitionMatrix(Xscaled, Xenc.RowP, Xenc.ColP)
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
@@ -151,33 +152,34 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 	t.Run("Test/Activate/MultiThread", func(t *testing.T) {
 		activation := utils.InitReLU(3)
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
+		// we need to rescale the input before the activation
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, runtime.NumCPU())
+		Act, _ := NewActivator(1, Box, runtime.NumCPU())
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc)
+		Act.ActivateBlocks(Xenc, 0)
 		fmt.Println("Done: ", time.Since(start))
 
-		utils.ActivatePlain(Xscaled, activation)
+		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
 
 		resPt, _ := pU.PartitionMatrix(Xscaled, Xenc.RowP, Xenc.ColP)
-
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 
 	t.Run("Test/Activate/Chebybase", func(t *testing.T) {
 		activation := utils.InitActivationCheby("silu", -5, 5, 10)
-		// we need to rescale the input before the activation
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, 1)
+		Act, _ := NewActivator(1, Box, 1)
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc)
+		Act.ActivateBlocks(Xenc, 0)
 		fmt.Println("Done: ", time.Since(start))
 
-		utils.ActivatePlain(Xscaled, activation)
+		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
 
 		resPt, _ := pU.PartitionMatrix(Xscaled, Xenc.RowP, Xenc.ColP)
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
@@ -185,19 +187,18 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 
 	t.Run("Test/Activate/MultiThread/Chebybase", func(t *testing.T) {
 		activation := utils.InitActivationCheby("silu", -5, 5, 10)
-		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(activation, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box, runtime.NumCPU())
+		Act, _ := NewActivator(1, Box, runtime.NumCPU())
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc)
+		Act.ActivateBlocks(Xenc, 0)
 		fmt.Println("Done: ", time.Since(start))
 
-		utils.ActivatePlain(Xscaled, activation)
+		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
 
 		resPt, _ := pU.PartitionMatrix(Xscaled, Xenc.RowP, Xenc.ColP)
-
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
 }

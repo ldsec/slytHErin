@@ -13,7 +13,7 @@ type CNLoader struct {
 	network.NetworkLoader
 }
 
-func (l *CNLoader) IsInit(network network.INetwork) bool {
+func (l *CNLoader) IsInit(network network.NetworkI) bool {
 	return network.IsInit()
 }
 
@@ -37,7 +37,7 @@ func (cn *CryptoNet) InitActivations() []utils.ChebyPolyApprox {
 	return []utils.ChebyPolyApprox{*approx}
 }
 
-func (l *CNLoader) Load(path string) network.INetwork {
+func (l *CNLoader) Load(path string) network.NetworkI {
 
 	jsonFile, err := os.Open(path)
 	utils.ThrowErr(err)
@@ -58,6 +58,5 @@ func (l *CNLoader) Load(path string) network.INetwork {
 }
 
 func (cn *CryptoNet) NewCryptoNet(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *CryptoNetHE {
-	cnhe := network.NewHENetwork(cn, splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box)
-	return &CryptoNetHE{cnhe}
+	return &CryptoNetHE{cn.NewHE(splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box).(*network.HENetwork)}
 }

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
@@ -41,13 +42,16 @@ type ChebyPolyApprox struct {
 	F         func(x float64) float64
 }
 
-type ApproxInterval struct {
+//Stores interval and degree of approximation in chebychev basis. Deg is set via SetDegOfParam
+type ApproxParam struct {
 	A   float64 `json:"a"`
 	B   float64 `json:"b"`
 	Deg int
 }
-type ApproxIntervals struct {
-	Intervals []ApproxInterval `json:"intervals"`
+
+//Approximation parameters for each layers
+type ApproxParams struct {
+	Params []ApproxParam `json:"intervals"`
 }
 
 // Initialize ReLU with coeffs not in cheby form from Matlab -> used by cryptonet
@@ -129,4 +133,32 @@ func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (wRescaled, bRescaled *m
 	wR := plainUtils.MulByConst(w, mulC)
 	bR := plainUtils.AddConst(plainUtils.MulByConst(b, mulC), addC)
 	return wR, bR
+}
+
+//decides the degree of approximation for each Param
+func SetDegOfParam(Params ApproxParams) ApproxParams {
+	ParamsNew := make([]ApproxParam, len(Params.Params))
+	margin := 2.0
+	for i, Param := range Params.Params {
+		Param.A = math.Floor(Param.A) - margin
+		Param.B = math.Floor(Param.B) + margin
+		diff := Param.B - Param.A
+		if diff <= 2 {
+			Param.Deg = 3
+		} else if diff <= 4 {
+			Param.Deg = 7
+		} else if diff <= 8 {
+			Param.Deg = 15
+		} else if diff <= 16 {
+			Param.Deg = 31
+		} else {
+			Param.Deg = 63
+			if i == 1 { //layer 2
+				Param.Deg = 31
+			}
+		}
+		fmt.Printf("Layer %d Approx: A = %f, B=%f --> deg = %d\n", i+1, Param.A, Param.B, Param.Deg)
+		ParamsNew[i] = Param
+	}
+	return ApproxParams{ParamsNew}
 }

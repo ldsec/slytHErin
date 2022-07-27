@@ -2,6 +2,7 @@ package network
 
 import (
 	"errors"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"gonum.org/v1/gonum/mat"
 )
@@ -9,16 +10,13 @@ import (
 //Custom Network Loader.
 //Exposes the method Load to load model from file and IsInit to verify correct initialization of weights and activation
 type NetworkLoader interface {
-	Load(path string) INetwork
-	IsInit(network INetwork) bool
+	Load(path string) NetworkI
+	IsInit(network NetworkI) bool
 }
 
 //Network loaded from json
-type INetwork interface {
-	//Init activation functions. Needs to be implemented by concrete network
-	InitActivations() []utils.ChebyPolyApprox
-	//Set batchSize. Needed to concretize layers as matrices. Will set init to true
-	Init(batchSize int)
+type NetworkI interface {
+	SetBatch(batchSize int)
 	SetLayers(layers []utils.Layer)
 	SetActivations(activations []utils.ChebyPolyApprox)
 	//returns weights and biases
@@ -29,12 +27,14 @@ type INetwork interface {
 	GetNumOfLayers() int
 	GetNumOfActivations() int
 	GetDimentions() ([]int, []int)
-	//true if network is initialized
+	//true if network is initialized, i.e if batch is defined as well as layers and activations
 	IsInit() bool
 	//true if he version needs bootstrapping at this layer with level = level
 	CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool
 	//computes how many levels are needed to complete the pipeline in he version
 	LevelsToComplete(currLayer int, afterMul bool) int
+	//Creates the HE version of this network
+	NewHE(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI
 }
 
 //Network loaded from json. Implements INetwork. Abstract type
@@ -44,7 +44,6 @@ type Network struct {
 	numOfLayers      int
 	numOfActivations int
 	batchSize        int
-	init             bool
 }
 
 func (n *Network) SetLayers(layers []utils.Layer) {
@@ -68,8 +67,8 @@ func (n *Network) GetNumOfActivations() int {
 }
 
 func (n *Network) GetParams() ([]*mat.Dense, []*mat.Dense) {
-	if n.batchSize == 0 {
-		panic(errors.New("Batchsize not set"))
+	if !n.IsInit() {
+		panic(errors.New("Not init"))
 	}
 	w := make([]*mat.Dense, n.numOfLayers)
 	b := make([]*mat.Dense, n.numOfLayers)
@@ -80,8 +79,8 @@ func (n *Network) GetParams() ([]*mat.Dense, []*mat.Dense) {
 }
 
 func (n *Network) getWeights() []*mat.Dense {
-	if n.batchSize == 0 {
-		panic(errors.New("Batchsize not set"))
+	if n.layers == nil {
+		panic(errors.New("Layers not set"))
 	}
 	w := make([]*mat.Dense, n.numOfLayers)
 	for i := range w {
@@ -95,6 +94,9 @@ func (n *Network) SetBatch(batchSize int) {
 }
 
 func (n *Network) GetParamsRescaled() ([]*mat.Dense, []*mat.Dense) {
+	if !n.IsInit() {
+		panic("Not init")
+	}
 	scaledW := make([]*mat.Dense, len(n.layers))
 	scaledB := make([]*mat.Dense, len(n.layers))
 	for i, l := range n.layers {
@@ -149,11 +151,11 @@ func (n *Network) GetDimentions() ([]int, []int) {
 	return rows, cols
 }
 
-func (n *Network) Init(batchSize int) {
-	n.batchSize = batchSize
-	n.init = n.batchSize != 0 && n.layers != nil && n.activations != nil
+func (n *Network) IsInit() bool {
+	return n.batchSize != 0 && n.layers != nil && n.activations != nil
 }
 
-func (n *Network) IsInit() bool {
-	return n.init
+func (n *Network) NewHE(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
+	nnhe := NewHENetwork(n, splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box)
+	return nnhe
 }

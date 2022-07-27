@@ -53,86 +53,86 @@ var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	RingType:     ring.Standard,
 })
 
-var HETrain = false
+var paramsLogN16, _ = ckks.NewParametersFromLiteral(bootstrapping.N16QP1546H192H32.SchemeParams)
+var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 
-func TestEvalDataEncModelEnc(t *testing.T) {
-	debug := false
-	multithread := true
+var HETrain = false
+var layers = 20 //20 or 50
+
+//Model in clear - data encrypted - centralized btp
+func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
+
+	var debug = false      //set to true for debug mode
+	var multiThread = true //set to true to enable multiple threads
+
+	suffix := "poly"
+	if !HETrain {
+		suffix = ""
+	}
+	path := fmt.Sprintf("nn%d_%s_packed.json", layers, suffix)
+
+	loader := new(NNLoader)
+	nn := loader.Load(path)
+
+	params := paramsLogN16
+	btpParams := btpParamsLogN16
+
+	features := 28 * 28
+	rows, cols := nn.GetDimentions()
+	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+
 	poolSize := 1
-	if multithread {
+	if multiThread {
 		poolSize = runtime.NumCPU()
 	}
-	fmt.Printf("Running on %d threads\n", poolSize)
-	layers := 50 //20 or 50
-
-	nn := LoadNN(layers, HETrain)
-
-	nn.Init(layers, false, HETrain)
-
-	// CRYPTO
-	ckksParams := bootstrapping.N15QP768H192H32.SchemeParams
-	btpParams := bootstrapping.N15QP768H192H32.BootstrappingParams
-	btpCapacity := 2 //param dependent
-	params, err := ckks.NewParametersFromLiteral(ckksParams)
-	utils.ThrowErr(err)
-
-	weightRows := make([]int, layers+1)
-	weightCols := make([]int, layers+1)
-	weightRows[0] = 784
-	weightCols[0] = 676
-	weightRows[1] = 676
-	weightCols[1] = 92
-	for i := 2; i < layers+1; i++ {
-		weightRows[i] = 92
-		weightCols[i] = 92
-	}
-	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params)
 
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
-	for _, splits := range possibleSplits {
-		cipherUtils.PrintSetOfSplits(splits)
-		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
-		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-		fmt.Println("Batch: ", batchSize)
+	cipherUtils.PrintAllSplits(possibleSplits)
 
-		path := fmt.Sprintf("/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	for _, splits := range possibleSplits {
+		fmt.Println()
+		fmt.Println("Trying split: ")
+		fmt.Println()
+		cipherUtils.PrintSetOfSplits(splits)
+
+		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
+
+		batchSize := splitInfo.InputRows * splitInfo.InputRowP
+		nn.SetBatch(batchSize)
 
 		Box := cipherUtils.NewBox(params)
+
+		path := fmt.Sprintf("/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+		fmt.Println("Key path: ", path)
 		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
 			fmt.Println("Creating rotation keys...")
 			Box = cipherUtils.BoxWithSplits(Box, btpParams, true, splits)
 			fmt.Println("Created rotation keys...")
 			cipherUtils.SerializeBox(path, Box)
 		} else {
-			Box = cipherUtils.DesereliazeBox(path, params, btpParams, true)
+			fmt.Println("Reading keys from disk")
+			Box = cipherUtils.DeserealizeBox(path, params, btpParams, true)
 		}
+
 		Btp := cipherUtils.NewBootstrapper(Box, poolSize)
+		cne := nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
 
-		weights, biases := nn.BuildParams(batchSize)
-		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
-		nne, err := nn.EncryptNN(weightsRescaled, biasesRescaled, splits, btpCapacity, -1, Box, poolSize)
+		fmt.Println("Encoded NN...")
+
+		datacn := data.LoadData("nn_data.json")
+		err := datacn.Init(batchSize)
 		utils.ThrowErr(err)
-		//load dataset
-		dataSn := data.LoadData("nn_data.json")
-		err = dataSn.Init(batchSize)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		corrects := 0
-		accuracy := 0.0
 
-		tot := 0
+		result := utils.NewStats(batchSize)
+		resultExp := utils.NewStats(batchSize)
+
 		iters := 0
-		maxIters := 2
+		maxIters := 5
 
-		var elapsed int64
-		var res utils.Stats
 		for true {
-			X, Y, err := dataSn.Batch()
+			X, Y, err := datacn.Batch()
 			Xbatch := plainUtils.NewDense(X)
 			if err != nil || iters >= maxIters {
 				//dataset completed
@@ -140,46 +140,64 @@ func TestEvalDataEncModelEnc(t *testing.T) {
 			}
 			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xenc, nne.Weights[0].InnerCols, Box)
+			cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
+
 			if !debug {
-				res = nne.EvalBatchEncrypted(Xenc, Y, 10, Btp)
+				resHE, end := cne.Eval(Xenc)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
-				res = nne.EvalBatchEncrypted_Debug(Xenc, Y, Xbatch, weights, biases, nn.ReLUApprox, 10, Btp)
+				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				utils.Predict(Y, 10, resClear)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
-			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
-			fmt.Println("Accuracy:", res.Accuracy)
-			corrects += res.Corrects
-			accuracy += res.Accuracy
-			tot += batchSize
-			elapsed += res.Time.Milliseconds()
 			iters++
-			fmt.Println()
 		}
-		fmt.Println("Accuracy:", accuracy/float64(iters))
-		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
+		result.PrintResult()
+		if debug {
+			fmt.Println("Expected")
+			resultExp.PrintResult()
+		}
 	}
 }
 
-func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
-	//NN20
-	//5 parties -> 146 batch in 229s
-	//10 parties ->
-	debug := true
-	multithread := true
+//Model encrypted - data encrypted - distributed bootstrap
+func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
+
+	var debug = false      //set to true for debug mode
+	var multiThread = true //set to true to enable multiple threads
+
+	suffix := "poly"
+	if !HETrain {
+		suffix = ""
+	}
+	path := fmt.Sprintf("nn%d_%s_packed.json", layers, suffix)
+
+	loader := new(NNLoader)
+	nn := loader.Load(path)
+
+	params := paramsLogN14
+
+	features := 28 * 28
+	rows, cols := nn.GetDimentions()
+	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+
 	poolSize := 1
-	if multithread {
+	if multiThread {
 		poolSize = runtime.NumCPU()
 	}
-	fmt.Printf("Running on %d threads\n", poolSize)
-	layers := 20 //20 or 50
 
-	nn := LoadNN(layers, HETrain)
-
-	nn.Init(layers, true, HETrain)
-
-	var params ckks.Parameters
-
-	params = paramsLogN14
+	if len(possibleSplits) == 0 {
+		panic(errors.New("No splits found!"))
+	}
+	cipherUtils.PrintAllSplits(possibleSplits)
 
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
@@ -192,7 +210,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 	parties := 3
 
-	//Create distributed parties
+	//Allocate addresses
 	localhost := "127.0.0.1"
 	partiesAddr := make([]string, parties)
 	for i := 0; i < parties; i++ {
@@ -203,22 +221,6 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 		}
 	}
 
-	weightRows := make([]int, layers+1)
-	weightCols := make([]int, layers+1)
-	weightRows[0] = 784
-	weightCols[0] = 676
-	weightRows[1] = 676
-	weightCols[1] = 92
-	for i := 2; i < layers+1; i++ {
-		weightRows[i] = 92
-		weightCols[i] = 92
-	}
-	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params)
-
-	if len(possibleSplits) == 0 {
-		panic(errors.New("No splits found!"))
-	}
 	for _, splits := range possibleSplits {
 		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
 		cipherUtils.PrintSetOfSplits(splits)
@@ -256,7 +258,7 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			BootStrapper: nil,
 		}
 
-		//start distributed parties
+		//[!] Start distributed parties
 		master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
 		utils.ThrowErr(err)
 		players := make([]*distributed.LocalPlayer, parties-1)
@@ -274,28 +276,23 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 		}
 
-		weights, biases := nn.BuildParams(batchSize)
-		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
-		nne, err := nn.EncryptNN(weightsRescaled, biasesRescaled, splits, -1, minLevel, Box, poolSize)
+		Btp := cipherUtils.NewDistributedBootstrapper(master, poolSize)
+		cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
+
+		fmt.Println("Encryped NN...")
+
+		datacn := data.LoadData("nn_data.json")
+		err = datacn.Init(batchSize)
 		utils.ThrowErr(err)
-		//load dataset
-		dataSn := data.LoadData("nn_data.json")
-		err = dataSn.Init(batchSize)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		corrects := 0
-		accuracy := 0.0
 
-		tot := 0
+		result := utils.NewStats(batchSize)
+		resultExp := utils.NewStats(batchSize)
+
 		iters := 0
-		maxIters := 2
+		maxIters := 5
 
-		var elapsed int64
-		var res utils.Stats
 		for true {
-			X, Y, err := dataSn.Batch()
+			X, Y, err := datacn.Batch()
 			Xbatch := plainUtils.NewDense(X)
 			if err != nil || iters >= maxIters {
 				//dataset completed
@@ -303,135 +300,42 @@ func TestEvalDataEncModelEnc_Distributed(t *testing.T) {
 			}
 			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xenc, nne.Weights[0].InnerCols, Box)
+			cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
+
 			if !debug {
-				res = nne.EvalBatchEncrypted_Distributed(Xenc, Y, 10, pkQ, decQ, minLevel, master)
+				resHE, end := cne.Eval(Xenc)
+
+				fmt.Println("Key Switch to querier public key")
+				master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+				fmt.Println("End", end)
+				//Switch to Dec of Querier
+				Box.Decryptor = decQ
+				resClear := cipherUtils.DecInput(resHE, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
-				res = nne.EvalBatchEncrypted_Distributed_Debug(Xenc, Y, Xbatch, weights, biases, nn.ReLUApprox, 10, pkQ, decQ, minLevel, master)
+				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+
+				fmt.Println("Key Switch to querier public key")
+				master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+				fmt.Println("End", end)
+				//Switch to Dec of Querier
+				Box.Decryptor = decQ
+				resClear := cipherUtils.DecInput(resHE, Box)
+				utils.Predict(Y, 10, resClear)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
-			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
-			fmt.Println("Accuracy:", res.Accuracy)
-			corrects += res.Corrects
-			accuracy += res.Accuracy
-			tot += batchSize
-			elapsed += res.Time.Milliseconds()
 			iters++
-			fmt.Println()
 		}
-		fmt.Println("Accuracy:", accuracy/float64(iters))
-		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
-	}
-}
-
-//MODEL IN CLEAR
-
-func TestEvalDataEncModelClear(t *testing.T) {
-	debug := true
-	multithread := true
-	poolSize := 1
-	if multithread {
-		poolSize = runtime.NumCPU()
-	}
-	fmt.Printf("Running on %d threads\n", poolSize)
-	layers := 50 //20 or 50
-
-	nn := LoadNN(layers, HETrain)
-
-	nn.Init(layers, false, HETrain)
-
-	// CRYPTO
-	ckksParams := bootstrapping.N16QP1546H192H32.SchemeParams
-	btpParams := bootstrapping.N16QP1546H192H32.BootstrappingParams
-	//btpCapacity := 2 //param dependent
-	btpCapacity := 9
-	params, err := ckks.NewParametersFromLiteral(ckksParams)
-	utils.ThrowErr(err)
-
-	weightRows := make([]int, layers+1)
-	weightCols := make([]int, layers+1)
-	weightRows[0] = 784
-	weightCols[0] = 676
-	weightRows[1] = 676
-	weightCols[1] = 92
-	for i := 2; i < layers+1; i++ {
-		weightRows[i] = 92
-		weightCols[i] = 92
-	}
-	weightCols[layers] = 10
-	possibleSplits := cipherUtils.FindSplits(-1, 784, weightRows, weightCols, params)
-
-	//path := fmt.Sprintf("/nn%d_centralized_logN%d_logQP%d", layers, params.LogN(), params.LogQ()+params.LogP())
-
-	if len(possibleSplits) == 0 {
-		panic(errors.New("No splits found!"))
-	}
-	for _, splits := range possibleSplits {
-		cipherUtils.PrintSetOfSplits(splits)
-		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
-		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-		fmt.Println("Batch: ", batchSize)
-		Box := cipherUtils.NewBox(params)
-
-		path := fmt.Sprintf("/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
-
-		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
-			fmt.Println("Creating rotation keys...")
-			Box = cipherUtils.BoxWithSplits(Box, btpParams, true, splits)
-			fmt.Println("Created rotation keys...")
-			cipherUtils.SerializeBox(path, Box)
-		} else {
-			Box = cipherUtils.DesereliazeBox(path, params, btpParams, true)
+		result.PrintResult()
+		if debug {
+			fmt.Println("Expected")
+			resultExp.PrintResult()
 		}
-
-		Btp := cipherUtils.NewBootstrapper(Box, poolSize)
-
-		weights, biases := nn.BuildParams(batchSize)
-		weightsRescaled, biasesRescaled := nn.RescaleWeightsForActivation(weights, biases)
-		fmt.Println("Encoding NN...")
-		nne, err := nn.EncodeNN(weightsRescaled, biasesRescaled, splits, btpCapacity, -1, Box, poolSize)
-		utils.ThrowErr(err)
-		fmt.Println("Encoded NN...")
-		//load dataset
-		dataSn := data.LoadData("nn_data.json")
-		err = dataSn.Init(batchSize)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		corrects := 0
-		accuracy := 0.0
-
-		tot := 0
-		iters := 0
-		maxIters := 2
-
-		var elapsed int64
-		var res utils.Stats
-		for true {
-			X, Y, err := dataSn.Batch()
-			Xbatch := plainUtils.NewDense(X)
-			if err != nil || iters >= maxIters {
-				//dataset completed
-				break
-			}
-			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
-			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xenc, nne.Weights[0].InnerCols, Box)
-			if !debug {
-				res = nne.EvalBatchEncrypted(Xenc, Y, 10, Btp)
-			} else {
-				res = nne.EvalBatchEncrypted_Debug(Xenc, Y, Xbatch, weights, biases, nn.ReLUApprox, 10, Btp)
-			}
-			fmt.Println("Corrects/Tot:", res.Corrects, "/", batchSize)
-			fmt.Println("Accuracy:", res.Accuracy)
-			corrects += res.Corrects
-			accuracy += res.Accuracy
-			tot += batchSize
-			elapsed += res.Time.Milliseconds()
-			iters++
-			fmt.Println()
-		}
-		fmt.Println("Accuracy:", accuracy/float64(iters))
-		fmt.Println("Latency(avg ms per batch):", float64(elapsed)/float64(iters))
 	}
 }

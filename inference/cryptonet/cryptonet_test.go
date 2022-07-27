@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/data"
-	"github.com/ldsec/dnn-inference/inference/network"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
@@ -77,12 +76,11 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
 
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-		cn.Init(batchSize)
+		cn.SetBatch(batchSize)
 
 		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
-		cne := network.NewHENetwork(cn, splits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
-
+		cne := cn.NewHE(splits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
 		fmt.Println("Encoded Cryptonet...")
 
 		datacn := data.LoadData("cryptonet_data_nopad.json")
@@ -167,11 +165,11 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
 
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-		cn.Init(batchSize)
+		cn.SetBatch(batchSize)
 
 		Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
 
-		cne := network.NewHENetwork(cn, splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
+		cne := cn.NewHE(splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
 
 		fmt.Println("Encoded Cryptonet...")
 

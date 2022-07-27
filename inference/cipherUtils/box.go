@@ -12,8 +12,8 @@ import (
 	"os"
 )
 
+//wrapper for the classes needed to perform encrypted operations, like a crypto-ToolBox
 type CkksBox struct {
-	//wrapper for the classes needed to perform encrypted operations, like a crypto-ToolBox
 	Params       ckks.Parameters
 	Encoder      ckks.Encoder
 	Evaluator    ckks.Evaluator
@@ -97,6 +97,7 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams boot
 	return Box
 }
 
+//Generates rotatiosns needed for pipeline. Takes input features, as well inner rows,cols and partitions of weights as block matrices
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
 	if btpParams != nil {
@@ -253,7 +254,7 @@ func SerializeBox(path string, Box CkksBox) {
 }
 
 //loads serialized keys from disk into a fresh box
-func DesereliazeBox(path string, params ckks.Parameters, btpParams bootstrapping.Parameters, withBtp bool) CkksBox {
+func DeserealizeBox(path string, params ckks.Parameters, btpParams bootstrapping.Parameters, withBtp bool) CkksBox {
 	fmt.Println("Reading keys from disk: ", path)
 	dat, err := os.ReadFile(path + "_sk")
 	utils.ThrowErr(err)

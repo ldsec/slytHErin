@@ -11,12 +11,20 @@ import (
 )
 
 type HENetworkI interface {
+	//Evaluates batch. Treats each layer l as: Act[l](X * weight[l] + bias[l])
 	Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration)
-	EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense, network Network)
-	CheckLvlAtLayer(level, layer int, forAct, afterMul bool) bool
+	//Evaluates batch with debug statements. Needs the batch in clear and the network in cleartext.
+	//Additionally needs the max L1 norm of the difference allowed for each intermediate result, elementwise.
+	//If difference is > L1Thresh, it panics
+	EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense, network NetworkI, L1thresh float64) (*cipherUtils.EncInput, *mat.Dense, time.Duration)
+	//Checks if ciphertext at current level, for layer layer, needs bootstrap (true) or not
+	//afterMul: if already multiplied by weight
+	//forAct: if before activation
+	CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool
+	//Returns number of levels requested to complete pipeline from current layer
+	//afterMul: if already multiplied by weight
 	LevelsToComplete(currLayer int, afterMul bool) int
 	IsInit() bool
-	GetDimentions()
 }
 
 // Network for HE, either in clear or encrypted
@@ -40,7 +48,7 @@ type HENetwork struct {
 
 // Creates a new network for he inference
 // Needs splits of input and weights and loaded network from json
-func NewHENetwork(network INetwork, splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *HENetwork {
+func NewHENetwork(network NetworkI, splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
 	if !network.IsInit() {
 		panic("Netowrk in clear is not initialized")
 	}
@@ -153,7 +161,7 @@ func (n *HENetwork) IsInit() bool {
 
 //computes how many levels are needed to complete the pipeline in he version
 func (n *HENetwork) LevelsToComplete(currLayer int, afterMul bool) int {
-	if !n.init {
+	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
 	}
 	levelsNeeded := 0
@@ -173,7 +181,7 @@ func (n *HENetwork) LevelsToComplete(currLayer int, afterMul bool) int {
 
 //true if he version needs bootstrapping at this layer with level = level
 func (n *HENetwork) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool {
-	if !n.init {
+	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
 	}
 	levelsOfAct := 0
@@ -183,7 +191,6 @@ func (n *HENetwork) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul
 	return (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel) && level < n.LevelsToComplete(layer, afterMul)
 }
 
-//Evaluates batch
 func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")
@@ -228,10 +235,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	return res, time.Since(start)
 }
 
-//Evaluates batch with debug statements. Needs the batch in clear and the network in cleartext.
-//Additionally needs the max L1 norm of the difference allowed for each intermediate result, elementwise.
-//If difference is > L1Thresh, it panics
-func (n *HENetwork) EvalDebug(X cipherUtils.BlocksOperand, Xclear *mat.Dense, network INetwork, L1thresh float64) (*cipherUtils.EncInput, *mat.Dense, time.Duration) {
+func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense, network NetworkI, L1thresh float64) (*cipherUtils.EncInput, *mat.Dense, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")
 	}
@@ -239,7 +243,7 @@ func (n *HENetwork) EvalDebug(X cipherUtils.BlocksOperand, Xclear *mat.Dense, ne
 	start := time.Now()
 
 	var prepack bool
-	level := X.Level()
+	level := Xenc.Level()
 	res := new(cipherUtils.EncInput)
 
 	resClear := Xclear
@@ -257,7 +261,7 @@ func (n *HENetwork) EvalDebug(X cipherUtils.BlocksOperand, Xclear *mat.Dense, ne
 
 		if i == 0 {
 			prepack = false
-			res = n.Multiplier.Multiply(X, n.Weights[i], prepack)
+			res = n.Multiplier.Multiply(Xenc, n.Weights[i], prepack)
 		} else {
 			prepack = true
 			res = n.Multiplier.Multiply(res, n.Weights[i], prepack)
