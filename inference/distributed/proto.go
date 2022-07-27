@@ -3,9 +3,7 @@ package distributed
 import (
 	"encoding/json"
 	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/dckks"
 	"github.com/tuneinsight/lattigo/v3/drlwe"
-	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"sync"
 )
 
@@ -16,12 +14,11 @@ type ProtocolType int16
 const (
 	CKSWITCH ProtocolType = iota
 	REFRESH  ProtocolType = iota
+	MASKING  ProtocolType = iota
 	END      ProtocolType = iota
 )
 
-/*
-	Dummy version of distributed protocols using channels for communication
-*/
+//Wrapper for distributed key switch or refresh
 type Protocol struct {
 	Protocol     interface{}      //instance of protocol
 	Crp          drlwe.CKSCRP     //Common reference poly if any
@@ -30,6 +27,14 @@ type Protocol struct {
 	Shares       []interface{}         //collects shares from parties
 	Completion   int                   //counter to completion
 	FeedbackChan chan *ckks.Ciphertext //final result of protocol
+}
+
+//Masking protocol for scenario data clear - model encrypted
+type MaskProtocol struct {
+	Ct           *ckks.Ciphertext //ct to be blindly decrypted
+	Mask         *ckks.Plaintext  //used for masking
+	Pt           *ckks.Plaintext  //result of decryption by server
+	FeedbackChan chan *ckks.Plaintext
 }
 
 //Extension for PCKS
@@ -54,41 +59,13 @@ type ProtocolMsg struct {
 	Extension interface{} `json:"extension"`
 }
 
+//Used by players for replying to master
 type ProtocolResp struct {
 	ProtoId  int          `json:"protoId"`
 	Type     ProtocolType `json:"type"`
 	PlayerId int          `json:"playerId"`
 	Share    []byte       `json:"share"`
 }
-
-type DummyMaster struct {
-	ProtoBuf *sync.Map //ct id -> protocol instance *DummyProtocol
-	sk       *rlwe.SecretKey
-	Cpk      *rlwe.PublicKey
-	Params   ckks.Parameters
-	Parties  int
-	//full duplex comm
-	M2PChans []chan []byte //master to players
-	P2MChans []chan []byte //players to master
-
-	//for Ending
-	runningMux    sync.RWMutex
-	runningProtos int       //counter for how many protos are running
-	Done          chan bool //flag caller that master is done with all instances
-}
-
-type DummyPlayer struct {
-	PCKS           *dckks.PCKSProtocol    //PubKeySwitch
-	BTP            *dckks.RefreshProtocol //Bootstrap
-	sk             *rlwe.SecretKey
-	Cpk            *rlwe.PublicKey
-	Params         ckks.Parameters
-	Id             int
-	ToMasterChan   chan []byte
-	FromMasterChan chan []byte
-}
-
-type Handler func(c chan []byte)
 
 //HELPERS
 func MarshalCrp(crp drlwe.CKSCRP) ([]byte, error) {

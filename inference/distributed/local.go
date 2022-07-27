@@ -90,9 +90,10 @@ type LocalMaster struct {
 	//for Ending
 	runningMux    sync.RWMutex
 	runningProtos int //counter for how many protos are running
-	poolSize      int //bound on parallel protocols
-	Box           cipherUtils.CkksBox
-	Done          chan bool //flag caller that master is done with all instances
+
+	poolSize int //bound on parallel protocols
+	Box      cipherUtils.CkksBox
+	Done     chan bool //flag caller that master is done with all instances
 }
 
 type LocalPlayer struct {
@@ -168,6 +169,7 @@ func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput,
 	var err error
 	if proto == END {
 		lmst.InitProto(proto, nil, nil, -1)
+		return
 	}
 	if lmst.poolSize == 1 {
 		//single threaded
