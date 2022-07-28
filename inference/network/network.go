@@ -48,10 +48,12 @@ type Network struct {
 
 func (n *Network) SetLayers(layers []utils.Layer) {
 	n.layers = layers
+	n.numOfLayers = len(layers)
 }
 
 func (n *Network) SetActivations(activations []utils.ChebyPolyApprox) {
 	n.activations = activations
+	n.numOfActivations = len(activations)
 }
 
 func (n *Network) GetActivations() []utils.ChebyPolyApprox {

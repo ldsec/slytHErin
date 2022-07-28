@@ -137,12 +137,13 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 	var err error
 	player.Addr, err = net.ResolveTCPAddr("tcp", addr)
-	utils.ThrowErr(err)
 	listener, err := net.Listen("tcp", player.Addr.String())
-	utils.ThrowErr(err)
+
 	listener = Network.Listener(listener)
 	player.Conn = listener.(net.Listener)
-	return player, nil
+	go player.listen()
+
+	return player, err
 }
 
 //MASTER PROTOCOL
@@ -159,7 +160,7 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 		if proto == REFRESH && X.Blocks[i][j].Level() > minLevel {
 			lmst.Box.Evaluator.ShallowCopy().DropLevel(X.Blocks[i][j], X.Blocks[i][j].Level()-minLevel)
 		}
-		X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
+		X.Blocks[i][j], err = lmst.initProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
 		utils.ThrowErr(err)
 	}
 }
@@ -168,14 +169,14 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int) {
 	var err error
 	if proto == END {
-		lmst.InitProto(proto, nil, nil, -1)
+		lmst.initProto(proto, nil, nil, -1)
 		return
 	}
 	if lmst.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				X.Blocks[i][j], err = lmst.InitProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
+				X.Blocks[i][j], err = lmst.initProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
 				utils.ThrowErr(err)
 			}
 		}
@@ -204,7 +205,7 @@ func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput,
 }
 
 //initiate protocol instance
-func (lmst *LocalMaster) InitProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
+func (lmst *LocalMaster) initProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
 	switch proto {
 	case CKSWITCH:
 		//prepare PubKeySwitch
@@ -468,7 +469,7 @@ func (lmst *LocalMaster) DispatchRef(resp ProtocolResp) {
 //PLAYERS PROTOCOL
 
 //Accepts an incoming TCP connection and handles it (blocking)
-func (lp *LocalPlayer) Listen() {
+func (lp *LocalPlayer) listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
 		c, err := lp.Conn.Accept()

@@ -54,6 +54,8 @@ func NewServer(Box cipherUtils.CkksBox, addr string) (*Server, error) {
 	listener, err := net.Listen("tcp", server.Addr.String())
 	listener = Network.Listener(listener)
 	server.Conn = listener.(net.Listener)
+	server.Box = Box
+	go server.listen()
 	return server, err
 }
 
@@ -68,7 +70,7 @@ func (Cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.Plai
 			return
 		}
 		i, j := coords[0], coords[1]
-		res.Blocks[i][j], err = Cl.InitProto(proto, X.Blocks[i][j], i*X.ColP+j)
+		res.Blocks[i][j], err = Cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
 		utils.ThrowErr(err)
 	}
 }
@@ -77,7 +79,7 @@ func (Cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.Plai
 func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *cipherUtils.PlainInput {
 	var err error
 	if proto == END {
-		Cl.InitProto(proto, nil, -1)
+		Cl.initProto(proto, nil, -1)
 		return nil
 	}
 	res := &cipherUtils.PlainInput{
@@ -94,7 +96,7 @@ func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				res.Blocks[i][j], err = Cl.InitProto(proto, X.Blocks[i][j], i*X.ColP+j)
+				res.Blocks[i][j], err = Cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
 				utils.ThrowErr(err)
 			}
 		}
@@ -124,7 +126,7 @@ func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 }
 
 //initiate protocol instance
-func (Cl *Client) InitProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (*ckks.Plaintext, error) {
+func (Cl *Client) initProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (*ckks.Plaintext, error) {
 	switch proto {
 	case MASKING:
 		Cl.ProtoBuf.Store(ctId, &MaskProtocol{
@@ -237,7 +239,7 @@ func (Cl *Client) DispatchMasking(resp ProtocolMsg) {
 //Server PROTOCOL
 
 //Accepts an incoming TCP connection and handles it (blocking)
-func (s *Server) Listen() {
+func (s *Server) listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
 		c, err := s.Conn.Accept()

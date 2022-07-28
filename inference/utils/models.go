@@ -51,8 +51,8 @@ func (s *Stats) Accumulate(other Stats) {
 func (s *Stats) PrintResult() {
 	fmt.Println("Results: ")
 	fmt.Printf("Accuracy: %f\n", s.Accuracy/float64(s.Iters))
-	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects/s.Iters*s.Batch)
-	fmt.Printf("Avg Time for Eval: %f\n", float64(s.Time)/float64(s.Iters))
+	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects, s.Iters*s.Batch)
+	fmt.Printf("Avg Time for Eval: %f\n ms", float64(s.Time)/float64(s.Iters))
 }
 
 // Returns weight and bias of layer

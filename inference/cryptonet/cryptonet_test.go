@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/data"
+	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
@@ -44,7 +45,7 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 //Model in clear - data encrypted
 func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
@@ -109,6 +110,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 				fmt.Println("End", end)
 				resClear := cipherUtils.DecInput(resHE, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
 				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, cn, 1.0)
@@ -116,8 +118,10 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 				resClear := cipherUtils.DecInput(resHE, Box)
 				utils.Predict(Y, 10, resClear)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				fmt.Println("Accuracy Expected: ", accuracy)
 				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
 			iters++
@@ -130,7 +134,8 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	}
 }
 
-//Model encrypted - data in clear
+//Model encrypted - data in clear. In this scenario the model is sent by server to the client
+//Server offers a decryption service
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
 	var debug = false      //set to true for debug mode
@@ -156,6 +161,12 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	}
 	cipherUtils.PrintAllSplits(possibleSplits)
 
+	serverAddr := "127.0.0.1:8001"
+	client, err := distributed.NewClient(serverAddr, Box, poolSize)
+	utils.ThrowErr(err)
+	_, err = distributed.NewServer(Box, serverAddr)
+	utils.ThrowErr(err)
+
 	for _, splits := range possibleSplits {
 		fmt.Println()
 		fmt.Println("Trying split: ")
@@ -171,7 +182,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
 		cne := cn.NewHE(splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
 
-		fmt.Println("Encoded Cryptonet...")
+		fmt.Println("Encrypted Cryptonet...")
 
 		datacn := data.LoadData("cryptonet_data_nopad.json")
 		err := datacn.Init(batchSize)
@@ -196,31 +207,22 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
 			if !debug {
 				resHE, end := cne.Eval(Xp)
-
-				mask := cipherUtils.MaskInputV2(resHE, Box, 128)
-
-				resMasked := cipherUtils.DecInputNoDecode(resHE, Box)
-
-				cipherUtils.UnmaskInput(resMasked, mask, Box)
-
+				resMasked := client.StartProto(distributed.MASKING, resHE)
 				fmt.Println("End ", end)
+
 				resClear := cipherUtils.DecodeInput(resMasked, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			} else {
 				resHE, resExp, end := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
-
-				mask := cipherUtils.MaskInputV2(resHE, Box, 128)
-
-				resMasked := cipherUtils.DecInputNoDecode(resHE, Box)
-
-				cipherUtils.UnmaskInput(resMasked, mask, Box)
-
+				resMasked := client.StartProto(distributed.MASKING, resHE)
 				fmt.Println("End ", end)
+
 				resClear := cipherUtils.DecodeInput(resMasked, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
-				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				fmt.Println("Accuracy Expected: ", accuracy)
 				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
 			iters++

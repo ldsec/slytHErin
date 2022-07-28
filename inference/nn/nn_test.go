@@ -265,7 +265,6 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		//start players
 		for i := 0; i < parties-1; i++ {
 			players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1])
-			go players[i].Listen()
 			utils.ThrowErr(err)
 		}
 

@@ -34,7 +34,7 @@ type CryptoNetHE struct {
 
 func (cn *CryptoNet) InitActivations() []utils.ChebyPolyApprox {
 	approx := utils.InitReLU(3)
-	return []utils.ChebyPolyApprox{*approx}
+	return []utils.ChebyPolyApprox{*approx, *approx}
 }
 
 func (l *CNLoader) Load(path string) network.NetworkI {
