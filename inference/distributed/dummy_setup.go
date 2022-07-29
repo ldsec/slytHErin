@@ -131,6 +131,12 @@ func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.Ro
 }
 
 func DeserializeKeys(path string, parties int) (sk *rlwe.SecretKey, skShares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet) {
+	sk = new(rlwe.SecretKey)
+	rtks = new(rlwe.RotationKeySet)
+	skShares = make([]*rlwe.SecretKey, parties)
+	for i := range skShares {
+		skShares[i] = new(rlwe.SecretKey)
+	}
 	fmt.Println("Reading keys from disk: ", path)
 	dat, err := os.ReadFile(path + "_sk")
 	utils.ThrowErr(err)

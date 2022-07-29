@@ -8,10 +8,9 @@ import (
 )
 
 //Custom Network Loader.
-//Exposes the method Load to load model from file and IsInit to verify correct initialization of weights and activation
+//Exposes the method Load to load model from file
 type NetworkLoader interface {
 	Load(path string) NetworkI
-	IsInit(network NetworkI) bool
 }
 
 //Network loaded from json

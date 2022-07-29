@@ -56,20 +56,20 @@ var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 var paramsLogN16, _ = ckks.NewParametersFromLiteral(bootstrapping.N16QP1546H192H32.SchemeParams)
 var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 
-var HETrain = false
-var layers = 20 //20 or 50
+var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
+var layers = 20    //20 or 50
 
 //Model in clear - data encrypted - centralized btp
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
-	suffix := "poly"
+	suffix := "_poly"
 	if !HETrain {
 		suffix = ""
 	}
-	path := fmt.Sprintf("nn%d_%s_packed.json", layers, suffix)
+	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	loader := new(NNLoader)
 	nn := loader.Load(path)
@@ -104,7 +104,7 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 
 		Box := cipherUtils.NewBox(params)
 
-		path := fmt.Sprintf("/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+		path := fmt.Sprintf("nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 		fmt.Println("Key path: ", path)
 		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
 			fmt.Println("Creating rotation keys...")
@@ -174,11 +174,11 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
-	suffix := "poly"
+	suffix := "_poly"
 	if !HETrain {
 		suffix = ""
 	}
-	path := fmt.Sprintf("nn%d_%s_packed.json", layers, suffix)
+	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	loader := new(NNLoader)
 	nn := loader.Load(path)
@@ -225,6 +225,7 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
 		cipherUtils.PrintSetOfSplits(splits)
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
+		nn.SetBatch(batchSize)
 
 		path := fmt.Sprintf("nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
@@ -233,19 +234,23 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		skShares := make([]*rlwe.SecretKey, parties)
 		pkP := new(rlwe.PublicKey)
 		rtks := new(rlwe.RotationKeySet)
+		rlk := new(rlwe.RelinearizationKey)
 		kgenP := ckks.NewKeyGenerator(params)
 
 		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
 			skShares, skP, pkP, kgenP = distributed.DummyEncKeyGen(params, crs, parties)
+			rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+
+			rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, splitInfo.RowPOfWeights, splitInfo.ColPOfWeights, params, nil)
+			rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
+
+			distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
 		} else {
 			skP, skShares, rtks = distributed.DeserializeKeys(path, parties) //read from file
+			kgenP = ckks.NewKeyGenerator(params)
+			pkP = kgenP.GenPublicKey(skP)
+			rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
 		}
-		rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
-
-		rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, splitInfo.RowPOfWeights, splitInfo.ColPOfWeights, params, nil)
-		rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
-
-		distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
 
 		decP := ckks.NewDecryptor(params, skP)
 
@@ -275,7 +280,7 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 			utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 		}
 
-		Btp := cipherUtils.NewDistributedBootstrapper(master, poolSize)
+		Btp := distributed.NewDistributedBootstrapper(master, poolSize)
 		cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
 
 		fmt.Println("Encryped NN...")
@@ -312,7 +317,9 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 				Box.Decryptor = decQ
 				resClear := cipherUtils.DecInput(resHE, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+
 			} else {
 				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
 
@@ -325,8 +332,10 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 				resClear := cipherUtils.DecInput(resHE, Box)
 				utils.Predict(Y, 10, resClear)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				fmt.Println("Accuracy Expected: ", accuracy)
 				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
 			iters++

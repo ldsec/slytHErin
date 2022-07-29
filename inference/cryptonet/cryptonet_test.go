@@ -221,6 +221,8 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
 				resClear := cipherUtils.DecodeInput(resMasked, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
 				fmt.Println("Accuracy Expected: ", accuracy)
 				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})

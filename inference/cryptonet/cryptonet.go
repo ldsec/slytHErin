@@ -13,10 +13,6 @@ type CNLoader struct {
 	network.NetworkLoader
 }
 
-func (l *CNLoader) IsInit(network network.NetworkI) bool {
-	return network.IsInit()
-}
-
 //json wrapper
 type cryptonet struct {
 	Conv1 utils.Layer `json:"conv1"`

@@ -47,16 +47,15 @@ func (nn *NN) InitActivations(layers int, HEtrain bool) []utils.ChebyPolyApprox 
 		act = "soft relu"
 	}
 	jsonFile, err := os.Open(fmt.Sprintf("nn%d%s_intervals.json", layers, suffix))
-	if err != nil { //|| !distributedBtp {
-		defer jsonFile.Close()
-		byteValue, _ := ioutil.ReadAll(jsonFile)
-		var intervals utils.ApproxParams
-		json.Unmarshal([]byte(byteValue), &intervals)
-		intervals = utils.SetDegOfParam(intervals)
-		for i := range intervals.Params {
-			interval := intervals.Params[i]
-			activations[i] = *utils.InitActivationCheby(act, interval.A, interval.B, interval.Deg)
-		}
+	utils.ThrowErr(err)
+	defer jsonFile.Close()
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	var intervals utils.ApproxParams
+	json.Unmarshal([]byte(byteValue), &intervals)
+	intervals = utils.SetDegOfParam(intervals)
+	for i := range intervals.Params {
+		interval := intervals.Params[i]
+		activations[i] = *utils.InitActivationCheby(act, interval.A, interval.B, interval.Deg)
 	}
 	return activations
 }

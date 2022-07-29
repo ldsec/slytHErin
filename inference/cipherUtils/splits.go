@@ -285,7 +285,7 @@ func ExctractInfo(splits []BlockSplits) (SplitsInfo, string) {
 	buf, _ := json.Marshal(info)
 	hasher := sha1.New()
 	hasher.Write(buf)
-	code := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	code := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
 	return info, code
 }
 

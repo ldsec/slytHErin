@@ -202,6 +202,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	level := X.Level()
 	res := new(cipherUtils.EncInput)
 	for i := 0; i < n.NumOfLayers; i++ {
+		fmt.Println("Layer ", i+1)
 		if n.CheckLvlAtLayer(level, n.MinLevel, i, false, false) {
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
@@ -252,6 +253,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 	activations := network.GetActivations()
 
 	for i := 0; i < n.NumOfLayers; i++ {
+		fmt.Println("Layer ", i+1)
 		if n.CheckLvlAtLayer(level, n.MinLevel, i, false, false) {
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
