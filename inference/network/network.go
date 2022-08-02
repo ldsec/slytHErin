@@ -9,6 +9,8 @@ import (
 
 //Custom Network Loader.
 //Exposes the method Load to load model from file
+//User should take care of defining a correct struct to parse the json file containing the network
+//The only constraint is that
 type NetworkLoader interface {
 	Load(path string) NetworkI
 }

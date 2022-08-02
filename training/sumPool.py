@@ -1,7 +1,7 @@
 import torch.nn as nn
 
+"""Define the ScaledAvgPool layer, a.k.a the Sum Pool"""
 class ScaledAvgPool2d(nn.Module):
-    """Define the ScaledAvgPool layer, a.k.a the Sum Pool"""
     def __init__(self, kernel_size, stride, padding=0):
       super().__init__()
       self.kernel_size = kernel_size

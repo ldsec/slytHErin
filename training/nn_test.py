@@ -5,7 +5,6 @@ from sklearn import preprocessing
 import json
 import argparse
 import numpy as np
-from nn import NN
 from activation import *
 from logger import Logger
 from dataHandler import *
@@ -16,8 +15,6 @@ from activation import *
 """
     Script for testing nn with approximations for homomorphic encryption
 """
-#Max value in NN50 = 7
-
 os.chdir(".")
 
 # explicit function to normalize array
@@ -62,15 +59,14 @@ def linear_eval(X, Y, serialized, activation):
     X = X.reshape(X.shape[0], -1)
     X = X.numpy()
 
-    conv = np.array(serialized['conv']['weight']['w']).reshape(serialized['conv']['weight']['rows'],
-                                                               serialized['conv']['weight']['cols'])
-    conv_bias = np.array(serialized['conv']['bias']['b'])
+    conv = np.array(serialized['layers'][0]['weight']['w']).reshape(serialized['layers'][0]['weight']['rows'],
+                                                               serialized['layers'][0]['weight']['cols'])
+    conv_bias = np.array(serialized['layers'][0]['bias']['b'])
     dense, bias = [], []
 
-    for d in serialized['dense']:
+    for d in serialized['layers'][1:]:
         dense.append(np.array(d['weight']['w']).reshape(d['weight']['rows'], d['weight']['cols']))
         bias.append(np.array(d['bias']['b']))
-
 
     act = activation
 
@@ -109,8 +105,6 @@ def linear_eval(X, Y, serialized, activation):
 
     pred = np.argmax(X, axis=1)
     corrects = np.sum(pred == Y.numpy())
-
-
 
     return corrects
 

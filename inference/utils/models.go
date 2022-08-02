@@ -14,11 +14,11 @@ type Bias struct {
 	Len int       `json:"len"`
 }
 
+/*
+	Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample
+	Clearly it can be generalized to a simple dense layer
+*/
 type Kernel struct {
-	/*
-		Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample
-		Clearly it can be generalized to a simple dense layer
-	*/
 	W    []float64 `json:"w"`
 	Rows int       `json:"rows"`
 	Cols int       `json:"cols"`

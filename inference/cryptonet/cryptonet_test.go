@@ -138,7 +138,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //Server offers a decryption service
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
