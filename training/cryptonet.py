@@ -152,11 +152,10 @@ if __name__ == "__main__":
   ##############################
   if exists("./models/cryptonet.pt"):
       print("Packing already trained model...")
-      #model = torch.load("./models/cryptonet.pt")
-      #packer = Packer(serialize_cryptonet, pack_cryptonet)
-      #with open(f'./models/cryptonet_packed.json', 'w') as f:
-          #json.dump(packer.Pack(model), f)
-      reserialize_cryptonet()
+      model = torch.load("./models/cryptonet.pt")
+      packer = Packer(serialize_cryptonet, pack_cryptonet)
+      with open(f'./models/cryptonet_packed.json', 'w') as f:
+          json.dump(packer.Pack(model), f)
   else:
     print("Training")
     dataHandler = DataHandler(dataset="MNIST", batch_size=64)

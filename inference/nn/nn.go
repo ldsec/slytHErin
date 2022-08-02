@@ -19,13 +19,6 @@ func (l *NNLoader) IsInit(network network.NetworkI) bool {
 	return network.IsInit()
 }
 
-//json wrapper
-type nn struct {
-	Conv   utils.Layer   `json:"conv"`
-	Dense  []utils.Layer `json:"dense"`
-	Layers int           `json:"layers"`
-}
-
 type NN struct {
 	network.Network
 }
@@ -68,17 +61,14 @@ func (l *NNLoader) Load(path string) network.NetworkI {
 	defer jsonFile.Close()
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 
-	var res nn
-	json.Unmarshal([]byte(byteValue), &res)
+	nj := new(network.NetworkJ)
+	utils.ThrowErr(json.Unmarshal([]byte(byteValue), nj))
 
-	layers := []utils.Layer{res.Conv}
-	layers = append(layers, res.Dense...)
-
-	nn := new(NN)
 	HEtrain := strings.Contains(path, "poly")
 
-	activations := nn.InitActivations(res.Layers, HEtrain)
-	nn.SetLayers(layers)
+	nn := new(NN)
+	nn.SetLayers(nj.Layers)
+	activations := nn.InitActivations(nn.GetNumOfLayers(), HEtrain)
 	nn.SetActivations(activations)
 	return nn
 }

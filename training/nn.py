@@ -16,6 +16,7 @@ import os
 import json
 from conv_transform import *
 from packing import *
+from os.path import exists
 
 """
     Script to serialize nn models from go training in a json format ready to be deserialized in Go implementation 
@@ -23,6 +24,17 @@ from packing import *
 """
 
 os.chdir("./models")
+
+def resereliaze_nn(path):
+    with open(path, "r") as f:
+        data = json.load(f)
+        layers = []
+        layers.append(Layer(data['conv']['weight'], data['conv']['bias']))
+        for i in range(data['layers']):
+            layers.append(Layer(data['dense'][i]['weight'],data['dense'][i]['bias']))
+        net = Net(layers, data['layers'])
+    with open(path, "w") as f:
+        json.dump(net.Serialize(),f)
 
 ## serialize models from json format from Go training
 def serialize_nn(json_data):
@@ -80,6 +92,10 @@ if __name__ == '__main__':
         finally:
 
             j_name = f"{args.model}{args.activation}_packed.json"
+
+            #if exists(j_name):
+            #    resereliaze_nn(j_name)
+            #    exit(0)
 
             ##go stuff
             with open(f'../nn_go_training/{args.model}{args.activation}_go.json', 'r') as f:

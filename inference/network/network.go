@@ -9,8 +9,8 @@ import (
 
 //Custom Network Loader.
 //Exposes the method Load to load model from file
-//User should take care of defining a correct struct to parse the json file containing the network
-//The only constraint is that
+//User should make sure that this method initiates also activation functions with a user-defined init method
+//The json structure should be compatible with Network
 type NetworkLoader interface {
 	Load(path string) NetworkI
 }
@@ -38,11 +38,17 @@ type NetworkI interface {
 	NewHE(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI
 }
 
+//NetworkJ wrapper for json struct
+type NetworkJ struct {
+	Layers    []utils.Layer `json:"layers,omitempty"`
+	NumLayers int           `json:"numLayers,omitempty"`
+}
+
 //Network loaded from json. Implements INetwork. Abstract type
 type Network struct {
-	layers           []utils.Layer
+	layers           []utils.Layer `json:"layers"`
 	activations      []utils.ChebyPolyApprox
-	numOfLayers      int
+	numOfLayers      int `json:"numLayers"`
 	numOfActivations int
 	batchSize        int
 }

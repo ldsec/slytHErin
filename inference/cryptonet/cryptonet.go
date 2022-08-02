@@ -14,11 +14,6 @@ type CNLoader struct {
 }
 
 //json wrapper
-type cryptonet struct {
-	Conv1 utils.Layer `json:"conv1"`
-	Pool1 utils.Layer `json:"pool1"`
-	Pool2 utils.Layer `json:"pool2"`
-}
 
 type CryptoNet struct {
 	network.Network
@@ -40,17 +35,16 @@ func (l *CNLoader) Load(path string) network.NetworkI {
 	defer jsonFile.Close()
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 
-	var res cryptonet
-	json.Unmarshal([]byte(byteValue), &res)
-
-	layers := []utils.Layer{res.Conv1, res.Pool1, res.Pool2}
-
+	nj := new(network.NetworkJ)
+	err = json.Unmarshal([]byte(byteValue), nj)
+	utils.ThrowErr(err)
 	cn := new(CryptoNet)
+	cn.SetLayers(nj.Layers)
 	activations := cn.InitActivations()
 	cn.SetActivations(activations)
-	cn.SetLayers(layers)
 
-	return cn
+	//return cn
+	return nil
 }
 
 func (cn *CryptoNet) NewCryptoNet(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *CryptoNetHE {
