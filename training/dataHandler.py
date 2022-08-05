@@ -96,10 +96,10 @@ if __name__=="__main__":
   ## return the data for evaluation
 
   parser = argparse.ArgumentParser()
-  parser.add_argument("--model", help="simplenet or nn")
+  parser.add_argument("--model", help="cryptonet or nn")
   
   args = parser.parse_args()
-  if args.model == "simplenet" or args.model == "nn":
+  if args.model == "cryptonet" or args.model == "nn":
     scale = True
     if args.model == "nn":
       scale = False
