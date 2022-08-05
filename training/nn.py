@@ -66,7 +66,10 @@ def pack_nn(serialized):
     
     for i in range(num_layers):
         w = np.array(serialized['dense_'+str(i+1)]['weight']['w'])
-        layers.append(Layer(pack_linear(w),pack_bias(serialized['dense_'+str(i+1)]['bias']['b'],serialized['dense_'+str(i+1)]['bias']['cols'],1)))
+        layers.append(Layer(
+            pack_linear(w),
+            pack_bias(serialized['dense_'+str(i+1)]['bias']['b'],
+                      serialized['dense_'+str(i+1)]['bias']['cols'],1)))
     
     net = Net(layers, num_layers)
     return net.Serialize()

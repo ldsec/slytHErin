@@ -35,17 +35,17 @@ class Net:
 # Handles packing of a network for HE inference in Go framework
 # User has to define custom serializer and packer for its network
 # Input:
-# serializer: 
-# method customly defined that takes data (e.g model from pytorch, json file...)
-# and outputs a dictionary to be used by packer. The only constraint is that the dictionary is compliant with the packer
-# user has to define its custom serializer and packer
-# packer:
-# takes the customly defined dictionary from serializer
-# the packer should invoke, for every layer (key in the serialized dict)
-# the packing method for the weight (e.g pack_conv, pack_linear or pack_pool)
-# and the packing method pack_bias for the bias of the layer, setting num_channels and replication accordingly
-# output MUST be a class Net in serialized form,
-# i.e as a rule of thumb you should define a Net() in your packer method and return Net.Serialize()
+#   serializer:
+#       method customly defined that takes data (e.g model from pytorch, json file...)
+#       and outputs a dictionary to be used by packer. The only constraint is that the dictionary is compliant with the packer
+#       user has to define its custom serializer and packer
+#   packer:
+#       takes the customly defined dictionary from serializer
+#       the packer should invoke, for every layer (key in the serialized dict)
+#       the packing method for the weight (e.g pack_conv, pack_linear or pack_pool)
+#       and the packing method pack_bias for the bias of the layer, setting num_channels and replication accordingly
+#       output MUST be a class Net in serialized form,
+#       i.e as a rule of thumb you should define a Net() in your packer method and return Net.Serialize()
 class Packer:
     def __init__(self, serializer, packer):
         self.serializer = serializer
@@ -83,7 +83,7 @@ def pack_conv(conv, kernel_rows, kernel_cols, stride, input_rows, input_cols):
         kernel_matrices.append(channelM)
     convM = np.vstack(kernel_matrices)
     rows, cols = convM.T.shape
-    return {'w': [x.item() for x in convM.T.flatten()], 'rows': rows, 'cols': cols}, convM.T
+    return {'w': convM.T.flatten().tolist(), 'rows': rows, 'cols': cols}, convM.T
 
 """
     For cryptonet
@@ -99,7 +99,7 @@ def pack_pool(pool):
         kernel_matrices.append(channel_matrix)
     poolM = np.vstack(kernel_matrices)
     rows, cols = poolM.T.shape
-    return {'w': [x.item() for x in poolM.T.flatten()], 'rows': rows, 'cols': cols}, poolM.T
+    return {'w': poolM.T.flatten().tolist(), 'rows': rows, 'cols': cols}, poolM.T
 
 """
     Packs a linear layer. the matrix should be s.t the evaluation of the layer
@@ -108,7 +108,7 @@ def pack_pool(pool):
 """
 def pack_linear(dense):
     rows, cols = dense.shape
-    return {'w': [x.item() for x in dense.flatten()], 'rows': rows, 'cols': cols}
+    return {'w': dense.flatten().tolist(), 'rows': rows, 'cols': cols}
 
 """
         Pack bias as an array to be summed to the convolution of one data sample
@@ -128,10 +128,10 @@ def pack_linear(dense):
 def pack_bias(b, channels, replication):
     #dense
     if replication == 1:
-        return {'b': b, 'len': channels}
+        return {'b': b.tolist(), 'len': channels}
     #conv
     bias = [0 for i in range(channels*replication)]
     for i in range(channels*replication):
         idx = i // replication
-        bias[i] = b[idx].item()
+        bias[i] = b.item(idx)
     return {'b': bias, 'len': channels*replication}

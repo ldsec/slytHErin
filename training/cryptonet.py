@@ -101,7 +101,7 @@ def pack_cryptonet(serialized):
     bias3 = pack_bias(b3, 10, 1)
     layer3 = Layer(pool2M, bias3)
 
-    net = Net([layer1,layer2,layer3])
+    net = Net([layer1,layer2,layer3], 3)
     return net.Serialize()
 
 class Cryptonet(nn.Module):
@@ -143,6 +143,47 @@ class Cryptonet(nn.Module):
           nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_out', nonlinearity='relu')
         elif self.init_method == "xavier":
           nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
+
+
+class SimpleNet(nn.Module):
+    '''
+      Simpliefied network used in paper for inference https://www.microsoft.com/en-us/research/publication/cryptonets-applying-neural-networks-to-encrypted-data-with-high-throughput-and-accuracy/
+    '''
+
+    def __init__(self, batch_size: int, activation: str, init_method: str, verbose: bool):
+        super().__init__()
+        self.verbose = verbose
+        self.init_method = init_method
+        self.batch_size = batch_size
+
+        if activation == "square":
+            self.activation = torch.square
+        elif activation == "relu":
+            self.activation = nn.ReLU()
+        elif activation == "relu_approx":
+            self.activation = ReLUApprox()
+
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=5, kernel_size=5, stride=2)
+        self.pool1 = nn.Conv2d(in_channels=5, out_channels=100, kernel_size=12, stride=1000)
+        self.pool2 = nn.Conv2d(in_channels=1, out_channels=10, kernel_size=(100, 1), stride=1000)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.activation(x)
+        x = self.pool1(x)
+        x = x.reshape([self.batch_size, 1, 100, 1])  # batch_size tensors in 1 channel, 100x1
+        x = self.activation(x)
+        x = self.pool2(x)
+        x = x.reshape(x.shape[0], -1)
+        return x
+
+    def weights_init(self, m):
+        for m in self.children():
+            if isinstance(m, nn.Conv2d):
+                if self.init_method == "he":
+                    nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_out', nonlinearity='relu')
+                elif self.init_method == "xavier":
+                    nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
 
 if __name__ == "__main__":
   ##############################
