@@ -44,8 +44,9 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 //Model in clear - data encrypted
 func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
+	//5.6 for 41 btach with logn14
 
-	var debug = true       //set to true for debug mode
+	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
@@ -61,6 +62,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	poolSize := 1
 	if multiThread {
 		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
 	if len(possibleSplits) == 0 {
@@ -137,6 +139,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //Model encrypted - data in clear. In this scenario the model is sent by server to the client
 //Server offers a decryption service
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
+	//13s for 41 batch with logn14 mask
 
 	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -154,6 +157,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	poolSize := 1
 	if multiThread {
 		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
 	if len(possibleSplits) == 0 {

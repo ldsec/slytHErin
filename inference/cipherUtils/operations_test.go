@@ -23,7 +23,15 @@ func TestMultiplication(t *testing.T) {
 	W := pU.RandMatrix(90, 50)
 	//X := pU.MatrixForDebug(3, 3)
 	//W := pU.MatrixForDebug(3, 3)
-	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
+
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{60, 60},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 30),
+	})
 	scale := params.DefaultScale()
 
 	Box := NewBox(params)

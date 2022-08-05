@@ -56,12 +56,11 @@ var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 var paramsLogN16, _ = ckks.NewParametersFromLiteral(bootstrapping.N16QP1546H192H32.SchemeParams)
 var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 
-var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
-var layers = 20    //20 or 50
-
 //Model in clear - data encrypted - centralized btp
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
-
+	//nn50 - 38m for 96 batch
+	var HETrain = false    //model trained with HE SGD, LSE and poly act (HE Friendly)
+	var layers = 50        //20 or 50
 	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
@@ -84,6 +83,7 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	poolSize := 1
 	if multiThread {
 		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
 	if len(possibleSplits) == 0 {
@@ -104,7 +104,7 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 
 		Box := cipherUtils.NewBox(params)
 
-		path := fmt.Sprintf("nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+		path := fmt.Sprintf("/root/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 		fmt.Println("Key path: ", path)
 		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
 			fmt.Println("Creating rotation keys...")
@@ -147,16 +147,18 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 				fmt.Println("End", end)
 				resClear := cipherUtils.DecInput(resHE, Box)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+
 			} else {
-				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.5)
 				fmt.Println("End", end)
 				resClear := cipherUtils.DecInput(resHE, Box)
-				utils.Predict(Y, 10, resClear)
 				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
-				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				fmt.Println("Accuracy Expected: ", accuracy)
 			}
 			iters++
 		}
@@ -169,8 +171,12 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 }
 
 //Model encrypted - data encrypted - distributed bootstrap
-func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
+func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
+	//nn20 - 4m for 48 batch with logN15_NN20
 
+	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
+	var layers = 20    //20 or 50
+	var parties = 10
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
@@ -183,7 +189,7 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	loader := new(NNLoader)
 	nn := loader.Load(path)
 
-	params := paramsLogN14
+	params := paramsLogN15_NN20
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
@@ -192,6 +198,7 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	poolSize := 1
 	if multiThread {
 		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
 	if len(possibleSplits) == 0 {
@@ -208,7 +215,6 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	// PARTIES
 	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
 	// [!] We assume that these protocols have been run in a setup phase by the parties
-	parties := 3
 
 	//Allocate addresses
 	localhost := "127.0.0.1"
@@ -227,7 +233,7 @@ func TestNN_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		batchSize := splitInfo.InputRows * splitInfo.InputRowP
 		nn.SetBatch(batchSize)
 
-		path := fmt.Sprintf("nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+		path := fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 
 		skP := new(rlwe.SecretKey)

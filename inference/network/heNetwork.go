@@ -202,6 +202,8 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	level := X.Level()
 	res := new(cipherUtils.EncInput)
 	for i := 0; i < n.NumOfLayers; i++ {
+		layerStart := time.Now()
+
 		fmt.Println("Layer ", i+1)
 		if n.CheckLvlAtLayer(level, n.MinLevel, i, false, false) {
 			if !n.Bootstrappable {
@@ -232,6 +234,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 		n.Activator.ActivateBlocks(res, i)
 
 		level = res.Level()
+		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, time.Since(start)
 }
@@ -253,11 +256,13 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 	activations := network.GetActivations()
 
 	for i := 0; i < n.NumOfLayers; i++ {
+		layerStart := time.Now()
 		fmt.Println("Layer ", i+1)
 		if n.CheckLvlAtLayer(level, n.MinLevel, i, false, false) {
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
+			fmt.Println("Bootstrapping...")
 			n.Bootstrapper.Bootstrap(res)
 		}
 
@@ -290,6 +295,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
+			fmt.Println("Bootstrapping...")
 			n.Bootstrapper.Bootstrap(res)
 		}
 
@@ -302,6 +308,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		}
 		*resClear = tmp2
 		level = res.Level()
+		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, resClear, time.Since(start)
 }

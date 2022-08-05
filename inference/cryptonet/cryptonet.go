@@ -43,8 +43,7 @@ func (l *CNLoader) Load(path string) network.NetworkI {
 	activations := cn.InitActivations()
 	cn.SetActivations(activations)
 
-	//return cn
-	return nil
+	return cn
 }
 
 func (cn *CryptoNet) NewCryptoNet(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *CryptoNetHE {

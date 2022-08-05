@@ -2,13 +2,11 @@ package cipherUtils
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	utils2 "github.com/ldsec/lattigo/v2/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
-	"math"
 	"os"
 )
 
@@ -100,34 +98,58 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams boot
 //Generates rotatiosns needed for pipeline. Takes input features, as well inner rows,cols and partitions of weights as block matrices
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
+
+	//implements a set
+	rotSet := make(map[int]struct{})
+	put := func(r int, rotations *[]int, rotSet *map[int]struct{}) {
+		if _, exists := (*rotSet)[r]; !exists {
+			*rotations = append(*rotations, r)
+			(*rotSet)[r] = struct{}{}
+		}
+	}
+
 	if btpParams != nil {
 		rotations = btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
+		for _, r := range rotations {
+			rotSet[r] = struct{}{}
+		}
 	}
 	var replicationFactor int
 	currCols := colIn
 	for w := 0; w < numWeights; w++ {
 		for i := 1; i < (rowsW[w]+1)>>1; i++ {
-			rotations = append(rotations, 2*i*rowIn)
+			r := 2 * i * rowIn
+			put(r, &rotations, &rotSet)
 		}
-		rotations = append(rotations, rowsW[w])
-		rotations = append(rotations, -rowsW[w]*rowIn)
-		rotations = append(rotations, -2*rowsW[w]*rowIn)
+		r := rowsW[w]
+		put(r, &rotations, &rotSet)
+		r = -rowsW[w] * rowIn
+		put(r, &rotations, &rotSet)
+		r = -2 * rowsW[w] * rowIn
+		put(r, &rotations, &rotSet)
+
 		if rowsW[w] < colsW[w] {
-			replicationFactor = plainUtils.Max(int(math.Ceil(float64(colsW[w]/rowsW[w]))), 3)
-			rotations = append(rotations, params.RotationsForReplicateLog(rowIn*currCols, replicationFactor)...)
+			replicationFactor = GetReplicaFactor(rowsW[w], colsW[w])
+			R := params.RotationsForReplicateLog(rowIn*currCols, replicationFactor)
+			for _, r := range R {
+				put(r, &rotations, &rotSet)
+			}
 		}
 		currCols = colsW[w]
 		//check repack
 		if w < numWeights-1 {
 			if currCols != rowsW[w+1] {
 				//repack
-				rotations = append(rotations, GenRotationsForRepackCols(rowIn, currCols*colPW[w], currCols, rowPW[w+1])...)
+				R := GenRotationsForRepackCols(rowIn, currCols*colPW[w], currCols, rowPW[w+1])
+				for _, r := range R {
+					put(r, &rotations, &rotSet)
+				}
 				currCols = rowsW[w+1]
 			}
 		}
 	}
 
-	rotations = append(rotations, rowIn)
+	put(rowIn, &rotations, &rotSet)
 
 	return rotations
 }

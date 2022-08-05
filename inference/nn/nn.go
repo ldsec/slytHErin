@@ -68,7 +68,7 @@ func (l *NNLoader) Load(path string) network.NetworkI {
 
 	nn := new(NN)
 	nn.SetLayers(nj.Layers)
-	activations := nn.InitActivations(nn.GetNumOfLayers(), HEtrain)
+	activations := nn.InitActivations(nn.GetNumOfLayers()-1, HEtrain)
 	nn.SetActivations(activations)
 	return nn
 }

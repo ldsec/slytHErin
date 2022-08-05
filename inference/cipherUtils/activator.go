@@ -9,20 +9,22 @@ import (
 
 //Handles an activation layer with a polynomial function on an EncInput
 
-type ActivationPoly struct {
+//Wrapper for polynomial activation function
+type activationPoly struct {
 	polynomial  *ckks.Polynomial
 	term0VecEcd *ckks.Plaintext
 }
 
+//Applies a poly activation function to ciphertext
 type Activator struct {
-	poly             []ActivationPoly
+	poly             []activationPoly
 	box              CkksBox //pool of evaluators to be used
 	isCheby          bool
 	poolSize         int
 	NumOfActivations int
 }
 
-type EvalFunc func(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox)
+type EvalFunc func(X *EncInput, i, j int, poly activationPoly, Box CkksBox)
 
 //Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
 //output of the previous linear layer
@@ -30,11 +32,12 @@ func NewActivator(numOfActivations int, Box CkksBox, poolSize int) (*Activator, 
 	Act := new(Activator)
 	Act.poolSize = poolSize
 	Act.NumOfActivations = numOfActivations
-	Act.poly = make([]ActivationPoly, Act.NumOfActivations)
+	Act.poly = make([]activationPoly, Act.NumOfActivations)
 	Act.box = Box
 	return Act, nil
 }
 
+//Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimentions
 func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int) {
 	poly := new(ckks.Polynomial)
 	i := layer
@@ -49,7 +52,7 @@ func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, lev
 		for i := range term0vec {
 			term0vec[i] = term0
 		}
-		Act.poly[i] = ActivationPoly{}
+		Act.poly[i] = activationPoly{}
 		if poly.Depth() > level {
 			panic(errors.New("Not enough levels for poly depth"))
 		}
@@ -66,7 +69,7 @@ func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, lev
 
 	case true:
 		Act.isCheby = true
-		Act.poly[i] = ActivationPoly{}
+		Act.poly[i] = activationPoly{}
 		Act.poly[i].polynomial = activation.Poly
 	default:
 		panic(errors.New("Activation of Activator is not a known type"))
@@ -78,7 +81,7 @@ func (Act *Activator) LevelsOfAct(layer int) int {
 	return Act.poly[layer].polynomial.Depth()
 }
 
-func (Act *Activator) spawnEvaluators(f EvalFunc, poly ActivationPoly, X *EncInput, ch chan []int) {
+func (Act *Activator) spawnEvaluators(f EvalFunc, poly activationPoly, X *EncInput, ch chan []int) {
 	for {
 		coords, ok := <-ch //feed the goroutines
 		if !ok {
@@ -90,7 +93,7 @@ func (Act *Activator) spawnEvaluators(f EvalFunc, poly ActivationPoly, X *EncInp
 	}
 }
 
-//Evaluates a polynomial on the ciphertext
+//Evaluates a polynomial on the ciphertext. If no activation is at layer, applies identity
 func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
 	if layer >= Act.NumOfActivations {
 		//no more act -> identity
@@ -132,7 +135,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
 }
 
 //Evaluates a polynomial on the ciphertext
-func evalPolyBlocks(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
+func evalPolyBlocks(X *EncInput, i, j int, poly activationPoly, Box CkksBox) {
 	eval := Box.Evaluator.ShallowCopy()
 	ct, _ := eval.EvaluatePoly(X.Blocks[i][j], poly.polynomial, X.Blocks[i][j].Scale)
 	eval.Add(ct, poly.term0VecEcd, ct)
@@ -140,7 +143,7 @@ func evalPolyBlocks(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
 }
 
 //Evaluates a polynomial on the ciphertext using ckks.Evaluator.EvaluatePolyVector. This should be called via Activator.ActivateBlocks
-func evalPolyBlocksVector(X *EncInput, i, j int, poly ActivationPoly, Box CkksBox) {
+func evalPolyBlocksVector(X *EncInput, i, j int, poly activationPoly, Box CkksBox) {
 	//build map of all slots with legit values
 	eval := Box.Evaluator.ShallowCopy()
 	ecd := Box.Encoder.ShallowCopy()

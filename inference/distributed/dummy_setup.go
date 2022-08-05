@@ -1,6 +1,7 @@
 package distributed
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -8,6 +9,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/drlwe"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
+	"net"
 	"os"
 	"strconv"
 )
@@ -17,6 +19,31 @@ import (
 	before interaction with the Querier
 	Thus, they are implemented in a dummy way
 */
+
+type SetupMsg struct {
+	SkShare *rlwe.SecretKey `json:"skShare,omitempty"`
+	Pk      *rlwe.PublicKey `json:"pk,omitempty"`
+	Id      int             `json:"id,omitempty"`
+	Addr    string          `json:"addr,omitempty"`
+}
+
+//Creates a player on remote node after receiving setup parameters from master. It is a dummy setup
+func Setup(addr string, params ckks.Parameters) *LocalPlayer {
+	addrTCP, err := net.ResolveTCPAddr("tcp", addr)
+	utils.ThrowErr(err)
+	listener, err := net.ListenTCP("tcp", addrTCP)
+	utils.ThrowErr(err)
+	conn, err := listener.AcceptTCP()
+	utils.ThrowErr(err)
+
+	data, err := ReadFrom(conn)
+	utils.ThrowErr(err)
+	var setupMsg SetupMsg
+	err = json.Unmarshal(data, &setupMsg)
+	utils.ThrowErr(err)
+	player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, setupMsg.Addr)
+	return player
+}
 
 //Returns array of secret key shares, secret key and collective encryption key
 func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties int) ([]*rlwe.SecretKey, *rlwe.SecretKey, *rlwe.PublicKey, ckks.KeyGenerator) {
