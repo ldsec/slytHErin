@@ -61,7 +61,9 @@ var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 var paramsLogN16, _ = ckks.NewParametersFromLiteral(bootstrapping.N16QP1546H192H32.SchemeParams)
 var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 
-//Model in clear - data encrypted - centralized btp
+//EXPERIMENT 1 - Model clear,data encrypted, Centralized Bootstrapping
+//Querier sends encrypted data to server for privacy-preserving inference. Server uses centralized bootstrapping
+//Use NN50
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	//nn50 - 38m for 96 batch
 	var HETrain = false    //model trained with HE SGD, LSE and poly act (HE Friendly)
@@ -173,7 +175,12 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	}
 }
 
-//Model encrypted - data encrypted - distributed bootstrap
+//EXPERIMENT 2: Model encrypted,data encrypted,distributed bootstrap
+//The model is supposed to be trained under encryption.
+//Querier sends data encrypted under nodes cohort public key to master server which performs computation
+//Master invokes distributed refresh with a variable number of parties, and finally invokes key switch protocol
+//Prediction is received under Querier public key
+//Use NN20_poly since it was trained with HE friendly parameters
 func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	//nn20 - 4m for 48 batch with logN15_NN20
 

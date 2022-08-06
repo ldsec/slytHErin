@@ -42,7 +42,8 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	DefaultScale: float64(1 << 30),
 })
 
-//Model in clear - data encrypted
+//EXPERIMENT 1 - Model in clear - data encrypted:
+//Querier sends encrypted data to server to get privacy preserving prediction
 func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	//5.6 for 41 btach with logn14
 
@@ -134,8 +135,9 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	}
 }
 
-//Model encrypted - data in clear. In this scenario the model is sent by server to the client
-//Server offers a decryption service
+//EXPERIMENT 2 - Model encrypted,data in clear:
+//In this scenario the model is sent by server to the client in encrypted form
+//Server offers an oblivious decryption service
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	//13s for 41 batch with logn14 mask
 
