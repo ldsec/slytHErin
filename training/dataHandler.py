@@ -42,28 +42,6 @@ class DataHandler():
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
       self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
 
-
-class DataHandlerAlex():
-  def __init__(self, dataset : str, batch_size : int, shuffle=True):
-    if dataset == "MNIST":
-      self.batch_size = batch_size
-      if batch_size == None:
-        drop_last = False
-      else:
-        drop_last = True
-      normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-      to_rgb = transforms.Lambda(lambda image: image.convert('RGB'))
-      resize = transforms.Resize((227, 227))
-      
-      transform = transforms.Compose([resize, to_rgb, transforms.ToTensor(), normalize])
-
-      train_ds = MNIST("data/", train=True, download=True, transform=transform)
-      test_ds = MNIST("data/", train=False, download=True, transform=transform)
-
-      self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
-      self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=2, pin_memory=True)
-
 class DataHandlerNN():
   """
     Specific loader for NN
@@ -101,19 +79,18 @@ if __name__=="__main__":
   args = parser.parse_args()
   if args.model == "cryptonet" or args.model == "nn":
     scale = True
-    if args.model == "nn":
-      scale = False
+    nopad = ""
+    if args.model == "cryptonet":
+      nopad = "_nopad"
+
     dataHandler = DataHandler("MNIST", None, shuffle = False, scale=scale)
     dataset = {'X':[], 'Y':[]}
     for data,label in dataHandler.test_dl:
-      if args.model == "simplenet":
-        #data = F.pad(data, (1,0,1,0)).numpy().flatten()
-        data = data.numpy().flatten()
-      else:
-        data = data.numpy().flatten()
+      data = data.numpy().flatten()
       sample = [x.item() for x in data] 
       dataset['X'].append(sample)
       dataset['Y'].append(label)
-    with open(f'./data/{args.model}_data_nopad.json','w') as f:
+
+    with open(f'./data/{args.model}_data{nopad}.json','w') as f:
       json.dump(dataset,f)
 
