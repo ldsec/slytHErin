@@ -15,3 +15,6 @@ and find the file in the ```data``` folder as a json
 
 ## NN
 You are provided with the json files already generated
+
+### Data
+Same as cryptonet, use dataHandler with ```--model nn```
