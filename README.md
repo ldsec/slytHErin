@@ -11,4 +11,7 @@ folder. You can copy this to ```inference/cryptonet```
 
 ### Data
 You can generate the json with MNIST data with ```python3 dataHandler.py --model cryptonet```
-and 
+and find the file in the ```data``` folder as a json
+
+## NN
+You are provided with the json files already generated
