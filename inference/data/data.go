@@ -1,3 +1,4 @@
+//handles data providing
 package data
 
 import (
@@ -19,6 +20,7 @@ type Data struct {
 	sem          sync.Mutex
 }
 
+//Load data from json file
 func LoadData(path string) *Data {
 	jsonFile, err := os.Open(path)
 	if err != nil {
@@ -31,6 +33,8 @@ func LoadData(path string) *Data {
 	json.Unmarshal([]byte(byteValue), &res)
 	return &res
 }
+
+//Set batch size
 func (data *Data) Init(batchSize int) error {
 	data.BatchSize = batchSize
 	totData := len(data.Y)
@@ -39,6 +43,7 @@ func (data *Data) Init(batchSize int) error {
 	return nil
 }
 
+//returns batch of data
 func (data *Data) Batch() ([][]float64, []int, error) {
 	data.sem.Lock()
 	defer data.sem.Unlock()

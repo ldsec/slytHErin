@@ -71,9 +71,6 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	cipherUtils.PrintAllSplits(possibleSplits)
 
 	for _, splits := range possibleSplits {
-		fmt.Println()
-		fmt.Println("Trying split: ")
-		fmt.Println()
 		cipherUtils.PrintSetOfSplits(splits)
 
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
@@ -133,6 +130,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 			fmt.Println("Expected")
 			resultExp.PrintResult()
 		}
+		break
 	}
 }
 
@@ -172,9 +170,6 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	utils.ThrowErr(err)
 
 	for _, splits := range possibleSplits {
-		fmt.Println()
-		fmt.Println("Trying split: ")
-		fmt.Println()
 		cipherUtils.PrintSetOfSplits(splits)
 
 		splitInfo, _ := cipherUtils.ExctractInfo(splits)
@@ -238,5 +233,6 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 			fmt.Println("Expected")
 			resultExp.PrintResult()
 		}
+		break
 	}
 }

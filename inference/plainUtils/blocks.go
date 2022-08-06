@@ -1,3 +1,4 @@
+//utils for plaintext operations and poc for block matrices
 package plainUtils
 
 import (

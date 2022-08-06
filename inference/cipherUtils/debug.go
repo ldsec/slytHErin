@@ -9,6 +9,7 @@ import (
 	"math"
 )
 
+//Statistics for debug
 type DebugStats struct {
 	MinPrec  float64
 	AvgPrec  float64
@@ -17,6 +18,7 @@ type DebugStats struct {
 	L2Dist   float64
 }
 
+//Debug stats for one ciphertext
 func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh float64, Box CkksBox) DebugStats {
 	encoder := Box.Encoder
 	params := Box.Params
@@ -24,17 +26,17 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 
 	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
 
-	fmt.Printf("ValuesTest:")
-	for i := range valuesWant {
-		fmt.Printf(" %6.10f", valuesTest[i])
-	}
-	fmt.Println()
-
-	fmt.Printf("ValuesWant:")
-	for i := range valuesWant {
-		fmt.Printf(" %6.10f", valuesWant[i])
-	}
-	fmt.Println()
+	//fmt.Printf("ValuesTest:")
+	//for i := range valuesWant {
+	//	fmt.Printf(" %6.10f", valuesTest[i])
+	//}
+	//fmt.Println()
+	//
+	//fmt.Printf("ValuesWant:")
+	//for i := range valuesWant {
+	//	fmt.Printf(" %6.10f", valuesWant[i])
+	//}
+	//fmt.Println()
 
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 	fmt.Println(precStats.String())
@@ -68,6 +70,7 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 	}
 }
 
+//Debug stats for block matrix
 func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
 	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
 	stats := DebugStats{

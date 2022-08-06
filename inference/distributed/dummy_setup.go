@@ -20,6 +20,7 @@ import (
 	Thus, they are implemented in a dummy way
 */
 
+//dummy setup msg sent from master to parties
 type SetupMsg struct {
 	SkShare *rlwe.SecretKey `json:"skShare,omitempty"`
 	Pk      *rlwe.PublicKey `json:"pk,omitempty"`
@@ -86,6 +87,7 @@ func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties
 	return skShares, sk, pk, kgen
 }
 
+//Dummy generation of relin keys
 func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, shares []*rlwe.SecretKey) *rlwe.RelinearizationKey {
 	type Party struct {
 		*dckks.RKGProtocol
@@ -128,6 +130,7 @@ func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, share
 	return rlk
 }
 
+//writes key from experiment to file
 func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet, path string) {
 	fmt.Println("Writing keys to disk: ", path)
 	dat, err := sk.MarshalBinary()
@@ -157,6 +160,7 @@ func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.Ro
 	f.Close()
 }
 
+//reads keys from file
 func DeserializeKeys(path string, parties int) (sk *rlwe.SecretKey, skShares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet) {
 	sk = new(rlwe.SecretKey)
 	rtks = new(rlwe.RotationKeySet)

@@ -1,3 +1,4 @@
+//Contains declaration and experiments for CryptoNet model
 package cryptonet
 
 import (

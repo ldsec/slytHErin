@@ -1,3 +1,4 @@
+//Package contains the logic for all operations between ciphertext and plaintexts
 package cipherUtils
 
 import (
@@ -7,15 +8,13 @@ import (
 	"sync"
 )
 
-//Handles an activation layer with a polynomial function on an EncInput
-
 //Wrapper for polynomial activation function
 type activationPoly struct {
 	polynomial  *ckks.Polynomial
 	term0VecEcd *ckks.Plaintext
 }
 
-//Applies a poly activation function to ciphertext
+//Handles an activation layer with a polynomial function on an EncInput
 type Activator struct {
 	poly             []activationPoly
 	box              CkksBox //pool of evaluators to be used

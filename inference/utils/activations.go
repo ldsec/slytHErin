@@ -1,3 +1,4 @@
+//various utils, including methods for matrices in plaintext, model definitions and activation functions
 package utils
 
 import (
@@ -32,8 +33,8 @@ type PolyApprox interface {
 	Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense)
 }
 
+//Polynomial approximation from ckks Approximate
 type ChebyPolyApprox struct {
-	//Polynomial approximation from ckks Approximate
 	PolyApprox
 	A, B      float64
 	Degree    int
@@ -54,7 +55,7 @@ type ApproxParams struct {
 	Params []ApproxParam `json:"intervals"`
 }
 
-// Initialize ReLU with coeffs not in cheby form from Matlab -> used by cryptonet
+//Initialize ReLU with coeffs not in cheby form from Matlab -> used by cryptonet
 func InitReLU(deg int) *ChebyPolyApprox {
 	relu := new(ChebyPolyApprox)
 	relu.ChebyBase = false

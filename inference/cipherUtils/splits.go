@@ -15,6 +15,7 @@ type BlockSplits struct {
 	InnerRows, InnerCols, RowP, ColP int
 }
 
+//Information on the current split
 type SplitsInfo struct {
 	InputRows     int   `json:"input_rows,omitempty"`
 	InputCols     int   `json:"input_cols,omitempty"` //inner dims of input
@@ -80,6 +81,7 @@ func GetMaxComplexity(splits []BlockSplits) float64 {
 // of input features (e.g 784 in case of MNIST) and the dimentions of all
 // the weights of the model expressed as matrices.
 // You can also provide the inputRows in case of testing where the number of rows is given, or set to -1 to let the splitter decide
+// FindSplits will follow an heuristic approach, trying to find the best trade-off between throughput and complexity
 func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, params ckks.Parameters) [][]BlockSplits {
 	var colPartitions []int
 	var innerCols []int
@@ -266,6 +268,7 @@ func FindSplits(inputRows, inputFeatures int, weightRows, weightCols []int, para
 	return filteredSplits
 }
 
+//Exctract info useful for splitting input and weights, plus a hashcode for serialization
 func ExctractInfo(splits []BlockSplits) (SplitsInfo, string) {
 	info := SplitsInfo{}
 	info.InputRows = splits[0].InnerRows
@@ -297,6 +300,7 @@ func PrintAllSplits(splits [][]BlockSplits) {
 }
 
 func PrintSetOfSplits(setOfSplits []BlockSplits) {
+	fmt.Println("-------------------------------------------------------------------------------------------")
 	for j := range setOfSplits {
 		var splittingWhat string
 		if j == 0 {
@@ -305,7 +309,9 @@ func PrintSetOfSplits(setOfSplits []BlockSplits) {
 			splittingWhat = fmt.Sprintf("Weight %d", j)
 		}
 		split := setOfSplits[j]
+		fmt.Println("-------------------------------------------------------------")
 		fmt.Println("Splits for ", splittingWhat)
-		fmt.Printf("InR: %d InC: %d RP: %d CP: %d\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
+		fmt.Printf("Inner Rows: %d Inner Cols: %d Row Partitions: %d Col Partitions: %d\n\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
 	}
+	fmt.Println("-------------------------------------------------------------------------------------------")
 }

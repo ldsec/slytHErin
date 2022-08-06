@@ -223,6 +223,7 @@ func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
 }
 
 //Return encrypted weight in block matrix form. The matrix is also block-transposed
+//i.e the first column of block is stored as row for cache efficiency
 func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
@@ -251,6 +252,7 @@ func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Bo
 }
 
 //Return plaintex weight in block matrix form. The matrix is also block-transposed
+//i.e the first column of block is stored as row for cache efficiency
 func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)

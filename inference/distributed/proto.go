@@ -50,6 +50,7 @@ type RefreshExt struct {
 	Scale     float64 `json:"scale"`
 }
 
+//Master to player
 type ProtocolMsg struct {
 	Type ProtocolType `json:"type"`
 	Id   int          `json:"id"` //this is the id of the ct in the Enc Block Matrix, like i*row+j

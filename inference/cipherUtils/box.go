@@ -3,7 +3,6 @@ package cipherUtils
 import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/utils"
-	utils2 "github.com/ldsec/lattigo/v2/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
@@ -152,71 +151,6 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 	put(rowIn, &rotations, &rotSet)
 
 	return rotations
-}
-
-// GenSubVectorRotationMatrix allows to generate a permutation matrix that roates subvectors independently.
-// Given a vector of size N=2^"logSlots", partitionned into N/"vectorSize" subvectors each of size "vectorSize",
-// rotates each subvector by "k" positions to the left.
-//
-// Example :
-// Given v = [a_(0), a_(1), a_(2), ..., a_(N-3), a_(N-2), a_(N-1)],
-// Then M x v = [rotate(a_(0), a_(1), ..., a_(vectorsize-1), k), ... , rotate(a_(N-vectorsize-1), a_(N-vectorsize), ..., a_(N-1), k)]
-//
-// If vectorSize does not divide N, then the last N%vectorSize slots are zero.
-// If N = vectorSize, then no mask is generated and the evaluation is instead a single rotation.
-//
-// This is done by generating the two masks :
-//       	 |     vectorsize     |, ..., |     vectorsize     |
-// mask_0 = [{1, ..., 1, 0, ..., 0}, ..., {1, ..., 1, 0, ..., 0}]
-// mask_1 = [{0, ..., 0, 1, ..., 1}, ..., {0, ..., 0, 1, ..., 1}]
-//            0 ----- k                    0 ----- k
-func GenSubVectorRotationMatrix(params ckks.Parameters, level int, scale float64, vectorSize, k int, logSlots int, encoder ckks.Encoder) (matrix ckks.LinearTransform) {
-
-	k %= vectorSize
-
-	diagMatrix := make(map[int][]complex128)
-
-	slots := 1 << logSlots
-
-	matrix.Vec = make(map[int]rlwe.PolyQP)
-
-	if vectorSize < slots {
-		m0 := make([]complex128, slots)
-		m1 := make([]complex128, slots)
-
-		for i := 0; i < slots/vectorSize; i++ {
-
-			index := i * vectorSize
-
-			for j := 0; j < k; j++ {
-				m0[j+index] = 1
-			}
-
-			for j := k; j < vectorSize; j++ {
-				m1[j+index] = 1
-			}
-		}
-
-		diagMatrix[slots-vectorSize+k] = m0
-		diagMatrix[k] = m1
-
-		// Encoding
-		matrix = ckks.NewLinearTransform(params, []int{slots - vectorSize + k, k}, level, params.LogSlots(), 0)
-		matrix.LogSlots = logSlots
-		matrix.Level = level
-		matrix.Scale = scale
-		// Encode m0
-		encoder.Embed(utils2.RotateComplex128Slice(m0, slots-vectorSize+k), params.LogSlots(), scale, true, matrix.Vec[slots-vectorSize+k])
-
-		// Encode m1
-		encoder.Embed(utils2.RotateComplex128Slice(m1, k), params.LogSlots(), scale, true, matrix.Vec[k])
-
-	} else {
-		// If N = vectorSize, the we a single rotation without masking is sufficient
-		matrix.Vec[k] = rlwe.PolyQP{}
-	}
-
-	return matrix
 }
 
 //serializes keys to disk

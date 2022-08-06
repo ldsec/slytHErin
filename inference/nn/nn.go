@@ -1,3 +1,4 @@
+//definitions and experiments for zama nn models
 package nn
 
 import (
