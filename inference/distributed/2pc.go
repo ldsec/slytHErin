@@ -13,6 +13,7 @@ import (
 	"sync"
 )
 
+//Client in the 2PC oblivious decryption protocol
 type Client struct {
 	ProtoBuf *sync.Map //ct id -> protocol instance *Protocol
 
@@ -28,6 +29,7 @@ type Client struct {
 	done     chan bool //flag caller that client is done with all instances
 }
 
+//Server offers decryption as a service for oblivious decryption protocol
 type Server struct {
 	Box  cipherUtils.CkksBox
 	Addr *net.TCPAddr

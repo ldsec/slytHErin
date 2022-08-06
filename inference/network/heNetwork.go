@@ -28,6 +28,7 @@ type HENetworkI interface {
 }
 
 // Network for HE, either in clear or encrypted
+// The implemented network should evaluate layers as: Input * Weight + bias -> Activation
 type HENetwork struct {
 	Weights []cipherUtils.BlocksOperand
 	Bias    []cipherUtils.BlocksOperand
@@ -191,6 +192,7 @@ func (n *HENetwork) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul
 	return (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel) && level < n.LevelsToComplete(layer, afterMul)
 }
 
+//Runs inference
 func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")
@@ -239,6 +241,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	return res, time.Since(start)
 }
 
+//Eval but with debug statements for checking the HE pipeline step by step
 func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense, network NetworkI, L1thresh float64) (*cipherUtils.EncInput, *mat.Dense, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")

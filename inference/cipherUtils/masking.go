@@ -1,20 +1,33 @@
 package cipherUtils
 
 import (
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"crypto/rand"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ring"
+	"math"
 	"math/big"
 )
 
+//Generates a random mask which can be encoded and added as a ckks plaintext
+func secureRandMask(n int, scale float64, lvl0 float64) []float64 {
+	m := make([]float64, n)
+	bitsLvl0 := math.Floor(math.Log(lvl0))
+	bitsScale := math.Floor(math.Log(scale))
+	for i := range m {
+		r, _ := rand.Int(rand.Reader, big.NewInt(int64(math.Pow(2, bitsLvl0-bitsScale))))
+		m[i] = float64(r.Uint64())
+	}
+	return m
+}
+
 //Deprecated
-//masks input
-func MaskInput(Xenc *EncInput, Box CkksBox) *PlainInput {
+//Masks input by adding a random encoded mask as a random ckks plaintext
+func MaskInputEcdMask(Xenc *EncInput, Box CkksBox) *PlainInput {
 	mask := make([][]*ckks.Plaintext, len(Xenc.Blocks))
 	for i := range Xenc.Blocks {
 		mask[i] = make([]*ckks.Plaintext, len(Xenc.Blocks[i]))
 		for j := range Xenc.Blocks[i] {
-			m := plainUtils.SecureRandMask(Xenc.InnerRows*Xenc.InnerCols, Box.Params.DefaultScale(), Box.Params.QiFloat64(0))
+			m := secureRandMask(Xenc.InnerRows*Xenc.InnerCols, Box.Params.DefaultScale(), Box.Params.QiFloat64(0))
 			mask[i][j] = Box.Encoder.EncodeNew(m, Xenc.Blocks[i][j].Level(), Box.Params.DefaultScale(), Box.Params.LogSlots())
 			Box.Evaluator.Add(Xenc.Blocks[i][j], mask[i][j], Xenc.Blocks[i][j])
 		}
@@ -90,7 +103,7 @@ func generateMask(params ckks.Parameters, level int, scale float64, lambda int) 
 	return maskPt, maskPtNeg
 }
 
-//Masks ct with 128 bit security mask: ct = ct - mask
+//Masks ct with 128 bit security mask: ct = ct - mask. Ensures indistinguishabilty
 func Mask(ct *ckks.Ciphertext, Box CkksBox) *ckks.Plaintext {
 	mask, maskNeg := generateMask(Box.Params, ct.Level(), ct.Scale, 128)
 	Box.Evaluator.Add(ct, maskNeg, ct)
@@ -107,7 +120,7 @@ func UnMask(pt, mask *ckks.Plaintext, Box CkksBox) {
 }
 
 //mask input with lambda bit security
-func MaskInputV2(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
+func MaskInput(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
 	// Generate the mask in Z[Y] for Y = X^{N/(2*slots)}
 	maskBlocks := make([][]*ckks.Plaintext, Xenc.RowP)
 	for i := 0; i < Xenc.RowP; i++ {
@@ -124,7 +137,7 @@ func MaskInputV2(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
 	}
 }
 
-//removes mask from MaskInputV2
+//removes mask from MaskInput
 func UnmaskInput(Xmask, mask *PlainInput, Box CkksBox) {
 	for i := 0; i < Xmask.RowP; i++ {
 		for j := 0; j < Xmask.ColP; j++ {

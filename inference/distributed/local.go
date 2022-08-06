@@ -78,6 +78,7 @@ func ReadFrom(c io.Reader) ([]byte, error) {
 	return buf, err
 }
 
+//Local master is the master node for LAN setting
 type LocalMaster struct {
 	ProtoBuf *sync.Map //ct id -> protocol instance *Protocol
 	sk       *rlwe.SecretKey
@@ -96,6 +97,7 @@ type LocalMaster struct {
 	Done     chan bool //flag caller that master is done with all instances
 }
 
+//Local players hold sk shares for LAN Setting
 type LocalPlayer struct {
 	PCKS   *dckks.PCKSProtocol    //PubKeySwitch
 	BTP    *dckks.RefreshProtocol //Bootstrap
@@ -541,6 +543,7 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg ProtocolMsg) {
 	utils.ThrowErr(err)
 }
 
+//Generate and send share to master
 func (lp *LocalPlayer) RunRefresh(c net.Conn, msg ProtocolMsg) {
 	var ct ring.Poly
 	//fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)

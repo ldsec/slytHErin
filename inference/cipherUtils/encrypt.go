@@ -77,25 +77,3 @@ func EncodeWeights(level int, w [][]float64, leftdim int, Box CkksBox) (ptW []*c
 	wg.Wait()
 	return
 }
-
-//takes level, weight matrix, rows of input matrix to be multiplied, and box. Returns plaintext weight in diagonal form
-func EncodeWeightsAsMap(level int, w [][]float64, leftdim int, Box CkksBox) (ptW []*ckks.Plaintext, nonZeroDiags []int) {
-	params := Box.Params
-	ecd := Box.Encoder
-
-	wF, nonZeroDiags := FormatWeightsAsMap(w, leftdim, true)
-
-	ptW = make([]*ckks.Plaintext, len(nonZeroDiags))
-	var wg sync.WaitGroup
-	for i := range ptW {
-		wg.Add(1)
-		go func(i int, ecd ckks.Encoder) {
-			defer wg.Done()
-			pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
-			ecd.EncodeSlots(wF[i], pt, params.LogSlots())
-			ptW[i] = pt
-		}(i, ecd.ShallowCopy())
-	}
-	wg.Wait()
-	return
-}

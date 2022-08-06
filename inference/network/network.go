@@ -120,6 +120,7 @@ func (n *Network) GetParamsRescaled() ([]*mat.Dense, []*mat.Dense) {
 	return scaledW, scaledB
 }
 
+//Returns the levels needed to complete the pipeline from current layers, before or after the weigth multplication
 func (n *Network) LevelsToComplete(currLayer int, afterMul bool) int {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
@@ -139,6 +140,7 @@ func (n *Network) LevelsToComplete(currLayer int, afterMul bool) int {
 	return levelsNeeded
 }
 
+//True if bootstrap is needed
 func (n *Network) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))

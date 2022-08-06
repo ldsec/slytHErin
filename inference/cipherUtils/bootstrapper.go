@@ -7,11 +7,12 @@ import (
 	"sync"
 )
 
+//Interface for bootstrappers
 type IBootstrapper interface {
 	Bootstrap(input *EncInput)
 }
 
-//centralized bootstrapper
+//Centralized bootstrapper. Homomorphically evaluates decryption circuit
 type Bootstrapper struct {
 	poolSize int
 	box      CkksBox

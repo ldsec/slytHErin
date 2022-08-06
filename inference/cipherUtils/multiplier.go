@@ -195,6 +195,7 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
 //  | version with optimized dimentions
 //  v
 
+//Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
 func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
@@ -295,6 +296,7 @@ func PrepackBlocks(X BlocksOperand, dimOut int, Box CkksBox) {
 	}
 }
 
+//Prepacking cipher
 func Prepack(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, eval ckks.Evaluator) {
 	img := eval.MultByiNew(input)
 	eval.Rotate(img, dimIn, img)
@@ -303,6 +305,7 @@ func Prepack(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, eval ckks.Evalua
 	eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
 }
 
+//Prepacking plain
 func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box CkksBox) *ckks.Plaintext {
 	tmp := Box.Encoder.Decode(input, Box.Params.LogSlots())
 	img := plainUtils.MulByi(plainUtils.ComplexToReal(tmp))
@@ -427,6 +430,8 @@ func RepackCols(X *EncInput, colP int, Box CkksBox) {
 }
 
 //HELPERS
+
+//Gets the replication factor used for the multipication algorithm given the inner rows and cols of the weight block-matrix
 func GetReplicaFactor(dimMid, dimOut int) int {
 	if dimOut > dimMid {
 		return plainUtils.Max(int(math.Ceil(float64(dimOut)/float64(dimMid)))+1, 3)

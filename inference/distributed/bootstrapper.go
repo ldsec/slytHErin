@@ -12,6 +12,7 @@ func NewDistributedBootstrapper(master *LocalMaster, minLevel int) *DistributedB
 	return &DistributedBtp{master: master, minLevel: minLevel}
 }
 
+//Starts refresh protocol with master
 func (Btp *DistributedBtp) Bootstrap(X *cipherUtils.EncInput) {
 	Btp.master.StartProto(REFRESH, X, nil, Btp.minLevel)
 }

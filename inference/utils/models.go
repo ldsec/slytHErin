@@ -24,6 +24,7 @@ type Kernel struct {
 	Cols int       `json:"cols"`
 }
 
+//A Kernel (convolution in Toeplitz form or dense) and A Bias
 type Layer struct {
 	Weight Kernel `json:"weight"`
 	Bias   Bias   `json:"bias"`
@@ -49,7 +50,8 @@ func (s *Stats) Accumulate(other Stats) {
 }
 
 func (s *Stats) PrintResult() {
-	fmt.Println("Results: ")
+	fmt.Println("---------------------------------------------------------------------------------")
+	fmt.Println("[!] Results: ")
 	fmt.Printf("Accuracy: %f\n", s.Accuracy/float64(s.Iters))
 	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects, s.Iters*s.Batch)
 	fmt.Printf("Avg Time for Eval: %f\n ms", float64(s.Time)/float64(s.Iters))
@@ -93,6 +95,7 @@ func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
 	return res
 }
 
+//Returns number of correct values, accuracy and predicted values
 func Predict(Y []int, labels int, result [][]float64) (int, float64, []int) {
 	batchSize := len(Y)
 	predictions := make([]int, batchSize)
