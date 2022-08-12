@@ -14,6 +14,7 @@ a transposed input in row-major order and a weight matrix
 in diagonal order: every diagonal is multiplied elementwise with a 
 rotated version of the input ciphertext.
 The algorithm is very efficient, as it use hoisted rotations.
+Moreover, it produces an output which is fully compatible with subsequent multiplication, with no need for repacking.
 ![image](./static/mul.png)
 
 ### Input packing
@@ -77,7 +78,8 @@ the cohort uses the model to perform prediction as a service:
   - the master node invokes a distributed key switch algorithm
   to switch to obtain a prediction encrypted under the querier's public key
   - prediction is sent back to the querier for decryption
-    ![image](./static/scenario_2.png)
+
+  ![image](./static/scenario_2.png)
 
 - Scenario 3: We assume that in a setup phase, the model owner sends the model,
 encrypted, to the client. The client can thus use the model to perform the inference
