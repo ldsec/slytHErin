@@ -1,11 +1,22 @@
-## CryptoNets training problem
-I managed to identify the problem, with a certain degree of certainty, to the use of the square activation function that will "blow up" the inputs. Probably what happens at that point is that the Sigmoid computed in the backprop. step becames 0...
-Putting ReLU in place of the square seems to solve the problem, even if the architecture is weird with the sum pooling.
-Also initializing weights after the square to small values seems to be good but not enough
+## Cryptonet
+You can run ```python3 cryptonet.py``` to train a new cryptonet model.
+After this you should see a ```cryptonet_packed.json``` file in the ```models```
+folder. You can copy this to ```inference/cryptonet```
 
-## SimpleNet
-In the paper for CryptoNet they mention a simplified 5-layer network used for inference. Apparently this one works much (much!)better during the training.
-Many combinations of activation function (square, relu, polynomial approx of relu up to degree=4) have been experimented. Best seems to be xavier init + relu or square.
+### Data
+You can generate the json with MNIST data with ```python3 dataHandler.py --model cryptonet```
+and find the file in the ```data``` folder as a json
 
-## AlexNet
-AlexNet with Sum Pooling instead of MaxPooling...waiting for training. Architecture is been implemented following the PyTorch standard one
+## NN
+You are provided with the json files already generated
+
+### Data
+Same as cryptonet, use dataHandler with ```--model nn```
+
+## Methods
+### Convolution as Dense layer
+Representation of ```gen_kernel_matrix```
+![image](../inference/static/conv_trans.png)
+
+Representation of ```pack_conv```
+![image](../inference/static/conv.png)
