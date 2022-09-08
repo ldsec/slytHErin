@@ -25,12 +25,38 @@ type SetupMsg struct {
 	SkShare *rlwe.SecretKey `json:"skShare,omitempty"`
 	Pk      *rlwe.PublicKey `json:"pk,omitempty"`
 	Id      int             `json:"id,omitempty"`
-	Addr    string          `json:"addr,omitempty"`
+	Port    int             `json:"port,omitempty"`
 }
 
-//Creates a player on remote node after receiving setup parameters from master. It is a dummy setup
-func Setup(addr string, params ckks.Parameters) *LocalPlayer {
-	addrTCP, err := net.ResolveTCPAddr("tcp", addr)
+var SetupPort = 7777   //port used by remote nodes to receive SetupMsg from master
+var ServicePort = 9999 //port used by remote nodes to receive ProtocolMsg from master
+
+//Invoked by master to spawn players on remote servers
+func MasterSetup(playersAddr []string, parties int, skShares []*rlwe.SecretKey, pkP *rlwe.PublicKey) {
+	//start players
+	for i := 1; i < parties; i++ {
+		msg := SetupMsg{
+			SkShare: skShares[i],
+			Pk:      pkP,
+			Id:      i,
+			Port:    ServicePort,
+		}
+		data, err := json.Marshal(msg)
+		utils.ThrowErr(err)
+		addr := playersAddr[i] + strconv.Itoa(SetupPort)
+		c, err := net.Dial("tcp", addr)
+		utils.ThrowErr(err)
+		c, err = Network.Conn(c)
+		utils.ThrowErr(err)
+		fmt.Printf("[!] Master: Sending config to player %d \n", i)
+		err = WriteTo(c, data)
+		utils.ThrowErr(err)
+	}
+}
+
+//Invoked by player to create player instance on remote node after receiving setup parameters from master. It is a dummy setup
+func PlayerSetup(setupPort int, params ckks.Parameters) *LocalPlayer {
+	addrTCP, err := net.ResolveTCPAddr("tcp", "127.0.0.1:"+strconv.Itoa(setupPort))
 	utils.ThrowErr(err)
 	listener, err := net.ListenTCP("tcp", addrTCP)
 	utils.ThrowErr(err)
@@ -42,7 +68,10 @@ func Setup(addr string, params ckks.Parameters) *LocalPlayer {
 	var setupMsg SetupMsg
 	err = json.Unmarshal(data, &setupMsg)
 	utils.ThrowErr(err)
-	player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, setupMsg.Addr)
+	addr := "127.0.0.1:" + strconv.Itoa(setupMsg.Port)
+	player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, addr)
+	conn.Close()
+	fmt.Printf("[!] Plater %d: received config and created instance\n", setupMsg.Id)
 	return player
 }
 

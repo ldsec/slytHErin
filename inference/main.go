@@ -59,7 +59,6 @@ func main() {
 		}
 	}
 
-	setupAddr := "127.0.0.1:7000"
 	//this creates a new player and listens for instructions from master
-	distributed.Setup(setupAddr, params)
+	distributed.PlayerSetup(distributed.SetupPort, params)
 }

@@ -18,7 +18,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 )
 
 /*
@@ -33,11 +32,13 @@ var MB = 1024 * KB
 //var MAX_SIZE = 10 * MB //LogN = 14
 var MAX_SIZE = 21 * MB //LogN = 15
 
-var Network = &latency.Network{
-	Kbps:    1024 * 1024, //1 Gbps
-	Latency: 200 * time.Millisecond,
-	MTU:     1500, // Ethernet
-}
+//var Network = &latency.Network{ //simulates LAN
+//	Kbps:    1024 * 1024, //1 Gbps
+//	Latency: 200 * time.Millisecond,
+//	MTU:     1500, // Ethernet
+//}
+
+var Network = &latency.Local //no overhead
 
 //HELPERS
 
@@ -109,6 +110,8 @@ type LocalPlayer struct {
 	Conn   net.Listener
 }
 
+//Creates and returns new master node. This node is in charge of the computations using the encrypted model
+//and orchestrates the distributed bootstrap and refresh
 func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int) (*LocalMaster, error) {
 	master := new(LocalMaster)
 	master.sk = sk
@@ -130,6 +133,8 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	return master, nil
 }
 
+//Returns a player node, which will take part in distributed bootstrap and key switch protocol
+//the player will be listening on the port specicied by address
 func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr string) (*LocalPlayer, error) {
 	player := new(LocalPlayer)
 	player.sk = sk

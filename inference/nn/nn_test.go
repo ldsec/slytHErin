@@ -181,8 +181,12 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 //Master invokes distributed refresh with a variable number of parties, and finally invokes key switch protocol
 //Prediction is received under Querier public key
 //Use NN20_poly since it was trained with HE friendly parameters
+//EDIT: this version emulates LAN on localhost with injected sleep calls for latency and bandwidth
 func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	//nn20 - 4m for 48 batch with logN15_NN20
+	if distributed.Network.Latency == 0 {
+		panic("Please ensure that the global var Network in distributed/local.go is set to latency.Network{} setting for lan emulation")
+	}
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
 	var layers = 20    //20 or 50
@@ -237,130 +241,312 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		}
 	}
 
-	for _, splits := range possibleSplits {
-		splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
-		cipherUtils.PrintSetOfSplits(splits)
-		batchSize := splitInfo.InputRows * splitInfo.InputRowP
-		nn.SetBatch(batchSize)
+	splits := possibleSplits[0]
+	splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
+	cipherUtils.PrintSetOfSplits(splits)
+	batchSize := splitInfo.InputRows * splitInfo.InputRowP
+	nn.SetBatch(batchSize)
 
-		path := fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
-		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+	path = fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 
-		skP := new(rlwe.SecretKey)
-		skShares := make([]*rlwe.SecretKey, parties)
-		pkP := new(rlwe.PublicKey)
-		rtks := new(rlwe.RotationKeySet)
-		rlk := new(rlwe.RelinearizationKey)
-		kgenP := ckks.NewKeyGenerator(params)
+	skP := new(rlwe.SecretKey)
+	skShares := make([]*rlwe.SecretKey, parties)
+	pkP := new(rlwe.PublicKey)
+	rtks := new(rlwe.RotationKeySet)
+	rlk := new(rlwe.RelinearizationKey)
+	kgenP := ckks.NewKeyGenerator(params)
 
-		if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
-			skShares, skP, pkP, kgenP = distributed.DummyEncKeyGen(params, crs, parties)
-			rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+	if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
+		skShares, skP, pkP, kgenP = distributed.DummyEncKeyGen(params, crs, parties)
+		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
 
-			rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, splitInfo.RowPOfWeights, splitInfo.ColPOfWeights, params, nil)
-			rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
+		rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, splitInfo.RowPOfWeights, splitInfo.ColPOfWeights, params, nil)
+		rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
 
-			distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
+		distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
+	} else {
+		skP, skShares, rtks = distributed.DeserializeKeys(path, parties) //read from file
+		kgenP = ckks.NewKeyGenerator(params)
+		pkP = kgenP.GenPublicKey(skP)
+		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+	}
+
+	decP := ckks.NewDecryptor(params, skP)
+
+	Box := cipherUtils.CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),                                             //public
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}), //from parties
+		Decryptor:    decP,                                                                //from parties for debug
+		Encryptor:    ckks.NewEncryptor(params, pkP),                                      //from parties
+		BootStrapper: nil,
+	}
+
+	//[!] Start distributed parties
+	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
+	utils.ThrowErr(err)
+	players := make([]*distributed.LocalPlayer, parties-1)
+	//start players
+	for i := 0; i < parties-1; i++ {
+		players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1])
+		utils.ThrowErr(err)
+	}
+
+	// info for bootstrapping
+	var minLevel int
+	var ok bool
+	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel > params.MaxLevel() {
+		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
+	}
+
+	Btp := distributed.NewDistributedBootstrapper(master, poolSize)
+	cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
+
+	fmt.Println("Encryped NN...")
+
+	datacn := data.LoadData("nn_data.json")
+	err = datacn.Init(batchSize)
+	utils.ThrowErr(err)
+
+	result := utils.NewStats(batchSize)
+	resultExp := utils.NewStats(batchSize)
+
+	iters := 0
+	maxIters := 5
+
+	for true {
+		X, Y, err := datacn.Batch()
+		Xbatch := plainUtils.NewDense(X)
+		if err != nil || iters >= maxIters {
+			//dataset completed
+			break
+		}
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
+		utils.ThrowErr(err)
+		cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
+
+		if !debug {
+			resHE, end := cne.Eval(Xenc)
+
+			fmt.Println("Key Switch to querier public key")
+			master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+			fmt.Println("End", end)
+			//Switch to Dec of Querier
+			Box.Decryptor = decQ
+			resClear := cipherUtils.DecInput(resHE, Box)
+			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+			fmt.Println("Accuracy HE: ", accuracy)
+			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+
 		} else {
-			skP, skShares, rtks = distributed.DeserializeKeys(path, parties) //read from file
-			kgenP = ckks.NewKeyGenerator(params)
-			pkP = kgenP.GenPublicKey(skP)
-			rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+
+			fmt.Println("Key Switch to querier public key")
+			master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+			fmt.Println("End", end)
+			//Switch to Dec of Querier
+			Box.Decryptor = decQ
+			resClear := cipherUtils.DecInput(resHE, Box)
+			utils.Predict(Y, 10, resClear)
+			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+			fmt.Println("Accuracy HE: ", accuracy)
+			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+			fmt.Println("Accuracy Expected: ", accuracy)
+			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 		}
+		iters++
+	}
+	result.PrintResult()
+	if debug {
+		fmt.Println("Expected")
+		resultExp.PrintResult()
+	}
+}
 
-		decP := ckks.NewDecryptor(params, skP)
+//EXPERIMENT 2: Model encrypted,data encrypted,distributed bootstrap
+//The model is supposed to be trained under encryption.
+//Querier sends data encrypted under nodes cohort public key to master server which performs computation
+//Master invokes distributed refresh with a variable number of parties, and finally invokes key switch protocol
+//Prediction is received under Querier public key
+//Use NN20_poly since it was trained with HE friendly parameters
+//EDIT: this version attempts to distribute the workload among real servers in LAN setting
+func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
+	if distributed.Network.Latency != 0 {
+		panic("Please ensure that the global var Network in distributed/local.go is set to latency.local by commenting out the other setting for lan emulation")
+	}
 
-		Box := cipherUtils.CkksBox{
-			Params:       params,
-			Encoder:      ckks.NewEncoder(params),                                             //public
-			Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}), //from parties
-			Decryptor:    decP,                                                                //from parties for debug
-			Encryptor:    ckks.NewEncryptor(params, pkP),                                      //from parties
-			BootStrapper: nil,
+	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
+	var layers = 20
+	var parties = 3
+	var debug = false      //set to true for debug mode
+	var multiThread = true //set to true to enable multiple threads
+
+	suffix := "_poly"
+	if !HETrain {
+		suffix = ""
+	}
+	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
+
+	loader := new(NNLoader)
+	nn := loader.Load(path)
+
+	params := paramsLogN15_NN20
+
+	features := 28 * 28
+	rows, cols := nn.GetDimentions()
+	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+
+	poolSize := 1
+	if multiThread {
+		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
+	}
+
+	if len(possibleSplits) == 0 {
+		panic(errors.New("No splits found!"))
+	}
+	cipherUtils.PrintAllSplits(possibleSplits)
+
+	// QUERIER
+	kgenQ := ckks.NewKeyGenerator(params)
+	skQ := kgenQ.GenSecretKey()
+	pkQ := kgenQ.GenPublicKey(skQ)
+	decQ := ckks.NewDecryptor(params, skQ)
+
+	// PARTIES
+	// [!] All the keys for encryption, keySw, Relin can be produced by MPC protocols
+	// [!] We assume that these protocols have been run in a setup phase by the parties
+
+	//Allocate addresses on ICC LAN
+	subNet := "10.90.40."
+	startingAddr := 2
+	partiesAddr := make([]string, parties)
+	for i := 0; i < parties; i++ {
+		partiesAddr[i] = subNet + strconv.Itoa(startingAddr+i)
+	}
+
+	splits := possibleSplits[0]
+	splitInfo, splitCode := cipherUtils.ExctractInfo(splits)
+	cipherUtils.PrintSetOfSplits(splits)
+	batchSize := splitInfo.InputRows * splitInfo.InputRowP
+	nn.SetBatch(batchSize)
+
+	path = fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+
+	skP := new(rlwe.SecretKey)
+	skShares := make([]*rlwe.SecretKey, parties)
+	pkP := new(rlwe.PublicKey)
+	rtks := new(rlwe.RotationKeySet)
+	rlk := new(rlwe.RelinearizationKey)
+	kgenP := ckks.NewKeyGenerator(params)
+
+	if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
+		skShares, skP, pkP, kgenP = distributed.DummyEncKeyGen(params, crs, parties)
+		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+
+		rotations := cipherUtils.GenRotations(splitInfo.InputRows, splitInfo.InputCols, splitInfo.NumWeights, splitInfo.RowsOfWeights, splitInfo.ColsOfWeights, splitInfo.RowPOfWeights, splitInfo.ColPOfWeights, params, nil)
+		rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
+
+		distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
+	} else {
+		skP, skShares, rtks = distributed.DeserializeKeys(path, parties) //read from file
+		kgenP = ckks.NewKeyGenerator(params)
+		pkP = kgenP.GenPublicKey(skP)
+		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
+	}
+
+	decP := ckks.NewDecryptor(params, skP)
+
+	Box := cipherUtils.CkksBox{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),                                             //public
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rtks}), //from parties
+		Decryptor:    decP,                                                                //from parties for debug
+		Encryptor:    ckks.NewEncryptor(params, pkP),                                      //from parties
+		BootStrapper: nil,
+	}
+
+	//[!] Start distributed parties
+	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
+	utils.ThrowErr(err)
+	distributed.MasterSetup(partiesAddr, parties, skShares, pkP)
+
+	// info for bootstrapping
+	var minLevel int
+	var ok bool
+	if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel > params.MaxLevel() {
+		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
+	}
+
+	Btp := distributed.NewDistributedBootstrapper(master, poolSize)
+	//instantiate new he network
+	cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
+
+	fmt.Println("Encryped NN...")
+
+	datacn := data.LoadData("nn_data.json")
+	err = datacn.Init(batchSize)
+	utils.ThrowErr(err)
+
+	result := utils.NewStats(batchSize)
+	resultExp := utils.NewStats(batchSize)
+
+	iters := 0
+	maxIters := 5
+
+	for true {
+		X, Y, err := datacn.Batch()
+		Xbatch := plainUtils.NewDense(X)
+		if err != nil || iters >= maxIters {
+			//dataset completed
+			break
 		}
-
-		//[!] Start distributed parties
-		master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
 		utils.ThrowErr(err)
-		players := make([]*distributed.LocalPlayer, parties-1)
-		//start players
-		for i := 0; i < parties-1; i++ {
-			players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1])
-			utils.ThrowErr(err)
+		cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
+
+		if !debug {
+			resHE, end := cne.Eval(Xenc)
+
+			fmt.Println("Key Switch to querier public key")
+			master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+			fmt.Println("End", end)
+			//Switch to Dec of Querier
+			Box.Decryptor = decQ
+			resClear := cipherUtils.DecInput(resHE, Box)
+			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+			fmt.Println("Accuracy HE: ", accuracy)
+			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+
+		} else {
+			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+
+			fmt.Println("Key Switch to querier public key")
+			master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
+
+			fmt.Println("End", end)
+			//Switch to Dec of Querier
+			Box.Decryptor = decQ
+			resClear := cipherUtils.DecInput(resHE, Box)
+			utils.Predict(Y, 10, resClear)
+			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+			fmt.Println("Accuracy HE: ", accuracy)
+			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+			fmt.Println("Accuracy Expected: ", accuracy)
+			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 		}
-
-		// info for bootstrapping
-		var minLevel int
-		var ok bool
-		if minLevel, _, ok = dckks.GetMinimumLevelForBootstrapping(128, params.DefaultScale(), parties, params.Q()); ok != true || minLevel > params.MaxLevel() {
-			utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
-		}
-
-		Btp := distributed.NewDistributedBootstrapper(master, poolSize)
-		cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
-
-		fmt.Println("Encryped NN...")
-
-		datacn := data.LoadData("nn_data.json")
-		err = datacn.Init(batchSize)
-		utils.ThrowErr(err)
-
-		result := utils.NewStats(batchSize)
-		resultExp := utils.NewStats(batchSize)
-
-		iters := 0
-		maxIters := 5
-
-		for true {
-			X, Y, err := datacn.Batch()
-			Xbatch := plainUtils.NewDense(X)
-			if err != nil || iters >= maxIters {
-				//dataset completed
-				break
-			}
-			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
-			utils.ThrowErr(err)
-			cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
-
-			if !debug {
-				resHE, end := cne.Eval(Xenc)
-
-				fmt.Println("Key Switch to querier public key")
-				master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
-
-				fmt.Println("End", end)
-				//Switch to Dec of Querier
-				Box.Decryptor = decQ
-				resClear := cipherUtils.DecInput(resHE, Box)
-				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
-				fmt.Println("Accuracy HE: ", accuracy)
-				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
-
-			} else {
-				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
-
-				fmt.Println("Key Switch to querier public key")
-				master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
-
-				fmt.Println("End", end)
-				//Switch to Dec of Querier
-				Box.Decryptor = decQ
-				resClear := cipherUtils.DecInput(resHE, Box)
-				utils.Predict(Y, 10, resClear)
-				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
-				fmt.Println("Accuracy HE: ", accuracy)
-				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
-				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
-				fmt.Println("Accuracy Expected: ", accuracy)
-				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
-			}
-			iters++
-		}
-		result.PrintResult()
-		if debug {
-			fmt.Println("Expected")
-			resultExp.PrintResult()
-		}
-		break
+		iters++
+	}
+	result.PrintResult()
+	if debug {
+		fmt.Println("Expected")
+		resultExp.PrintResult()
 	}
 }
