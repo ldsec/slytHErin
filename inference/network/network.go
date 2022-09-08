@@ -46,9 +46,9 @@ type NetworkJ struct {
 
 //Network loaded from json. Implements INetwork. Abstract type
 type Network struct {
-	layers           []utils.Layer `json:"layers"`
+	layers           []utils.Layer
 	activations      []utils.ChebyPolyApprox
-	numOfLayers      int `json:"numLayers"`
+	numOfLayers      int
 	numOfActivations int
 	batchSize        int
 }
@@ -75,6 +75,7 @@ func (n *Network) GetNumOfActivations() int {
 	return n.numOfActivations
 }
 
+//Gets weights and biases
 func (n *Network) GetParams() ([]*mat.Dense, []*mat.Dense) {
 	if !n.IsInit() {
 		panic(errors.New("Not init"))
@@ -102,6 +103,7 @@ func (n *Network) SetBatch(batchSize int) {
 	n.batchSize = batchSize
 }
 
+//Gets weight and bias rescaled before activation (e.g for activation in Chebychev base)
 func (n *Network) GetParamsRescaled() ([]*mat.Dense, []*mat.Dense) {
 	if !n.IsInit() {
 		panic("Not init")

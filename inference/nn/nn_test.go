@@ -63,7 +63,7 @@ var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 
 //EXPERIMENT 1 - Model clear,data encrypted, Centralized Bootstrapping
 //Querier sends encrypted data to server for privacy-preserving inference. Server uses centralized bootstrapping
-//Use NN50
+//Uses NN50
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	//nn50 - 38m for 96 batch
 	var HETrain = false    //model trained with HE SGD, LSE and poly act (HE Friendly)

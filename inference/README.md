@@ -26,7 +26,7 @@ It follows from the matrix multiplication:
 ![image](./static/input_pack.png)
 
 Additionally, we use the complex trick to get a reduction
-in the size of a factor 2. Ciphertext is then replicated by ```replicaFactor```:
+in the size of a factor 2: adjacent columns of the input matrix are compressed in one, exploiting the imaginary part of complex numbers in the slots. Ciphertext is then replicated by ```replicaFactor``` in order to simulate cyclic rotations:
 
 ![image](./static/input_complex.png)
 
@@ -70,8 +70,8 @@ is sent back to the querier for decryption.
 a collective public key and a private key of which each node holds a share.
 We assume that the model itself has been trained
 by the cohort of nodes under encryption, so to preserve the
-confidentiality of each nodes' training data. After training,
-the cohort uses the model to perform prediction as a service:
+confidentiality of each nodes' training data and of the model itself. After training,
+the cohort uses the model to perform oblivious prediction as a service:
   - the querier encrypts its data under the cohort public key
   - the master node performs the computation. It invokes a distributed bootstrapping
   algorithm if needed.
