@@ -92,3 +92,31 @@ the result, masked with a 128 bit random mask, to the model owner, who offers an
 - Experiment 2: Evaluation of Cryptonet following scenario 3
 - Experiment 3: Evaluation of ZAMA NN50 following scenario 1. Centralized bootstrapping is needed
 - Experiment 4: Evaluation of ZAMA NN20 modified to be trained under encryption. Distributed bootstrapping and key switch
+
+#### Results
+
+##### Hardware Specifications
+- 2x Intel Xeon E5-2680 v3, 48 vCPUs
+- 16GB DDR4 RAM
+##### Network Setting
+Localhost interface wrapped with `latency` go package:
+Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
+##### Experiment 1
+| Batch 	| LogN 	| Latency(s) 	|
+|-------	|------	|------------	|
+| 41    	| 14   	| 5.6        	|
+
+##### Experiment 2
+| Batch 	| LogN 	| Latency(s) 	 |
+|-------	|------	|--------------|
+| 41    	| 14   	| 13        	  |
+
+##### Experiment 3
+| Batch 	 | LogN 	 | Latency(s) 	  |
+|---------|--------|---------------|
+| 96    	 | 16   	 | 2280        	 |
+
+##### Experiment 4
+| Batch 	 | LogN 	 | Parties | Latency(s) 	 |
+|---------|--------|---------|--------------|
+| 48    	 | 15   	 | 10      | 240        	 |
