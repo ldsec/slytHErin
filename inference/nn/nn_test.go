@@ -184,14 +184,11 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 //EDIT: this version emulates LAN on localhost with injected sleep calls for latency and bandwidth
 func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	//nn20 - 4m for 48 batch with logN15_NN20
-	if distributed.Network.Latency == 0 {
-		panic("Please ensure that the global var Network in distributed/local.go is set to latency.Network{} setting for lan emulation")
-	}
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
 	var layers = 20    //20 or 50
 	var parties = 10
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	suffix := "_poly"
@@ -284,12 +281,13 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	}
 
 	//[!] Start distributed parties
-	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
+	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize, true)
 	utils.ThrowErr(err)
 	players := make([]*distributed.LocalPlayer, parties-1)
 	//start players
 	for i := 0; i < parties-1; i++ {
-		players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1])
+		players[i], err = distributed.NewLocalPlayer(skShares[i+1], pkP, params, i+1, partiesAddr[i+1], true)
+		go players[i].Listen()
 		utils.ThrowErr(err)
 	}
 
@@ -375,14 +373,12 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 //Use NN20_poly since it was trained with HE friendly parameters
 //EDIT: this version attempts to distribute the workload among real servers in LAN setting
 func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
-	if distributed.Network.Latency != 0 {
-		panic("Please ensure that the global var Network in distributed/local.go is set to latency.local by commenting out the other setting for lan emulation")
-	}
+	//291s for 48 batch, loss in accuracy ~ 0.4%
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
 	var layers = 20
 	var parties = 3
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	suffix := "_poly"
@@ -409,7 +405,6 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	if len(possibleSplits) == 0 {
 		panic(errors.New("No splits found!"))
 	}
-	cipherUtils.PrintAllSplits(possibleSplits)
 
 	// QUERIER
 	kgenQ := ckks.NewKeyGenerator(params)
@@ -426,7 +421,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	startingAddr := 2
 	partiesAddr := make([]string, parties)
 	for i := 0; i < parties; i++ {
-		partiesAddr[i] = subNet + strconv.Itoa(startingAddr+i)
+		partiesAddr[i] = subNet + strconv.Itoa(startingAddr+i) + ":" + strconv.Itoa(distributed.ServicePort)
 	}
 
 	splits := possibleSplits[0]
@@ -472,9 +467,9 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	}
 
 	//[!] Start distributed parties
-	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize)
+	master, err := distributed.NewLocalMaster(skShares[0], pkP, params, parties, partiesAddr, Box, poolSize, false)
 	utils.ThrowErr(err)
-	distributed.MasterSetup(partiesAddr, parties, skShares, pkP)
+	master.MasterSetup(partiesAddr, parties, skShares, pkP)
 
 	// info for bootstrapping
 	var minLevel int
@@ -525,7 +520,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 
 		} else {
-			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 1.0)
+			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 2.0)
 
 			fmt.Println("Key Switch to querier public key")
 			master.StartProto(distributed.CKSWITCH, resHE, pkQ, minLevel)
@@ -544,7 +539,9 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 		}
 		iters++
 	}
+	master.StartProto(distributed.END, nil, nil, 0)
 	result.PrintResult()
+	fmt.Println()
 	if debug {
 		fmt.Println("Expected")
 		resultExp.PrintResult()

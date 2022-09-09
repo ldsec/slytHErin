@@ -2,7 +2,6 @@ package distributed
 
 import (
 	"crypto/md5"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,63 +20,8 @@ import (
 )
 
 /*
-Local version of distributed protocols using  localhost for communication
+Distributed protocol in LAN environment, either on distributed servers or on LAN simulated via Localhost
 */
-
-var DELIM = []byte{'\r', '\n', '\r', '\n'}
-var TYP = uint8(255)
-var KB = 1024
-var MB = 1024 * KB
-
-//var MAX_SIZE = 10 * MB //LogN = 14
-var MAX_SIZE = 21 * MB //LogN = 15
-
-//var Network = &latency.Network{ //simulates LAN
-//	Kbps:    1024 * 1024, //1 Gbps
-//	Latency: 200 * time.Millisecond,
-//	MTU:     1500, // Ethernet
-//}
-
-var Network = &latency.Local //no overhead
-
-//HELPERS
-
-//write TLV value
-func WriteTo(c io.Writer, buf []byte) error {
-	err := binary.Write(c, binary.LittleEndian, TYP) //1-byte type
-	if err != nil {
-		return err
-	}
-	err = binary.Write(c, binary.LittleEndian, uint32(len(buf))) //4-byte len
-	if err != nil {
-		return err
-	}
-	err = binary.Write(c, binary.LittleEndian, buf)
-	return err
-}
-
-//reads TLV value
-func ReadFrom(c io.Reader) ([]byte, error) {
-	var typ uint8
-	err := binary.Read(c, binary.LittleEndian, &typ)
-	if err != nil {
-		return nil, err
-	}
-	if typ != TYP {
-		return nil, errors.New("Not TYP")
-	}
-	var l uint32
-	err = binary.Read(c, binary.LittleEndian, &l)
-	if err != nil {
-		return nil, err
-	}
-	if int(l) > MAX_SIZE {
-		return nil, errors.New("Payload too large")
-	}
-	buf := make([]byte, l)
-	err = binary.Read(c, binary.LittleEndian, buf)
-	return buf, err
-}
 
 //Local master is the master node for LAN setting
 type LocalMaster struct {
@@ -86,6 +30,7 @@ type LocalMaster struct {
 	Cpk      *rlwe.PublicKey
 	Params   ckks.Parameters
 	Parties  int
+	Network  *latency.Network
 	//comms
 	Addr        *net.TCPAddr
 	PartiesAddr []*net.TCPAddr
@@ -100,6 +45,7 @@ type LocalMaster struct {
 
 //Local players hold sk shares for LAN Setting
 type LocalPlayer struct {
+	Remote
 	PCKS   *dckks.PCKSProtocol    //PubKeySwitch
 	BTP    *dckks.RefreshProtocol //Bootstrap
 	sk     *rlwe.SecretKey
@@ -112,7 +58,8 @@ type LocalPlayer struct {
 
 //Creates and returns new master node. This node is in charge of the computations using the encrypted model
 //and orchestrates the distributed bootstrap and refresh
-func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int) (*LocalMaster, error) {
+//Set localhost to true if LAN is simulated on localhost
+func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int, localhost bool) (*LocalMaster, error) {
 	master := new(LocalMaster)
 	master.sk = sk
 	master.Cpk = cpk
@@ -130,12 +77,20 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	}
 	master.poolSize = poolSize
 	master.Box = Box
+	master.Network = Lan
+	if localhost {
+		master.Network = Local
+	}
 	return master, nil
 }
 
 //Returns a player node, which will take part in distributed bootstrap and key switch protocol
-//the player will be listening on the port specicied by address
-func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr string) (*LocalPlayer, error) {
+//Set localhost to true if LAN is simulated on localhost
+func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr string, localhost bool) (*LocalPlayer, error) {
+	Network := Lan
+	if localhost {
+		Network = Local
+	}
 	player := new(LocalPlayer)
 	player.sk = sk
 	player.Cpk = cpk
@@ -148,7 +103,6 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 	listener = Network.Listener(listener)
 	player.Conn = listener.(net.Listener)
-	go player.listen()
 
 	return player, err
 }
@@ -318,7 +272,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 		addr := lmst.PartiesAddr[i]
 		c, err := net.Dial("tcp", addr.String())
 		utils.ThrowErr(err)
-		c, err = Network.Conn(c)
+		c, err = lmst.Network.Conn(c)
 		utils.ThrowErr(err)
 		go func(c net.Conn, buf []byte) {
 			defer c.Close()
@@ -368,7 +322,7 @@ func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphe
 		addr := lmst.PartiesAddr[i]
 		c, err := net.Dial("tcp", addr.String())
 		utils.ThrowErr(err)
-		c, err = Network.Conn(c)
+		c, err = lmst.Network.Conn(c)
 		utils.ThrowErr(err)
 		go func(c net.Conn, buf []byte) {
 			defer c.Close()
@@ -476,7 +430,7 @@ func (lmst *LocalMaster) DispatchRef(resp ProtocolResp) {
 //PLAYERS PROTOCOL
 
 //Accepts an incoming TCP connection and handles it (blocking)
-func (lp *LocalPlayer) listen() {
+func (lp *LocalPlayer) Listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
 		c, err := lp.Conn.Accept()

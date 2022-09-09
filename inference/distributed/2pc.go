@@ -9,6 +9,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"google.golang.org/grpc/benchmark/latency"
 	"io"
 	"net"
 	"sync"
@@ -20,6 +21,7 @@ type Client struct {
 
 	//comms
 	ServerAddr *net.TCPAddr
+	Network    *latency.Network
 
 	//for Ending
 	runningMux    sync.RWMutex
@@ -32,12 +34,15 @@ type Client struct {
 
 //Server offers decryption as a service for oblivious decryption protocol
 type Server struct {
+	Remote
 	Box  cipherUtils.CkksBox
 	Addr *net.TCPAddr
 	Conn net.Listener
 }
 
-func NewClient(ServerAddr string, Box cipherUtils.CkksBox, poolSize int) (*Client, error) {
+//Creates new client. Client runs inference on plaintext data with encrypted model
+//Set localhost to true if LAN is simulated on localhost
+func NewClient(ServerAddr string, Box cipherUtils.CkksBox, poolSize int, localhost bool) (*Client, error) {
 	cl := new(Client)
 	cl.Box = Box
 	cl.poolSize = poolSize
@@ -45,11 +50,20 @@ func NewClient(ServerAddr string, Box cipherUtils.CkksBox, poolSize int) (*Clien
 	cl.ProtoBuf = new(sync.Map)
 	var err error
 	cl.ServerAddr, err = net.ResolveTCPAddr("tcp", ServerAddr)
+	if localhost {
+		cl.Network = Local
+	} else {
+		cl.Network = Lan
+	}
 
 	return cl, err
 }
 
-func NewServer(Box cipherUtils.CkksBox, addr string) (*Server, error) {
+func NewServer(Box cipherUtils.CkksBox, addr string, localhost bool) (*Server, error) {
+	Network := Lan
+	if localhost {
+		Network = Local
+	}
 	server := new(Server)
 
 	var err error
@@ -58,7 +72,7 @@ func NewServer(Box cipherUtils.CkksBox, addr string) (*Server, error) {
 	listener = Network.Listener(listener)
 	server.Conn = listener.(net.Listener)
 	server.Box = Box
-	go server.listen()
+
 	return server, err
 }
 
@@ -198,7 +212,7 @@ func (Cl *Client) RunMasking(ctId int) {
 	addr := Cl.ServerAddr
 	c, err := net.Dial("tcp", addr.String())
 	utils.ThrowErr(err)
-	c, err = Network.Conn(c)
+	c, err = Cl.Network.Conn(c)
 	utils.ThrowErr(err)
 	go func(c net.Conn, buf []byte) {
 		defer c.Close()
@@ -242,7 +256,7 @@ func (Cl *Client) DispatchMasking(resp ProtocolMsg) {
 //Server PROTOCOL
 
 //Accepts an incoming TCP connection and handles it (blocking)
-func (s *Server) listen() {
+func (s *Server) Listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
 		c, err := s.Conn.Accept()

@@ -3,6 +3,7 @@ package distributed
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 )
 
 /*
@@ -28,11 +30,17 @@ type SetupMsg struct {
 	Port    int             `json:"port,omitempty"`
 }
 
+//setup msg from client to server
+type ServerMsg struct {
+	Sk   *rlwe.SecretKey `json:"sk,omitempty"`
+	Addr string          `json:"addr,omitempty" json:"addr,omitempty"`
+}
+
 var SetupPort = 7777   //port used by remote nodes to receive SetupMsg from master
 var ServicePort = 9999 //port used by remote nodes to receive ProtocolMsg from master
 
 //Invoked by master to spawn players on remote servers
-func MasterSetup(playersAddr []string, parties int, skShares []*rlwe.SecretKey, pkP *rlwe.PublicKey) {
+func (lmst *LocalMaster) MasterSetup(playersAddr []string, parties int, skShares []*rlwe.SecretKey, pkP *rlwe.PublicKey) {
 	//start players
 	for i := 1; i < parties; i++ {
 		msg := SetupMsg{
@@ -43,36 +51,106 @@ func MasterSetup(playersAddr []string, parties int, skShares []*rlwe.SecretKey, 
 		}
 		data, err := json.Marshal(msg)
 		utils.ThrowErr(err)
-		addr := playersAddr[i] + strconv.Itoa(SetupPort)
+		//strip service port and add setup port
+		addr := strings.Split(playersAddr[i], ":")[0] + ":" + strconv.Itoa(SetupPort)
 		c, err := net.Dial("tcp", addr)
 		utils.ThrowErr(err)
-		c, err = Network.Conn(c)
+		c, err = lmst.Network.Conn(c)
 		utils.ThrowErr(err)
-		fmt.Printf("[!] Master: Sending config to player %d \n", i)
+		fmt.Printf("[!] Master: Sending config to player %d -- %dB\n", i, len(data))
 		err = WriteTo(c, data)
 		utils.ThrowErr(err)
+		c.Close()
 	}
 }
 
-//Invoked by player to create player instance on remote node after receiving setup parameters from master. It is a dummy setup
-func PlayerSetup(setupPort int, params ckks.Parameters) *LocalPlayer {
-	addrTCP, err := net.ResolveTCPAddr("tcp", "127.0.0.1:"+strconv.Itoa(setupPort))
+//Invoked by client to setup server listening on setup port
+func (cl *Client) ClientSetup(serverAddr string, params ckks.Parameters, sk *rlwe.SecretKey) {
+	msg := ServerMsg{
+		Sk:   sk,
+		Addr: strings.Split(serverAddr, ":")[0] + ":" + strconv.Itoa(ServicePort),
+	}
+	data, err := json.Marshal(msg)
+	c, err := net.Dial("tcp", serverAddr)
 	utils.ThrowErr(err)
-	listener, err := net.ListenTCP("tcp", addrTCP)
+	c, err = cl.Network.Conn(c)
 	utils.ThrowErr(err)
-	conn, err := listener.AcceptTCP()
+	fmt.Printf("[!] Client: Sending config to server -- %dB\n", len(data))
+	err = WriteTo(c, data)
 	utils.ThrowErr(err)
+	c.Close()
+}
+
+//Invoked by remote server for setup. The msg received will create either a player instance for the distributed bootstrap and keyswitch or a server instance for the oblivious decryption
+func ListenForSetup(setupAddr string, params ckks.Parameters) Remote {
+	Network := Lan
+	listener, err := net.Listen("tcp", setupAddr)
+	utils.ThrowErr(err)
+	listener = Network.Listener(listener)
+	if err != nil {
+		listener.Close()
+		panic(err)
+	}
+	fmt.Printf("Listening at %s\n", setupAddr)
+
+	conn, err := listener.Accept()
+	if err != nil {
+		listener.Close()
+		panic(err)
+	}
 
 	data, err := ReadFrom(conn)
-	utils.ThrowErr(err)
+	if err != nil {
+		conn.Close()
+		panic(err)
+	}
+
+	v := map[string]interface{}{}
+	var serverMsg ServerMsg
 	var setupMsg SetupMsg
-	err = json.Unmarshal(data, &setupMsg)
-	utils.ThrowErr(err)
-	addr := "127.0.0.1:" + strconv.Itoa(setupMsg.Port)
-	player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, addr)
-	conn.Close()
-	fmt.Printf("[!] Plater %d: received config and created instance\n", setupMsg.Id)
-	return player
+	err = json.Unmarshal(data, &v)
+	if err != nil {
+		conn.Close()
+		panic(err)
+	}
+	if _, ok := v["addr"]; ok {
+		//it's servermsg
+		err = json.Unmarshal(data, &serverMsg)
+		utils.ThrowErr(err)
+		utils.ThrowErr(err)
+		//strip setup port
+		box := cipherUtils.CkksBox{
+			Params:       params,
+			Encoder:      ckks.NewEncoder(params),
+			Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{}),
+			Encryptor:    ckks.NewEncryptor(params, serverMsg.Sk),
+			Decryptor:    ckks.NewDecryptor(params, serverMsg.Sk),
+			BootStrapper: nil,
+		}
+		server, err := NewServer(box, serverMsg.Addr, false)
+		if err != nil {
+			conn.Close()
+			panic(err)
+		}
+		fmt.Printf("[!] Server: received config and created instance at %s\n", server.Addr.String())
+		conn.Close()
+		return server
+	} else if _, ok := v["port"]; ok {
+		//it's setupmsg
+		err = json.Unmarshal(data, &setupMsg)
+		utils.ThrowErr(err)
+		//strip setup port
+		addr := strings.Split(setupAddr, ":")[0] + ":" + strconv.Itoa(setupMsg.Port)
+		player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, addr, false)
+		if err != nil {
+			conn.Close()
+			panic(err)
+		}
+		fmt.Printf("[!] Player %d: received config and created instance at %s\n", setupMsg.Id, addr)
+		conn.Close()
+		return player
+	}
+	panic("Could not create instance")
 }
 
 //Returns array of secret key shares, secret key and collective encryption key

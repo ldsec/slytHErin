@@ -99,8 +99,13 @@ the result, masked with a 128 bit random mask, to the model owner, who offers an
 - 2x Intel Xeon E5-2680 v3, 48 vCPUs
 - 16GB DDR4 RAM
 ##### Network Setting
-Localhost interface wrapped with `latency` go package:
+- Localhost interface wrapped with `latency` go package:
 Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
+- LAN of EPFL ICCLUSTER
+###### How to setup and run on cluster
+- Step 1: run setup.sh -- this will upload the necessary files and configure the servers
+- Step 2: before running experiments, run remote.sh -- this will start the server listening for experiment configuration
+- Step 3: upon ending the experiment, run cleanup.sh -- this will kill the process listening on the ports
 ##### Experiment 1
 | Batch 	| LogN 	| Latency(s) 	|
 |-------	|------	|------------	|

@@ -8,6 +8,6 @@ tar -C /usr/local -xzf go1.18.3.linux-amd64.tar.gz
 export GOROOT=/usr/local/go
 export PATH=$PATH:$GOROOT/bin
 
-apt update
-apt upgrade
+apt update -y
+apt upgrade -y
 apt install -y gcc

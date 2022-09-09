@@ -17,7 +17,7 @@ type CkksBox struct {
 	Encryptor    ckks.Encryptor
 	Decryptor    ckks.Decryptor
 	BootStrapper *bootstrapping.Bootstrapper
-	sk           *rlwe.SecretKey
+	Sk           *rlwe.SecretKey
 	rtks         *rlwe.RotationKeySet
 	evk          bootstrapping.EvaluationKeys
 	kgen         ckks.KeyGenerator
@@ -39,7 +39,7 @@ func NewBox(params ckks.Parameters) CkksBox {
 		Decryptor:    dec,
 		Encryptor:    enc,
 		BootStrapper: nil,
-		sk:           sk,
+		Sk:           sk,
 		kgen:         kgen,
 	}
 	return Box
@@ -61,15 +61,15 @@ func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool
 	info, _ := ExctractInfo(splits)
 	rotations := GenRotations(info.InputRows, info.InputCols, info.NumWeights, info.RowsOfWeights, info.ColsOfWeights, info.RowPOfWeights, info.ColPOfWeights, Box.Params, &btpParams)
 
-	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
-	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
+	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
+	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
 		Rlk:  rlk,
 		Rtks: Box.rtks,
 	})
 	var err error
 	if withBtp {
-		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
+		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.Sk)
 		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
@@ -79,15 +79,15 @@ func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool
 //returns Box with Evaluator and Bootstrapper if needed
 func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams bootstrapping.Parameters) CkksBox {
 
-	rlk := Box.kgen.GenRelinearizationKey(Box.sk, 2)
-	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.sk)
+	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
+	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
 		Rlk:  rlk,
 		Rtks: Box.rtks,
 	})
 	var err error
 	if withBtp {
-		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.sk)
+		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.Sk)
 		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
@@ -155,7 +155,7 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 
 //serializes keys to disk
 func SerializeBox(path string, Box CkksBox) {
-	sk := Box.sk
+	sk := Box.Sk
 	rotKeys := Box.rtks
 	fmt.Println("Writing keys to disk: ", path)
 	dat, err := sk.MarshalBinary()
@@ -231,7 +231,7 @@ func DeserealizeBox(path string, params ckks.Parameters, btpParams bootstrapping
 		Decryptor:    ckks.NewDecryptor(params, &sk),
 		Encryptor:    ckks.NewEncryptor(params, &sk),
 		BootStrapper: nil,
-		sk:           &sk,
+		Sk:           &sk,
 		rtks:         &rotKeys,
 		kgen:         kgen,
 	}
