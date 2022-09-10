@@ -242,7 +242,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 //Server offers an oblivious decryption service
 //EDIT: this version spawns the server on a server on the iccluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
-	//13s for 41 batch with logn14 mask
+	//12.5s for 41 batch with logn14 mask
 
 	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -267,11 +267,13 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		panic(errors.New("No splits found!"))
 	}
 
-	serverAddr := cluster.SubNet + strconv.Itoa(cluster.StartingAddr+1) + ":" + strconv.Itoa(distributed.ServicePort)
-	setupServerAddr := cluster.SubNet + strconv.Itoa(cluster.StartingAddr+1) + ":" + strconv.Itoa(distributed.SetupPort)
-	client, err := distributed.NewClient(serverAddr, Box, poolSize, false)
+	clusterConfig := cluster.ReadConfig("../cluster/config.json")
+	serverAddr := clusterConfig.ClusterIps[1] //0 is the client
+
+	client, err := distributed.NewClient(serverAddr+":"+strconv.Itoa(distributed.ServicePort), Box, poolSize, false)
 	utils.ThrowErr(err)
-	client.ClientSetup(setupServerAddr, params, Box.Sk)
+
+	client.ClientSetup(serverAddr, Box.Sk)
 	utils.ThrowErr(err)
 
 	splits := possibleSplits[0]

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
+	"github.com/ldsec/dnn-inference/inference/cluster"
 	"github.com/ldsec/dnn-inference/inference/data"
 	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
@@ -377,7 +378,6 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
 	var layers = 20
-	var parties = 3
 	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
@@ -417,11 +417,11 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
 	//Allocate addresses on ICC LAN
-	subNet := "10.90.40."
-	startingAddr := 2
+	clusterConfig := cluster.ReadConfig("../cluster/config.json")
+	parties := clusterConfig.NumServers
 	partiesAddr := make([]string, parties)
 	for i := 0; i < parties; i++ {
-		partiesAddr[i] = subNet + strconv.Itoa(startingAddr+i) + ":" + strconv.Itoa(distributed.ServicePort)
+		partiesAddr[i] = clusterConfig.ClusterIps[i]
 	}
 
 	splits := possibleSplits[0]

@@ -6,7 +6,6 @@ import (
 	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"os"
-	"strconv"
 )
 
 //Spawns an instance node into a server in the iccluster
@@ -60,6 +59,6 @@ func main() {
 	}
 
 	//this creates a new player and listens for instructions from master
-	instance := distributed.ListenForSetup(*addr+":"+strconv.Itoa(distributed.SetupPort), params)
+	instance := distributed.ListenForSetup(*addr, params)
 	instance.Listen()
 }
