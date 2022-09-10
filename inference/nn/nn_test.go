@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
+	"github.com/ldsec/dnn-inference/inference/cluster"
 	"github.com/ldsec/dnn-inference/inference/data"
 	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
@@ -417,11 +418,10 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	// [!] We assume that these protocols have been run in a setup phase by the parties
 
 	//Allocate addresses on ICC LAN
-	subNet := "10.90.40."
-	startingAddr := 2
+	clusterConfig := cluster.ReadConfig("../cluster/config.json")
 	partiesAddr := make([]string, parties)
-	for i := 0; i < parties; i++ {
-		partiesAddr[i] = subNet + strconv.Itoa(startingAddr+i) + ":" + strconv.Itoa(distributed.ServicePort)
+	for i := 0; i < parties-1; i++ {
+		partiesAddr[i] = clusterConfig.ClusterIps[i+1]
 	}
 
 	splits := possibleSplits[0]

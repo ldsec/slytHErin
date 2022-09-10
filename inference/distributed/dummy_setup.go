@@ -13,7 +13,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 )
 
 /*
@@ -27,13 +26,11 @@ type SetupMsg struct {
 	SkShare *rlwe.SecretKey `json:"skShare,omitempty"`
 	Pk      *rlwe.PublicKey `json:"pk,omitempty"`
 	Id      int             `json:"id,omitempty"`
-	Port    int             `json:"port,omitempty"`
 }
 
 //setup msg from client to server
 type ServerMsg struct {
-	Sk   *rlwe.SecretKey `json:"sk,omitempty"`
-	Addr string          `json:"addr,omitempty" json:"addr,omitempty"`
+	Sk *rlwe.SecretKey `json:"sk,omitempty"`
 }
 
 var SetupPort = 7777   //port used by remote nodes to receive SetupMsg from master
@@ -47,12 +44,11 @@ func (lmst *LocalMaster) MasterSetup(playersAddr []string, parties int, skShares
 			SkShare: skShares[i],
 			Pk:      pkP,
 			Id:      i,
-			Port:    ServicePort,
 		}
 		data, err := json.Marshal(msg)
 		utils.ThrowErr(err)
 		//strip service port and add setup port
-		addr := strings.Split(playersAddr[i], ":")[0] + ":" + strconv.Itoa(SetupPort)
+		addr := playersAddr[i] + ":" + strconv.Itoa(SetupPort)
 		c, err := net.Dial("tcp", addr)
 		utils.ThrowErr(err)
 		c, err = lmst.Network.Conn(c)
@@ -67,11 +63,10 @@ func (lmst *LocalMaster) MasterSetup(playersAddr []string, parties int, skShares
 //Invoked by client to setup server listening on setup port
 func (cl *Client) ClientSetup(serverAddr string, params ckks.Parameters, sk *rlwe.SecretKey) {
 	msg := ServerMsg{
-		Sk:   sk,
-		Addr: strings.Split(serverAddr, ":")[0] + ":" + strconv.Itoa(ServicePort),
+		Sk: sk,
 	}
 	data, err := json.Marshal(msg)
-	c, err := net.Dial("tcp", serverAddr)
+	c, err := net.Dial("tcp", serverAddr+":"+strconv.Itoa(SetupPort))
 	utils.ThrowErr(err)
 	c, err = cl.Network.Conn(c)
 	utils.ThrowErr(err)
@@ -82,16 +77,16 @@ func (cl *Client) ClientSetup(serverAddr string, params ckks.Parameters, sk *rlw
 }
 
 //Invoked by remote server for setup. The msg received will create either a player instance for the distributed bootstrap and keyswitch or a server instance for the oblivious decryption
-func ListenForSetup(setupAddr string, params ckks.Parameters) Remote {
+func ListenForSetup(addr string, params ckks.Parameters) Remote {
 	Network := Lan
-	listener, err := net.Listen("tcp", setupAddr)
+	listener, err := net.Listen("tcp", addr+":"+strconv.Itoa(SetupPort))
 	utils.ThrowErr(err)
 	listener = Network.Listener(listener)
 	if err != nil {
 		listener.Close()
 		panic(err)
 	}
-	fmt.Printf("Listening at %s\n", setupAddr)
+	fmt.Printf("Listening at %s\n", addr)
 
 	conn, err := listener.Accept()
 	if err != nil {
@@ -113,7 +108,7 @@ func ListenForSetup(setupAddr string, params ckks.Parameters) Remote {
 		conn.Close()
 		panic(err)
 	}
-	if _, ok := v["addr"]; ok {
+	if _, ok := v["sk"]; ok {
 		//it's servermsg
 		err = json.Unmarshal(data, &serverMsg)
 		utils.ThrowErr(err)
@@ -127,7 +122,7 @@ func ListenForSetup(setupAddr string, params ckks.Parameters) Remote {
 			Decryptor:    ckks.NewDecryptor(params, serverMsg.Sk),
 			BootStrapper: nil,
 		}
-		server, err := NewServer(box, serverMsg.Addr, false)
+		server, err := NewServer(box, addr+":"+strconv.Itoa(ServicePort), false)
 		if err != nil {
 			conn.Close()
 			panic(err)
@@ -135,18 +130,17 @@ func ListenForSetup(setupAddr string, params ckks.Parameters) Remote {
 		fmt.Printf("[!] Server: received config and created instance at %s\n", server.Addr.String())
 		conn.Close()
 		return server
-	} else if _, ok := v["port"]; ok {
+	} else if _, ok := v["skShare"]; ok {
 		//it's setupmsg
 		err = json.Unmarshal(data, &setupMsg)
 		utils.ThrowErr(err)
 		//strip setup port
-		addr := strings.Split(setupAddr, ":")[0] + ":" + strconv.Itoa(setupMsg.Port)
-		player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, addr, false)
+		player, err := NewLocalPlayer(setupMsg.SkShare, setupMsg.Pk, params, setupMsg.Id, addr+":"+strconv.Itoa(ServicePort), false)
 		if err != nil {
 			conn.Close()
 			panic(err)
 		}
-		fmt.Printf("[!] Player %d: received config and created instance at %s\n", setupMsg.Id, addr)
+		fmt.Printf("[!] Player %d: received config and created instance at %s\n", setupMsg.Id, player.Addr.String())
 		conn.Close()
 		return player
 	}
