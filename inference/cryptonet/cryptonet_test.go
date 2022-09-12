@@ -129,6 +129,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	}
 	result.PrintResult()
 	if debug {
+		fmt.Println()
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}
@@ -232,6 +233,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	}
 	result.PrintResult()
 	if debug {
+		fmt.Println()
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}
@@ -298,7 +300,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	resultExp := utils.NewStats(batchSize)
 
 	iters := 0
-	maxIters := 1
+	maxIters := 5
 
 	for true {
 		X, Y, err := datacn.Batch()
@@ -337,6 +339,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	}
 	result.PrintResult()
 	if debug {
+		fmt.Println()
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}

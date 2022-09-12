@@ -107,23 +107,38 @@ Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
 - Step 1: run ip_scan.sh -- this will collect the ip addresses of the servers in cluster
 - Step 2: run setup.sh -- this will upload the necessary files and configure the servers
 - Step 3: before running experiments, run remote.sh -- this will start the servers listening for experiment configuration
-- Step 4: upon ending the experiment, run cleanup.sh -- this will kill the processes holding the ports
+- Step 4: upon ending the experiment (if fail), run cleanup.sh -- this will kill the processes holding the ports
 ##### Experiment 1
 | Batch 	| LogN 	| Latency(s) 	|
 |-------	|------	|------------	|
 | 41    	| 14   	| 5.6        	|
 
-##### Experiment 2
-| Batch 	| LogN 	| Latency(s) 	 |
-|-------	|------	|--------------|
-| 41    	| 14   	| 13        	  |
+##### Experiment 2 -- localhost
+| Batch 	| LogN 	| Latency(s) 	  |
+|-------	|------	|---------------|
+| 41    	| 14   	| 12.9        	 |
+
+##### Experiment 2 -- Cluster LAN
+| Batch 	| LogN 	| Latency(s) 	  |
+|-------	|------	|---------------|
+| 41    	| 14   	| 11.7        	 |
 
 ##### Experiment 3
-| Batch 	 | LogN 	 | Latency(s) 	  |
-|---------|--------|---------------|
-| 96    	 | 16   	 | 2280        	 |
+| Batch 	 | LogN 	 | Latency(s) 	    |
+|---------|--------|-----------------|
+| 96    	 | 16   	 | 2298.3        	 |
 
-##### Experiment 4
-| Batch 	 | LogN 	 | Parties | Latency(s) 	 |
-|---------|--------|---------|--------------|
-| 48    	 | 15   	 | 10      | 240        	 |
+##### Experiment 4 -- localhost
+| Batch 	 | LogN 	 | Parties | Latency(s) 	   |
+|---------|--------|---------|----------------|
+| 48    	 | 15   	 | 10      | 240.7        	 |
+
+##### Experiment 4 -- Cluster LAN
+| Batch 	 | LogN 	 | Parties | Latency(s) 	   |
+|---------|--------|---------|----------------|
+| 48    	 | 15   	 | 10      | 226.4        	 |
+
+###### Notes
+- Experiment 1 can run in around 4s with batch size = 1
+- Experiment 3 shows a loss in accuracy of around 0.2% over 5 iters
+- Experiment 4 shows a loss in accuracy of around 0.4% over 5 iters

@@ -164,11 +164,13 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
 				fmt.Println("Accuracy Expected: ", accuracy)
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 			}
 			iters++
 		}
 		result.PrintResult()
 		if debug {
+			fmt.Println()
 			fmt.Println("Expected")
 			resultExp.PrintResult()
 		}
@@ -361,6 +363,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	}
 	result.PrintResult()
 	if debug {
+		fmt.Println()
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}
@@ -543,6 +546,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	result.PrintResult()
 	fmt.Println()
 	if debug {
+		fmt.Println()
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}
