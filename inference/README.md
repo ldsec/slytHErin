@@ -19,7 +19,7 @@ Moreover, it produces an output which is fully compatible with subsequent multip
 
 ### Input packing
 It follows from the matrix multiplication:
-- each image in batch (a tensor) is row-flattened
+- each image in batch (a tensor) is row-flattened (appending the channels next to each other)
 - you get a matrix NxD
 - matrix is transposed (DxN) and flattened
 
