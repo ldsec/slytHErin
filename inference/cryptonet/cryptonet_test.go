@@ -298,7 +298,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	resultExp := utils.NewStats(batchSize)
 
 	iters := 0
-	maxIters := 5
+	maxIters := 1
 
 	for true {
 		X, Y, err := datacn.Batch()
@@ -340,4 +340,5 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		fmt.Println("Expected")
 		resultExp.PrintResult()
 	}
+	client.StartProto(distributed.END, nil)
 }

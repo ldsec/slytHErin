@@ -17,13 +17,13 @@ var MB = 1024 * KB
 
 var MAX_SIZE = 30 * MB //LogN = 15, setup included
 
-var Local = &latency.Network{ //simulates LAN on localhost
+var Local = latency.Network{ //simulates LAN on localhost
 	Kbps:    1024 * 1024, //1 Gbps
 	Latency: 200 * time.Millisecond,
 	MTU:     1500, // Ethernet
 }
 
-var Lan = &latency.Local //no overhead, used in real distributed env.
+var Lan = latency.Local //no overhead, used in real distributed env.
 
 //HELPERS
 

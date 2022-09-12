@@ -35,6 +35,9 @@ else
     exit
 fi
 
+cat config.json | jq ".cluster_ips = []" > tmp.json
+mv tmp.json config.json
+
 parties=$(jq ".num_servers" < $FILE)
 user=$(jq ".ssh_user" < $FILE)
 user=$(echo "$user" | tr -d '"')

@@ -56,6 +56,37 @@ class Packer:
         return self.packer(serialized)
 
 """
+    The idea:
+        gen_kernel_matrix(k) returns for each channel of a kernel in a conv layer, a matrix m s.t
+        m @ x.T = conv(k,x) (where @ is the matrix multiplication)
+
+        if we have n kernels with f channels (meaning that input image has f dimensions),
+        we can generate a matrix M
+
+        M = | m(k1_ch1) |...| m(k1_chf)|
+            | m(k2_ch1) |...| m(k2_chf)|
+            | .........................|
+            | m(kn_ch1) |...| m(kn_chf)|
+
+        s.t 
+
+        M @ X.T = conv(k,X)
+        where each row of x is a flattened data sample |x_1|...|x_f|
+
+        The output is going to be a matrix b x (output_dim**2)*n
+        where n is the number of output channels (i.e kernels)
+        and output_dim is the dimention of a single convolution between x_i and a channel j of a kernel i,
+        so 
+        X @ M.T =
+         |x1 * k1|...|x1 * kn|
+         |x2 * k1|...|x2 * kn|
+         |...................|
+         |xb * k1|...|xb * kn| 
+
+        Following this, is easy to pack the subsequent layers as the output format is consistent with the input
+"""
+
+"""
     Pack kernel matrixes, each kernel filter in Toepltiz representation
     Output is:
     |k1_ch1|...|k1_chn|

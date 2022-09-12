@@ -10,7 +10,10 @@ Help()
    # Display Help
    echo "Make sure that you have already the servers in the ssh known hosts"
    echo "Make sure that you have config.json in same folder"
-   echo "Syntax: setup.sh [-h]"
+   echo "Syntax: setup.sh [-options]"
+   echo "options:"
+   echo "-l: y/n light version to move only inference binary"
+   echo "-h help"
 }
 
 ############################################################
@@ -19,8 +22,11 @@ Help()
 ############################################################
 ############################################################
 
-while getopts ":h" flag; do
+light="n"
+
+while getopts ":l:h" flag; do
     case "${flag}" in
+        l) light=${OPTARG};;
         h) Help
            exit;;
     esac
@@ -33,11 +39,14 @@ else
     echo "$FILE does not exist."
     exit
 fi
+
 parties=$(jq ".num_servers" < $FILE)
 user=$(jq ".ssh_user" < $FILE)
 user=$(echo "$user" | tr -d '"')
 pwd=$(jq ".ssh_pwd" < $FILE)
 pwd=$(echo "$pwd" | tr -d '"')
+
+echo "Light mode: $light"
 
 i=0
 cwd=$(pwd)
@@ -47,12 +56,26 @@ while [ $i -lt $parties ]; do
       id="0""$id"
   fi
   echo "connecting to: '${user}:${pwd}@iccluster${id}.iccluster.epfl.ch'"
-  lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "rmdir dnn; mkdir dnn; cd dnn; rmdir config; mkdir config; exit"
+
+  if [ "$light" == "n" ]; then
+    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "rmdir dnn; mkdir dnn; cd dnn; rmdir config; mkdir config; exit"
+  else
+    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd dnn/config; rm inference; exit"
+  fi
+
   cd ../../config
-  for f in *; do
-    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put ${f}; exit"
-  done
-  sshpass -p "${pwd}" ssh "${user}"@iccluster"${id}".iccluster.epfl.ch "cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
+
+
+  if [ "$light" == "n" ]; then
+  # move all
+    for f in *; do
+      lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put ${f}; exit"
+    done
+    sshpass -p "${pwd}" ssh -o StrictHostKeyChecking=no "${user}"@iccluster"${id}".iccluster.epfl.ch "cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
+  else
+    # move only inference binary
+    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put inference; exit"
+  fi
   i=$((i+1))
   cd "$cwd"
 done

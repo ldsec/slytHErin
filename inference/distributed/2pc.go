@@ -21,7 +21,7 @@ type Client struct {
 
 	//comms
 	ServerAddr *net.TCPAddr
-	Network    *latency.Network
+	Network    latency.Network
 
 	//for Ending
 	runningMux    sync.RWMutex
@@ -78,7 +78,7 @@ func NewServer(Box cipherUtils.CkksBox, addr string, localhost bool) (*Server, e
 
 //MASTER PROTOCOL
 
-func (Cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.PlainInput, proto ProtocolType, ch chan []int) {
+func (cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.PlainInput, proto ProtocolType, ch chan []int) {
 	var err error
 	for {
 		coords, ok := <-ch //feed the goroutines
@@ -87,16 +87,16 @@ func (Cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.Plai
 			return
 		}
 		i, j := coords[0], coords[1]
-		res.Blocks[i][j], err = Cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
+		res.Blocks[i][j], err = cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
 		utils.ThrowErr(err)
 	}
 }
 
 //starts protocol instances in parallel
-func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *cipherUtils.PlainInput {
+func (cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *cipherUtils.PlainInput {
 	var err error
 	if proto == END {
-		Cl.initProto(proto, nil, -1)
+		cl.initProto(proto, nil, -1)
 		return nil
 	}
 	res := &cipherUtils.PlainInput{
@@ -109,24 +109,24 @@ func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 	for i := range res.Blocks {
 		res.Blocks[i] = make([]*ckks.Plaintext, res.ColP)
 	}
-	if Cl.poolSize == 1 {
+	if cl.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				res.Blocks[i][j], err = Cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
+				res.Blocks[i][j], err = cl.initProto(proto, X.Blocks[i][j], i*X.ColP+j)
 				utils.ThrowErr(err)
 			}
 		}
-	} else if Cl.poolSize > 1 {
+	} else if cl.poolSize > 1 {
 		//bounded threading
 
 		ch := make(chan []int)
 		var wg sync.WaitGroup
 		//spawn consumers
-		for i := 0; i < Cl.poolSize; i++ {
+		for i := 0; i < cl.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Cl.spawnEvaluators(X, res, proto, ch)
+				cl.spawnEvaluators(X, res, proto, ch)
 				defer wg.Done()
 			}()
 		}
@@ -143,33 +143,33 @@ func (Cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 }
 
 //initiate protocol instance
-func (Cl *Client) initProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (*ckks.Plaintext, error) {
+func (cl *Client) initProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (*ckks.Plaintext, error) {
 	switch proto {
 	case MASKING:
-		Cl.ProtoBuf.Store(ctId, &MaskProtocol{
+		cl.ProtoBuf.Store(ctId, &MaskProtocol{
 			Ct:           ct,
-			Pt:           ckks.NewPlaintext(Cl.Box.Params, ct.Level(), ct.Scale),
+			Pt:           ckks.NewPlaintext(cl.Box.Params, ct.Level(), ct.Scale),
 			FeedbackChan: make(chan *ckks.Plaintext),
 		})
-		go Cl.RunMasking(ctId)
+		go cl.RunMasking(ctId)
 
 	case END:
-		Cl.RunEnd()
+		cl.RunEnd()
 		return nil, nil
 	default:
 		return nil, errors.New("Unknown protocol")
 	}
-	entry, ok := Cl.ProtoBuf.Load(ctId)
+	entry, ok := cl.ProtoBuf.Load(ctId)
 	if !ok {
 		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
 	}
 	res := <-entry.(*MaskProtocol).FeedbackChan
-	Cl.ProtoBuf.Delete(ctId)
+	cl.ProtoBuf.Delete(ctId)
 	return res, nil
 }
 
 //reads reply from open connection to player
-func (Cl *Client) Dispatch(c net.Conn) {
+func (cl *Client) Dispatch(c net.Conn) {
 	buf, err := ReadFrom(c)
 	utils.ThrowErr(err)
 	//sum := md5.Sum(buf)
@@ -179,25 +179,25 @@ func (Cl *Client) Dispatch(c net.Conn) {
 	utils.ThrowErr(err)
 	switch resp.Type {
 	case MASKING:
-		Cl.DispatchMasking(resp)
+		cl.DispatchMasking(resp)
 	default:
 		utils.ThrowErr(errors.New("resp for unknown protocol"))
 	}
 }
 
 //Runs the Masking protocol
-func (Cl *Client) RunMasking(ctId int) {
+func (cl *Client) RunMasking(ctId int) {
 	//create protocol instance
-	entry, ok := Cl.ProtoBuf.Load(ctId)
+	entry, ok := cl.ProtoBuf.Load(ctId)
 	if !ok {
 		utils.ThrowErr(errors.New(fmt.Sprintf("Error fetching entry for id %d", ctId)))
 	}
 	ct := entry.(*MaskProtocol).Ct
-	mask := cipherUtils.Mask(ct, cipherUtils.BoxShallowCopy(Cl.Box))
+	mask := cipherUtils.Mask(ct, cipherUtils.BoxShallowCopy(cl.Box))
 	//update entry
 	entry.(*MaskProtocol).Mask = mask
 	entry.(*MaskProtocol).Ct = ct
-	Cl.ProtoBuf.Store(ctId, entry)
+	cl.ProtoBuf.Store(ctId, entry)
 
 	dat, err := ct.MarshalBinary()
 	utils.ThrowErr(err)
@@ -209,27 +209,27 @@ func (Cl *Client) RunMasking(ctId int) {
 	// send message and listen for reply:
 
 	fmt.Printf("[*] Client -- Sending masking init %d B ID: %d to server. Checksum: %x\n\n", len(buf), msg.Id, sum)
-	addr := Cl.ServerAddr
+	addr := cl.ServerAddr
 	c, err := net.Dial("tcp", addr.String())
 	utils.ThrowErr(err)
-	c, err = Cl.Network.Conn(c)
+	c, err = cl.Network.Conn(c)
 	utils.ThrowErr(err)
 	go func(c net.Conn, buf []byte) {
 		defer c.Close()
 		err = WriteTo(c, buf)
 		utils.ThrowErr(err)
-		Cl.Dispatch(c)
+		cl.Dispatch(c)
 	}(c, buf)
 }
 
-func (Cl *Client) RunEnd() {
+func (cl *Client) RunEnd() {
 	msg := ProtocolMsg{Type: END, Id: 0, Ct: nil}
 	buf, err := json.Marshal(msg)
 	utils.ThrowErr(err)
 
 	// send message and close
 
-	addr := Cl.ServerAddr
+	addr := cl.ServerAddr
 	c, err := net.DialTCP("tcp", nil, addr)
 	utils.ThrowErr(err)
 	go func(c *net.TCPConn, buf []byte) {
@@ -241,15 +241,15 @@ func (Cl *Client) RunEnd() {
 }
 
 //Listen for shares and aggregates
-func (Cl *Client) DispatchMasking(resp ProtocolMsg) {
-	entry, ok := Cl.ProtoBuf.Load(resp.Id)
+func (cl *Client) DispatchMasking(resp ProtocolMsg) {
+	entry, ok := cl.ProtoBuf.Load(resp.Id)
 	if !ok {
 		return
 	}
 	pt := entry.(*MaskProtocol).Pt
 	utils.ThrowErr(pt.Value.UnmarshalBinary(resp.Ct))
-	cipherUtils.UnMask(pt, entry.(*MaskProtocol).Mask, cipherUtils.BoxShallowCopy(Cl.Box))
-	Cl.ProtoBuf.Store(resp.Id, entry.(*MaskProtocol))
+	cipherUtils.UnMask(pt, entry.(*MaskProtocol).Mask, cipherUtils.BoxShallowCopy(cl.Box))
+	cl.ProtoBuf.Store(resp.Id, entry.(*MaskProtocol))
 	entry.(*MaskProtocol).FeedbackChan <- pt
 }
 

@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 )
 
@@ -30,7 +31,7 @@ type LocalMaster struct {
 	Cpk      *rlwe.PublicKey
 	Params   ckks.Parameters
 	Parties  int
-	Network  *latency.Network
+	Network  latency.Network
 	//comms
 	Addr        *net.TCPAddr
 	PartiesAddr []*net.TCPAddr
@@ -72,7 +73,7 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	master.Addr, _ = net.ResolveTCPAddr("tcp", partiesAddr[0])
 	var err error
 	for i := 1; i < parties; i++ {
-		master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i])
+		master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i]+":"+strconv.Itoa(ServicePort))
 		utils.ThrowErr(err)
 	}
 	master.poolSize = poolSize

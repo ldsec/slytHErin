@@ -103,9 +103,11 @@ the result, masked with a 128 bit random mask, to the model owner, who offers an
 Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
 - LAN of EPFL ICCLUSTER
 ###### How to setup and run on cluster
-- Step 1: run setup.sh -- this will upload the necessary files and configure the servers
-- Step 2: before running experiments, run remote.sh -- this will start the server listening for experiment configuration
-- Step 3: upon ending the experiment, run cleanup.sh -- this will kill the process listening on the ports
+- Step 0: go to /cluster and populate config.json as needed
+- Step 1: run ip_scan.sh -- this will collect the ip addresses of the servers in cluster
+- Step 2: run setup.sh -- this will upload the necessary files and configure the servers
+- Step 3: before running experiments, run remote.sh -- this will start the servers listening for experiment configuration
+- Step 4: upon ending the experiment, run cleanup.sh -- this will kill the processes holding the ports
 ##### Experiment 1
 | Batch 	| LogN 	| Latency(s) 	|
 |-------	|------	|------------	|

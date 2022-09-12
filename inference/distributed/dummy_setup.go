@@ -66,11 +66,12 @@ func (cl *Client) ClientSetup(serverAddr string, sk *rlwe.SecretKey) {
 		Sk: sk,
 	}
 	data, err := json.Marshal(msg)
+
 	c, err := net.Dial("tcp", serverAddr+":"+strconv.Itoa(SetupPort))
 	utils.ThrowErr(err)
 	c, err = cl.Network.Conn(c)
 	utils.ThrowErr(err)
-	fmt.Printf("[!] Client: Sending config to server -- %dB\n", len(data))
+	fmt.Printf("[!] Client: Sending config to server at %s -- %dB\n", serverAddr, len(data))
 	err = WriteTo(c, data)
 	utils.ThrowErr(err)
 	c.Close()
@@ -112,8 +113,6 @@ func ListenForSetup(addr string, params ckks.Parameters) Remote {
 		//it's servermsg
 		err = json.Unmarshal(data, &serverMsg)
 		utils.ThrowErr(err)
-		utils.ThrowErr(err)
-		//strip setup port
 		box := cipherUtils.CkksBox{
 			Params:       params,
 			Encoder:      ckks.NewEncoder(params),
@@ -143,8 +142,9 @@ func ListenForSetup(addr string, params ckks.Parameters) Remote {
 		fmt.Printf("[!] Player %d: received config and created instance at %s\n", setupMsg.Id, player.Addr.String())
 		conn.Close()
 		return player
+	} else {
+		panic("Could not create instance")
 	}
-	panic("Could not create instance")
 }
 
 //Returns array of secret key shares, secret key and collective encryption key
