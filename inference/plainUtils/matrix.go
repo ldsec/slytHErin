@@ -217,13 +217,13 @@ func MulByi(v []float64) []complex128 {
 
 //rotates v of k positions to the left or to the right if k < 0
 func RotateRealArray(v []float64, k int) []float64 {
-	if k < 0 || len(v) == 0 {
+	if k == 0 || len(v) == 0 {
 		return v
 	}
 	var r int
 	if k < 0 {
 		//Right
-		r = len(v) - k%len(v)
+		r = (len(v) - k) % len(v)
 	} else {
 		r = k % len(v)
 	}

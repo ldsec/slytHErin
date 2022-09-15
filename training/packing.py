@@ -71,7 +71,7 @@ class Packer:
         s.t 
 
         M @ X.T = conv(k,X)
-        where each row of x is a flattened data sample |x_1|...|x_f|
+        where each row of x is a flattened data sample |x_1|...|x_f| (x_i is the channel i of one image)
 
         The output is going to be a matrix b x (output_dim**2)*n
         where n is the number of output channels (i.e kernels)
