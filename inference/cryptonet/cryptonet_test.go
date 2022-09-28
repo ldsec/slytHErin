@@ -10,6 +10,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"runtime"
 	"strconv"
 	"testing"
@@ -35,6 +36,16 @@ var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	DefaultScale: float64(1 << 30),
 })
 
+var paramsLogN14_CI, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	RingType:     ring.ConjugateInvariant,
+	LogN:         14,
+	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{60, 60},
+	Sigma:        rlwe.DefaultSigma,
+	LogSlots:     14,
+	DefaultScale: float64(1 << 30),
+})
+
 var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
 	LogQ:         []int{60, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
@@ -55,7 +66,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json")
 
-	params := paramsLogN14
+	params := paramsLogN14_CI
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
 	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)

@@ -284,4 +284,5 @@ func PrintDense(m *mat.Dense) {
 		}
 		fmt.Println("|")
 	}
+	fmt.Println()
 }
