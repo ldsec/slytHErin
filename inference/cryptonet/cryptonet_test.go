@@ -66,7 +66,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json")
 
-	params := paramsLogN14
+	params := paramsLogN14_CI
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
 	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
