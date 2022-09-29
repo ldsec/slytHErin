@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"os"
 )
@@ -26,9 +27,6 @@ type CkksBox struct {
 func NewBox(params ckks.Parameters) CkksBox {
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
-
-	//init rotations
-	//rotations are performed between submatrixes
 
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
@@ -57,9 +55,9 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 }
 
 //returns Box with Evaluator and Bootstrapper if needed
-func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool, splits []BlockSplits) CkksBox {
+func BoxWithSplits(Box CkksBox, withBtp bool, btpParams *bootstrapping.Parameters, splits []BlockSplits) CkksBox {
 	info, _ := ExctractInfo(splits)
-	rotations := GenRotations(info.InputRows, info.InputCols, info.NumWeights, info.RowsOfWeights, info.ColsOfWeights, info.RowPOfWeights, info.ColPOfWeights, Box.Params, &btpParams)
+	rotations := GenRotations(info.InputRows, info.InputCols, info.NumWeights, info.RowsOfWeights, info.ColsOfWeights, info.RowPOfWeights, info.ColPOfWeights, Box.Params, btpParams)
 
 	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
 	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
@@ -69,26 +67,28 @@ func BoxWithSplits(Box CkksBox, btpParams bootstrapping.Parameters, withBtp bool
 	})
 	var err error
 	if withBtp {
-		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.Sk)
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
+		Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
 	return Box
 }
 
 //returns Box with Evaluator and Bootstrapper if needed
-func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams bootstrapping.Parameters) CkksBox {
+func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *bootstrapping.Parameters) CkksBox {
+
+	conjInv := Box.Params.RingType() == ring.ConjugateInvariant
 
 	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
-	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
+	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, !conjInv, Box.Sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
 		Rlk:  rlk,
 		Rtks: Box.rtks,
 	})
 	var err error
 	if withBtp {
-		Box.evk = bootstrapping.GenEvaluationKeys(btpParams, Box.Params, Box.Sk)
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, btpParams, Box.evk)
+		Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
 	return Box

@@ -7,7 +7,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/tuneinsight/lattigo/v3/ckks"
-	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"gonum.org/v1/gonum/mat"
 	"math"
@@ -17,6 +17,16 @@ import (
 
 var CNparamsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
+	LogQ:         []int{45, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
+	LogP:         []int{60, 60},
+	Sigma:        rlwe.DefaultSigma,
+	LogSlots:     13,
+	DefaultScale: float64(1 << 40),
+})
+
+var CNparamsLogN14_CI, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	RingType:     ring.ConjugateInvariant,
+	LogN:         13,
 	LogQ:         []int{45, 40, 40, 40, 40}, //Log(PQ) <= 438 for LogN 14
 	LogP:         []int{60, 60},
 	Sigma:        rlwe.DefaultSigma,
@@ -50,6 +60,53 @@ func FormatWeightMap(W [][]float64, rowIn int, slots int) (map[int][]float64, er
 		if !isZero {
 			nonZeroDiags[rowIn*i] = plainUtils.ReplicateRealArray(diag, 2)
 		}
+	}
+	return nonZeroDiags, nil
+}
+
+func FormatWeightsAsMap_ComplexTrick(w [][]float64, leftdim int, slots int) (map[int][]complex128, error) {
+	d := len(w)
+	if d != len(w[0]) {
+		return nil, errors.New("Non square")
+	}
+	if d*leftdim*2 > slots {
+		return nil, errors.New("d * rowIn * 2 > slots")
+	}
+	scaling := complex(0.5, 0)
+
+	nonZeroDiags := make(map[int][]complex128) //rotation -> diag to be multiplied by
+	m := make([][]complex128, (len(w)+1)/2)
+
+	for i := 0; i < len(w)>>1; i++ {
+
+		m[i] = make([]complex128, leftdim*len(w[0]))
+
+		for j := 0; j < len(w[0]); j++ {
+
+			cReal := w[(i*2+0+j)%len(w)][j]
+			cImag := w[(i*2+1+j)%len(w)][j]
+
+			for k := 0; k < leftdim; k++ {
+				m[i][j*leftdim+k] = scaling * complex(cReal, -cImag) // 0.5 factor for imaginary part cleaning: (a+bi) + (a-bi) = 2a
+			}
+		}
+	}
+	//odd
+	if len(w)&1 == 1 {
+
+		idx := len(m) - 1
+
+		m[idx] = make([]complex128, leftdim*len(w[0]))
+
+		for j := 0; j < len(w[0]); j++ {
+			cReal := w[(idx*2+j)%len(w)][j]
+			for k := 0; k < leftdim; k++ {
+				m[idx][j*leftdim+k] = scaling * complex(cReal, 0)
+			}
+		}
+	}
+	for i := range m {
+		nonZeroDiags[2*i*leftdim] = plainUtils.ReplicateComplexArray(m[i], 2)
 	}
 	return nonZeroDiags, nil
 }
@@ -118,7 +175,7 @@ func Test_LT(t *testing.T) {
 		rotations = append(rotations, lt.Rotations()...)
 		rotations = append(rotations, GenRotations(r, c, 1, []int{c}, []int{c}, []int{1}, []int{1}, CNparamsLogN14, nil)...)
 
-		Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+		Box = BoxWithRotations(Box, rotations, false, nil)
 		start := time.Now()
 		Box.Evaluator.ReplicateLog(ctA, r*c, GetReplicaFactor(c, c), ctA)
 		ctR := Box.Evaluator.LinearTransformNew(ctA, lt)[0]
@@ -164,10 +221,74 @@ func Test_LT(t *testing.T) {
 		}
 	})
 
+	t.Run("Simple Mul Complex Trick", func(t *testing.T) {
+		A := plainUtils.RandMatrix(r, c)
+		W := plainUtils.RandMatrix(c, c)
+		plainUtils.PrintDense(A)
+		plainUtils.PrintDense(W)
+
+		Box := NewBox(CNparamsLogN14)
+
+		ctA := Box.Encryptor.EncryptNew(Box.Encoder.EncodeNew(plainUtils.RowFlatten(plainUtils.TransposeDense(A)), CNparamsLogN14.MaxLevel(), CNparamsLogN14.DefaultScale(), CNparamsLogN14.LogSlots()))
+		diagW, err := FormatWeightsAsMap_ComplexTrick(plainUtils.MatToArray(W), r, CNparamsLogN14.Slots())
+		utils.ThrowErr(err)
+		lt := ckks.GenLinearTransformBSGS(Box.Encoder, diagW, CNparamsLogN14.MaxLevel(), CNparamsLogN14.QiFloat64(CNparamsLogN14.MaxLevel()), 8, CNparamsLogN14.LogSlots())
+		rotations := CNparamsLogN14.RotationsForReplicateLog(r*c, GetReplicaFactor(c, c))
+		rotations = append(rotations, lt.Rotations()...)
+		rotations = append(rotations, GenRotations(r, c, 1, []int{c}, []int{c}, []int{1}, []int{1}, CNparamsLogN14, nil)...)
+
+		Box = BoxWithRotations(Box, rotations, false, nil)
+		start := time.Now()
+		Prepack(ctA, r, c, c, Box.Evaluator)
+		ctR := Box.Evaluator.LinearTransformNew(ctA, lt)[0]
+		Box.Evaluator.Rescale(ctR, Box.Params.DefaultScale(), ctR)
+		Box.Evaluator.Add(ctR, Box.Evaluator.ConjugateNew(ctR), ctR)
+		end1 := time.Since(start)
+
+		ptW := EncodeWeights(CNparamsLogN14.MaxLevel(), plainUtils.MatToArray(W), r, Box)
+		ctA = Box.Encryptor.EncryptNew(Box.Encoder.EncodeNew(plainUtils.RowFlatten(plainUtils.TransposeDense(A)), CNparamsLogN14.MaxLevel(), CNparamsLogN14.DefaultScale(), CNparamsLogN14.LogSlots()))
+		start = time.Now()
+		ctR2 := MulWpt(ctA, r, c, c, ptW, true, true, Box)
+		end2 := time.Since(start)
+
+		ReImg := Box.Encoder.Decode(Box.Decryptor.DecryptNew(ctR), CNparamsLogN14.LogSlots())[:(r * c)]
+		Re := make([]float64, len(ReImg))
+		for i := range ReImg {
+			Re[i] = real(ReImg[i])
+		}
+		ReImg2 := Box.Encoder.Decode(Box.Decryptor.DecryptNew(ctR2), CNparamsLogN14.LogSlots())[:(r * c)]
+		Re2 := make([]float64, len(ReImg2))
+		for i := range ReImg2 {
+			Re2[i] = real(ReImg2[i])
+		}
+
+		fmt.Println("Want")
+		Rm := new(mat.Dense)
+		Rm.Mul(A, W)
+		R := plainUtils.RowFlatten(plainUtils.TransposeDense(Rm))
+		fmt.Println(R)
+		fmt.Println("Got -- lt with BSGS")
+		fmt.Println(Re)
+		fmt.Println("Got -- standard")
+		fmt.Println(Re2)
+
+		fmt.Println("Timings:")
+		fmt.Println("LT: ", end1)
+		fmt.Println("Standard: ", end2)
+
+		for i := range R {
+			assert.Less(t, math.Abs(R[i]-Re[i]), 1e-5, "BSGS fail")
+		}
+
+		for i := range R {
+			assert.Less(t, math.Abs(R[i]-Re2[i]), 1e-5, "Std fail")
+		}
+	})
+
 	t.Run("Mul-Act-Mul", func(t *testing.T) {
 		A := plainUtils.RandMatrix(r, c)
-		W1 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1e-3)
-		W2 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1e-3)
+		W1 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1e-2)
+		W2 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1)
 		plainUtils.PrintDense(A)
 		fmt.Println()
 		plainUtils.PrintDense(W1)
@@ -175,6 +296,9 @@ func Test_LT(t *testing.T) {
 		plainUtils.PrintDense(W2)
 
 		// Activation
+		// the slots with effective results are activated, while the other slots (> r*c) which contain garbage
+		// (due to the replication of the diagonals, which are also rotated, which is needed for simulating a cyclic rotation)
+		// are 0ed
 
 		act := new(ckks.Polynomial)
 		act.Coeffs = []complex128{complex(0, 0), complex(0, 0), complex(1, 0)} //f(x) = x^2
@@ -210,7 +334,7 @@ func Test_LT(t *testing.T) {
 		rotations = append(rotations, lt2.Rotations()...)
 		rotations = append(rotations, GenRotations(r, c, 2, []int{c, c}, []int{c, c}, []int{1, 1}, []int{1, 1}, CNparamsLogN14, nil)...)
 
-		Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+		Box = BoxWithRotations(Box, rotations, false, nil)
 
 		start := time.Now()
 
@@ -279,5 +403,100 @@ func Test_LT(t *testing.T) {
 
 		fmt.Println("Timings:")
 		fmt.Println("STD: ", end2)
+	})
+
+	t.Run("Mul-Act-Mul With CI", func(t *testing.T) {
+		A := plainUtils.RandMatrix(r, c)
+		W1 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1e-2)
+		W2 := plainUtils.MulByConst(plainUtils.RandMatrix(c, c), 1)
+		plainUtils.PrintDense(A)
+		fmt.Println()
+		plainUtils.PrintDense(W1)
+		fmt.Println()
+		plainUtils.PrintDense(W2)
+
+		// Activation
+		// the slots with effective results are activated, while the other slots (> r*c) which contain garbage
+		// (due to the replication of the diagonals, which are also rotated, which is needed for simulating a cyclic rotation)
+		// are 0ed
+
+		act := new(ckks.Polynomial)
+		act.Coeffs = []complex128{complex(0, 0), complex(0, 0), complex(1, 0)} //f(x) = x^2
+		null := new(ckks.Polynomial)
+		null.Coeffs = []complex128{complex(0, 0), complex(0, 0), complex(0, 0)} //g(x) = 0
+		slotsIndex := make(map[int][]int)
+
+		idxF := make([]int, r*c)
+		idxG := make([]int, CNparamsLogN14.Slots()-(r*c))
+		for i := 0; i < CNparamsLogN14.Slots(); i++ {
+			if i < (r * c) {
+				idxF[i] = i // Index with all effective slots
+			} else {
+				idxG[i-(r*c)] = i // Index with all garbage slots
+			}
+		}
+
+		slotsIndex[0] = idxF
+		slotsIndex[1] = idxG
+
+		Box := NewBox(CNparamsLogN14_CI)
+
+		//LT
+
+		ctA := Box.Encryptor.EncryptNew(Box.Encoder.EncodeNew(plainUtils.RowFlatten(plainUtils.TransposeDense(A)), CNparamsLogN14.MaxLevel(), CNparamsLogN14.DefaultScale(), CNparamsLogN14.LogSlots()))
+		diagW1, err := FormatWeightMap(plainUtils.MatToArray(W1), r, CNparamsLogN14.Slots())
+		diagW2, err := FormatWeightMap(plainUtils.MatToArray(W2), r, CNparamsLogN14.Slots())
+		utils.ThrowErr(err)
+		lt1 := ckks.GenLinearTransformBSGS(Box.Encoder, diagW1, CNparamsLogN14.MaxLevel(), CNparamsLogN14.QiFloat64(CNparamsLogN14.MaxLevel()), 8, CNparamsLogN14.LogSlots())
+		lt2 := ckks.GenLinearTransformBSGS(Box.Encoder, diagW2, CNparamsLogN14.MaxLevel()-2, CNparamsLogN14.QiFloat64(CNparamsLogN14.MaxLevel()-2), 8, CNparamsLogN14.LogSlots())
+		rotations := CNparamsLogN14.RotationsForReplicateLog(r*c, GetReplicaFactor(c, c))
+		rotations = append(rotations, lt1.Rotations()...)
+		rotations = append(rotations, lt2.Rotations()...)
+		rotations = append(rotations, GenRotations(r, c, 2, []int{c, c}, []int{c, c}, []int{1, 1}, []int{1, 1}, CNparamsLogN14, nil)...)
+
+		Box = BoxWithRotations(Box, rotations, false, nil)
+
+		start := time.Now()
+
+		Box.Evaluator.ReplicateLog(ctA, r*c, GetReplicaFactor(c, c), ctA)
+		ctR := Box.Evaluator.LinearTransformNew(ctA, lt1)[0]
+		Box.Evaluator.Rescale(ctR, CNparamsLogN14.DefaultScale(), ctR)
+		if ctR, err = Box.Evaluator.EvaluatePolyVector(ctR, []*ckks.Polynomial{act, null}, Box.Encoder, slotsIndex, ctR.Scale); err != nil {
+			panic(err)
+		}
+		Box.Evaluator.ReplicateLog(ctR, r*c, GetReplicaFactor(c, c), ctR)
+		Box.Evaluator.LinearTransform(ctR, lt2, []*ckks.Ciphertext{ctR})
+		Box.Evaluator.Rescale(ctR, CNparamsLogN14.DefaultScale(), ctR)
+
+		end := time.Since(start)
+
+		ReImg := Box.Encoder.Decode(Box.Decryptor.DecryptNew(ctR), CNparamsLogN14.LogSlots())[:(r * c)]
+		Re := make([]float64, len(ReImg))
+		for i := range ReImg {
+			Re[i] = real(ReImg[i])
+		}
+
+		fmt.Println("Want")
+		Rm := new(mat.Dense)
+		Rm.Mul(A, W1)
+		Rm = plainUtils.ApplyFuncDense(func(v float64) float64 {
+			return v * v
+		}, Rm)
+		R := plainUtils.RowFlatten(plainUtils.TransposeDense(Rm))
+		Rm2 := new(mat.Dense)
+		Rm2.Mul(Rm, W2)
+		R = plainUtils.RowFlatten(plainUtils.TransposeDense(Rm2))
+		fmt.Println(R)
+		fmt.Println("Got -- lt with BSGS")
+		fmt.Println(Re)
+
+		fmt.Println("Timings:")
+		fmt.Println("LT: ", end)
+
+		for i := range R {
+			assert.Less(t, math.Abs(R[i]-Re[i]), 1e-5, "BSGS fail")
+		}
+		fmt.Println("Done... Consumed levels:", CNparamsLogN14.MaxLevel()-ctR.Level())
+
 	})
 }

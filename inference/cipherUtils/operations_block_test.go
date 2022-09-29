@@ -29,7 +29,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		Box = BoxWithSplits(Box, false, nil, splits[0])
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
@@ -45,7 +45,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		Box = BoxWithSplits(Box, false, nil, splits[0])
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
@@ -60,7 +60,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 	t.Run("Test/C2C", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		Box = BoxWithSplits(Box, false, nil, splits[0])
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct, true)
@@ -76,7 +76,7 @@ func TestMultiplier_Multiply(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
 		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		Box = BoxWithSplits(Box, false, nil, splits[0])
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wct, true)
@@ -205,15 +205,16 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 
 func TestBootstrapper_Bootstrap(t *testing.T) {
 	X := pU.RandMatrix(64, 64)
-	ckksParams := bootstrapping.N16QP1546H192H32.SchemeParams
-	btpParams := bootstrapping.N16QP1546H192H32.BootstrappingParams
-
+	ckksParams := bootstrapping.N16QP1553H192H32.SchemeParams
+	ciParams, err := ckks.NewParametersFromLiteral(ckks.PN15QP880CI)
+	utils.ThrowErr(err)
+	btpParams := bootstrapping.N16QP1553H192H32.BootstrappingParams
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
 
 	Box := NewBox(params)
-	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, btpParams)
+	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, &btpParams)
 
-	t.Run("Test/Bootstrap", func(t *testing.T) {
+	t.Run("Test/Bootstrap/SingleThread", func(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Btp := NewBootstrapper(Box, 1)
@@ -239,6 +240,44 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
 	})
+	//Not working
+	t.Run("Test/Bootstrap/CI", func(t *testing.T) {
+		BoxCi := NewBox(ciParams)
+		swkStd2Ci, swkCi2Std := Box.kgen.GenSwitchingKeysForBridge(Box.Sk, BoxCi.Sk)
+		s, err := ckks.NewDomainSwitcher(params, swkStd2Ci, swkCi2Std)
+		utils.ThrowErr(err)
+		XencCi, _ := NewEncInput(X, 4, 4, ciParams.MaxLevel(), ciParams.DefaultScale(), BoxCi)
+		Btp := NewBootstrapper(Box, runtime.NumCPU())
+		start := time.Now()
+		Xenc := new(EncInput)
+		Xenc.RowP = XencCi.RowP
+		Xenc.ColP = XencCi.ColP
+		Xenc.InnerRows = XencCi.InnerRows
+		Xenc.InnerCols = XencCi.InnerCols
+		Xenc.Blocks = make([][]*ckks.Ciphertext, len(XencCi.Blocks))
+		for i := 0; i < XencCi.RowP; i++ {
+			Xenc.Blocks[i] = make([]*ckks.Ciphertext, len(XencCi.Blocks[i]))
+			for j := 0; j < XencCi.ColP; j++ {
+				Xenc.Blocks[i][j] = ckks.NewCiphertext(params, 1, params.MaxLevel(), params.DefaultScale())
+				s.RealToComplex(XencCi.Blocks[i][j], Xenc.Blocks[i][j])
+			}
+		}
+		Xc := pU.NewDense(pU.MatToArray(X))
+		resPt, _ := pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
+		Btp.Bootstrap(Xenc)
+		Xc = pU.NewDense(pU.MatToArray(X))
+		resPt, _ = pU.PartitionMatrix(Xc, Xenc.RowP, Xenc.ColP)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
+		for i := 0; i < XencCi.RowP; i++ {
+			for j := 0; j < XencCi.ColP; j++ {
+				s.ComplexToReal(Xenc.Blocks[i][j], XencCi.Blocks[i][j])
+			}
+		}
+		fmt.Println("Done: ", time.Since(start))
+
+		PrintDebugBlocks(XencCi, resPt, 0.01, BoxCi)
+	})
 }
 
 func TestRepack(t *testing.T) {
@@ -253,7 +292,7 @@ func TestRepack(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	Box := NewBox(params)
 	rotations := GenRotationsForRepackCols(rows/rowP, cols, cols/colP, newColP)
-	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+	Box = BoxWithRotations(Box, rotations, false, nil)
 
 	Xenc, err := NewEncInput(X, rowP, colP, params.MaxLevel(), params.DefaultScale(), Box)
 	utils.ThrowErr(err)
@@ -270,7 +309,7 @@ func TestRepack(t *testing.T) {
 	Wpt, err := NewPlainWeightDiag(W, newColP, 2, Xenc.InnerRows, params.MaxLevel()-1, Box)
 	utils.ThrowErr(err)
 
-	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, bootstrapping.Parameters{})
+	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, nil)
 	Mul := NewMultiplier(Box, runtime.NumCPU())
 	start = time.Now()
 	resEnc := Mul.Multiply(Xenc, Wpt, true)

@@ -36,7 +36,7 @@ func TestMultiplication(t *testing.T) {
 
 	Box := NewBox(params)
 	rotations := GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, []int{1}, []int{1}, params, nil)
-	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+	Box = BoxWithRotations(Box, rotations, false, nil)
 
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
