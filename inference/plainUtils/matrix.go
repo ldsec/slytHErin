@@ -11,6 +11,16 @@ func NewDense(X [][]float64) *mat.Dense {
 	return mat.NewDense(len(X), len(X[0]), Vectorize(X, true))
 }
 
+func PadDense(m *mat.Dense, rowPad, colPad int) *mat.Dense {
+	n := mat.NewDense(NumRows(m)+rowPad, NumCols(m)+colPad, nil)
+	for i := 0; i < NumRows(m); i++ {
+		for j := 0; j < NumCols(m); j++ {
+			n.Set(i, j, m.At(i, j))
+		}
+	}
+	return n
+}
+
 func DenseToMatrix(m *mat.Dense) [][]float64 {
 	M := make([][]float64, NumRows(m))
 	for i := 0; i < NumRows(m); i++ {
@@ -117,21 +127,19 @@ func Eye(n int) *mat.Dense {
 	return mat.NewDense(n, n, d)
 }
 
-/*
-	Input: matrix X
-	Output: column array of vectorized X
-	Example:
-
-	X = |a b|
-		|c d|
-
-	if tranpose false:
-		output = [a ,b, c, d] column vector
-	else:
-		output = [a ,c, b, d] column vector
-
-	for reference: https://en.wikipedia.org/wiki/Vectorization_(mathematics)
-*/
+//	Input: matrix X
+//	Output: column array of vectorized X
+//	Example:
+//
+//	X = |a b|
+//		|c d|
+//
+//	if tranpose false:
+//		output = [a ,b, c, d] column vector
+//	else:
+//		output = [a ,c, b, d] column vector
+//
+//	for reference: https://en.wikipedia.org/wiki/Vectorization_(mathematics)
 func Vectorize(X [][]float64, transpose bool) []float64 {
 	rows := len(X)
 	cols := len(X[0])

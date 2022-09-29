@@ -20,6 +20,44 @@ func TestBlock(t *testing.T) {
 	fmt.Println("Distance:", Distance(RowFlatten(m), RowFlatten(m2)))
 }
 
+func TestBlockWPad(t *testing.T) {
+	m := RandMatrix(128, 128)
+	PrintDense(m)
+	bm, err := PartitionMatrix(m, 2, 2)
+	if err != nil {
+		panic(err)
+	}
+	PrintBlocks(bm)
+	m2 := ExpandBlocks(bm)
+	for i := 0; i < NumRows(m); i++ {
+		fmt.Println("real:", m.RawRowView(i))
+		fmt.Println("test:", m2.RawRowView(i))
+	}
+	fmt.Println("Distance:", Distance(RowFlatten(m), RowFlatten(m2)))
+
+	w1 := RandMatrix(128, 128)
+	w2 := RandMatrix(128, 128)
+
+	wm1, err := PartitionMatrix(w1, 2, 2)
+	//wm2, err := PartitionMatrixSquare(w2, 2, 2, 128/2) //mul, thus square
+	wm2, err := PartitionMatrix(w2, 2, 2)
+	PrintBlocks(wm2)
+	a, _ := AddBlocks(bm, wm1)
+	tmp1 := new(mat.Dense)
+	tmp1.Add(m, w1)
+	r := ExpandBlocks(a)
+	fmt.Println("Distance:", Distance(RowFlatten(r), RowFlatten(tmp1)))
+	b, _ := MultiPlyBlocks(a, wm2)
+	PrintBlocks(b)
+	r = ExpandBlocks(b)
+	PrintDense(r)
+	fmt.Println("_____________________________________________")
+	tmp2 := new(mat.Dense)
+	tmp2.Mul(tmp1, w2)
+	PrintDense(tmp2)
+	fmt.Println("Distance:", Distance(RowFlatten(r), RowFlatten(tmp2)))
+}
+
 func TestSumBlock(t *testing.T) {
 	m := RandMatrix(64, 845)
 	for i := 0; i < NumRows(m); i++ {

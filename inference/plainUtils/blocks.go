@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"gonum.org/v1/gonum/mat"
-	"math"
 	"sync"
 )
 
@@ -14,9 +13,11 @@ type BMatrix struct {
 	Blocks               [][]*mat.Dense
 	RowP, ColP           int //num of partitions
 	InnerRows, InnerCols int //size of sub-matrixes
+	RealRows, RealCols   int //size of original matrix with no padding
 }
 
 //Tranpose the blocks partition of the matrix, but leaves untouched the inner matrix of each block
+//In other words, it changes the arrangment the blocks
 func TransposeBlocks(Bm *BMatrix) *BMatrix {
 	Tm := new(BMatrix)
 	Tm.RowP = Bm.ColP
@@ -32,31 +33,15 @@ func TransposeBlocks(Bm *BMatrix) *BMatrix {
 	return Tm
 }
 
-/*
-	Partitions m into a rowPxcolP Block Matrix
-	where each sub-matrix is row(m)/rowP x col(m)/colP
-*/
+//Partitions m into a rowPxcolP Block Matrix
+//where each sub-matrix is row(m)/rowP x col(m)/colP
 func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 	rowM, colM := m.Dims()
-	if colM%colP != 0 {
+	if colM%colP != 0 || rowM%rowP != 0 {
 		return nil, errors.New("Cannot Split Matrix in Blocks!")
 	}
-	mP := new(mat.Dense)
-	if rowM%rowP != 0 {
-		//pad
-		f := int(math.Ceil(float64(rowM) / float64(rowP)))
-		mP = mat.NewDense(f*rowP, colM, nil)
-		for i := 0; i < NumRows(m); i++ {
-			for j := 0; j < NumCols(m); j++ {
-				mP.Set(i, j, m.At(i, j))
-			}
-		}
-	} else {
-		mP = m
-	}
-	rowMp, colMp := mP.Dims()
-	rowS := rowMp / rowP
-	colS := colMp / colP
+	rowS := rowM / rowP
+	colS := colM / colP
 	Bm := make([][]*mat.Dense, rowP)
 	for i := 0; i < rowP; i++ {
 		Bm[i] = make([]*mat.Dense, colP)
@@ -64,17 +49,42 @@ func PartitionMatrix(m *mat.Dense, rowP, colP int) (*BMatrix, error) {
 			Bm[i][j] = mat.NewDense(rowS, colS, nil)
 			for s := i * rowS; s < (i+1)*rowS; s++ {
 				for r := j * colS; r < (j+1)*colS; r++ {
+					Bm[i][j].Set(s%rowS, r%colS, m.At(s, r))
+				}
+			}
+		}
+	}
+	return &BMatrix{Blocks: Bm, RowP: rowP, ColP: colP, InnerRows: rowS, InnerCols: colS, RealRows: rowM, RealCols: colM}, nil
+}
+
+//Partitions m into a rowPxcolP Block Matrix
+//where each sub-matrix is a square dxd matrix (eventually with padding)
+func PartitionMatrixSquare(m *mat.Dense, rowP, colP, d int) (*BMatrix, error) {
+	rowM, colM := m.Dims()
+	expR, expC := rowP*d, colP*d
+	padR, padC := expR-rowM, expC-colM
+	mP := PadDense(m, padR, padC)
+	rowMP, colMP := mP.Dims()
+	rowS := rowMP / rowP
+	colS := colMP / colP
+	Bm := make([][]*mat.Dense, rowP)
+	for i := 0; i < rowP; i++ {
+		Bm[i] = make([]*mat.Dense, colP)
+		for j := 0; j < colP; j++ {
+			Bm[i][j] = mat.NewDense(d, d, nil)
+			for s := i * rowS; s < (i+1)*rowS; s++ {
+				for r := j * colS; r < (j+1)*colS; r++ {
 					Bm[i][j].Set(s%rowS, r%colS, mP.At(s, r))
 				}
 			}
 		}
 	}
-	return &BMatrix{Blocks: Bm, RowP: rowP, ColP: colP, InnerRows: rowS, InnerCols: colS}, nil
+	return &BMatrix{Blocks: Bm, RowP: rowP, ColP: colP, InnerRows: d, InnerCols: d, RealRows: rowM, RealCols: colM}, nil
 }
 
 //Reconstruct a matrix from block representation
 func ExpandBlocks(Bm *BMatrix) *mat.Dense {
-	m := mat.NewDense(Bm.RowP*Bm.InnerRows, Bm.ColP*Bm.InnerCols, nil)
+	m := mat.NewDense(Bm.RealRows, Bm.RealCols, nil)
 	for i := 0; i < NumRows(m); i++ {
 		outerI := i / Bm.InnerRows
 		innerI := i % Bm.InnerRows
@@ -105,7 +115,7 @@ func AddBlocks(A, B *BMatrix) (*BMatrix, error) {
 			C[i][j].Add(A.Blocks[i][j], B.Blocks[i][j])
 		}
 	}
-	return &BMatrix{Blocks: C, RowP: A.RowP, ColP: B.ColP, InnerRows: A.InnerRows, InnerCols: A.InnerCols}, err
+	return &BMatrix{Blocks: C, RowP: A.RowP, ColP: B.ColP, InnerRows: A.InnerRows, InnerCols: A.InnerCols, RealRows: A.RealRows, RealCols: A.RealCols}, err
 }
 
 func MultiPlyBlocks(A, B *BMatrix) (*BMatrix, error) {
@@ -148,7 +158,7 @@ func MultiPlyBlocks(A, B *BMatrix) (*BMatrix, error) {
 			C[i][j] = Cij
 		}
 	}
-	return &BMatrix{Blocks: C, RowP: q, ColP: r, InnerRows: innerRows, InnerCols: innerCols}, err
+	return &BMatrix{Blocks: C, RowP: q, ColP: r, InnerRows: innerRows, InnerCols: innerCols, RealRows: A.RealRows, RealCols: B.RealCols}, err
 }
 
 func MultiplyBlocksByConst(A *BMatrix, c float64) *BMatrix {

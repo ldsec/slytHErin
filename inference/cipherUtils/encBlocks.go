@@ -21,7 +21,6 @@ type BlocksOperand interface {
 
 //Encrypted block matrix, to be used for input or bias layer
 type EncInput struct {
-	BlocksOperand
 	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                  //num of partitions
 	InnerRows  int                  //rows of sub-matrix
@@ -30,7 +29,6 @@ type EncInput struct {
 
 //Plaintext block matrix, to be used for input or bias layer
 type PlainInput struct {
-	BlocksOperand
 	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP int                 //num of partitions
 	InnerRows  int                 //rows of sub-matrix
@@ -39,14 +37,12 @@ type PlainInput struct {
 
 //Encrypted matrix in diagonal form
 type EncDiagMat struct {
-	BlocksOperand
 	//store an encrypted weight matrix in diagonal form
 	Diags []*ckks.Ciphertext //enc diagonals
 }
 
 //Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
-	BlocksOperand
 	Blocks     [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP int
 	LeftDim    int //rows of left matrix
