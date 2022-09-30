@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
-	"gonum.org/v1/gonum/mat"
 	"math"
 )
 
@@ -25,18 +24,6 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 	decryptor := Box.Decryptor
 
 	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())[:len(valuesWant)]
-
-	//fmt.Printf("ValuesTest:")
-	//for i := range valuesWant {
-	//	fmt.Printf(" %6.10f", valuesTest[i])
-	//}
-	//fmt.Println()
-	//
-	//fmt.Printf("ValuesWant:")
-	//for i := range valuesWant {
-	//	fmt.Printf(" %6.10f", valuesWant[i])
-	//}
-	//fmt.Println()
 
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, valuesWant, valuesTest, params.LogSlots(), 0)
 	fmt.Println(precStats.String())
@@ -71,57 +58,37 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 }
 
 //Debug stats for block matrix
-func PrintDebugBlocks(X *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
+func PrintDebugBlocks(Xenc *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
 	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
-	stats := DebugStats{
-		MinPrec:  60,
-		AvgPrec:  0,
-		MaxPrec:  0,
-		MaxValue: 0,
-		L2Dist:   0,
-	}
-	for i := 0; i < X.RowP; i++ {
-		for j := 0; j < X.ColP; j++ {
-			//because the plaintext in X.Blocks is the matrix transposed and flattened, transpose the plaintext
-			var ptm *mat.Dense
-			ptm = plainUtils.TransposeDense(Pt.Blocks[i][j])
 
-			pt := plainUtils.MatToArray(ptm)
-			stat := PrintDebug(X.Blocks[i][j], plainUtils.RealToComplex(plainUtils.Vectorize(pt, true)), thresh, Box)
+	X := plainUtils.Vectorize(DecInput(Xenc, Box), false)
+	Y := plainUtils.Vectorize(plainUtils.MatToArray(plainUtils.ExpandBlocks(Pt)), false)
 
-			if stats.MaxPrec < stat.MaxPrec {
-				stats.MaxPrec = stat.MaxPrec
-			}
-			if stats.MinPrec > stat.MinPrec {
-				stats.MinPrec = stat.MinPrec
-			}
-			stats.AvgPrec += stat.AvgPrec
-			if stats.MaxValue < stat.MaxValue {
-				stats.MaxValue = stat.MaxValue
-			}
-			stats.L2Dist += stat.L2Dist
+	precStats := ckks.GetPrecisionStats(Box.Params, Box.Encoder, nil, Y[:Box.Params.Slots()], X[:Box.Params.Slots()], Box.Params.LogSlots(), 0)
+	fmt.Println(precStats.String())
+
+	dist := plainUtils.Distance(X, Y)
+
+	maxTest := 0.0
+	maxWant := 0.0
+
+	for i := 0; i < len(X); i++ {
+		if math.Abs(X[i]) > maxTest {
+			maxTest = math.Abs(X[i])
+		}
+		if math.Abs(Y[i]) > maxWant {
+			maxWant = math.Abs(Y[i])
 		}
 	}
-	stats.AvgPrec /= float64(X.RowP * X.ColP)
-	stats.L2Dist /= float64(X.RowP * X.ColP)
 
-	params := Box.Params
-
-	fmt.Println()
-	fmt.Printf("Level: %d (logQ = %d)\n", X.Blocks[0][0].Level(), params.LogQLvl(X.Blocks[0][0].Level()))
-	fmt.Println("Consumed levels:", params.MaxLevel()-X.Blocks[0][0].Level())
-	fmt.Println("Difference with Scale: ", X.Blocks[0][0].Scale-params.DefaultScale())
-
-	fmt.Println("[!] Final Stats:")
-	fmt.Printf("MAX Prec: %f\n", stats.MaxPrec)
-	fmt.Printf("MIN Prec: %f\n", stats.MinPrec)
-	fmt.Printf("AVG Prec: %f\n", stats.AvgPrec)
-	fmt.Printf("MAX Value: %f\n", stats.MaxValue)
-	fmt.Printf("AVG L2 Dist: %f\n", stats.L2Dist)
-
-	fmt.Println("----------------------------------------------------------------------------------------")
-	return
-
-	fmt.Println("----------------------------------------------------------------------------------------")
-	return
+	//compare L1 distance between values
+	for i := range Y {
+		if math.Abs(Y[i]-X[i]) > thresh {
+			panic(errors.New(fmt.Sprintf("Expected %f, got %f, at %d", Y[i], X[i], i)))
+		}
+	}
+	fmt.Println(precStats.String())
+	fmt.Println("Distance:", dist)
+	fmt.Println("Max Test:", maxTest)
+	fmt.Println("Max Test:", maxWant)
 }

@@ -1,57 +1,60 @@
 package cipherUtils
 
-/*
 import (
-	"errors"
 	"fmt"
 	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/stretchr/testify/assert"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"
+	"math"
 	"runtime"
 	"testing"
 	"time"
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(40, 720)
-	W := pU.RandMatrix(720, 100)
+	X := pU.RandMatrix(40, 768)
+	W := pU.RandMatrix(768, 768)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
-
-	splits := FindSplits(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
-	PrintAllSplits(splits)
-	if len(splits) == 0 {
-		panic(errors.New("No splits found"))
-	}
-
 	Box := NewBox(params)
 
 	t.Run("Test/C2P", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
-		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		S := NewSplitter(false, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], splits.ExctractInfoAt(1)[1], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), true, Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
-		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
+		resPt := DecInput(resEnc, Box)
+		resArray := pU.MatToArray(&res)
+		for i := range resArray {
+			for j := range resArray[i] {
+				assert.Less(t, math.Abs(resPt[i][j]-resArray[i][j]), 1e-3)
+			}
+		}
 	})
 
-	t.Run("Test/C2P/Multithread", func(t *testing.T) {
+	t.Run("Test/C2P_Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
-		Wpt, _ := NewPlainWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		S := NewSplitter(false, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], splits.ExctractInfoAt(1)[1], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), true, Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
-
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
@@ -59,12 +62,15 @@ func TestMultiplier_Multiply(t *testing.T) {
 	})
 
 	t.Run("Test/C2C", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
-		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		S := NewSplitter(true, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -72,17 +78,19 @@ func TestMultiplier_Multiply(t *testing.T) {
 		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
 	})
 
-	t.Run("Test/C2C/Multithread", func(t *testing.T) {
+	t.Run("Test/C2C_Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		Xenc, _ := NewEncInput(X, splits[0][0].RowP, splits[0][0].ColP, params.MaxLevel(), params.DefaultScale(), Box)
-		Wct, _ := NewEncWeightDiag(W, splits[0][1].RowP, splits[0][1].ColP, Xenc.InnerRows, params.MaxLevel(), Box)
-		Box = BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits[0])
+		S := NewSplitter(true, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wct, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true)
 		fmt.Println("Done: ", time.Since(start))
-
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
@@ -212,7 +220,7 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
 
 	Box := NewBox(params)
-	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, btpParams)
+	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, &btpParams)
 
 	t.Run("Test/Bootstrap", func(t *testing.T) {
 
@@ -242,6 +250,7 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	})
 }
 
+/*
 func TestRepack(t *testing.T) {
 	rows := 1
 	cols := 720

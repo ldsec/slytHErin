@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestRotateRealArray(t *testing.T) {
+	v := make([]float64, 9)
+
+	for i := range v {
+		v[i] = float64(i) + 1.0
+	}
+	fmt.Println(v)
+	fmt.Println(RotateRealArray(v, -4))
+	for i := range v {
+		v[i] = float64(i) + 1.0
+	}
+	fmt.Println(RotateRealArray(v, 4))
+}
+
 func TestBlock(t *testing.T) {
 	m := RandMatrix(5, 4)
 	bm, err := PartitionMatrix(m, 2, 2)
@@ -36,11 +50,13 @@ func TestBlockWPad(t *testing.T) {
 	fmt.Println("Distance:", Distance(RowFlatten(m), RowFlatten(m2)))
 
 	w1 := RandMatrix(128, 128)
-	w2 := RandMatrix(128, 128)
+	w2 := RandMatrix(128, 186)
+	w3 := RandMatrix(186, 150)
 
 	wm1, err := PartitionMatrix(w1, 2, 2)
-	//wm2, err := PartitionMatrixSquare(w2, 2, 2, 128/2) //mul, thus square
-	wm2, err := PartitionMatrix(w2, 2, 2)
+	wm2, err := PartitionMatrixSquare(w2, 2, 3, 128/2) //mul, thus square
+	wm3, err := PartitionMatrixSquare(w3, 3, 3, 128/2) //mul, thus square
+	//wm2, err := PartitionMatrix(w2, 2, 2)
 	PrintBlocks(wm2)
 	a, _ := AddBlocks(bm, wm1)
 	tmp1 := new(mat.Dense)
@@ -56,6 +72,15 @@ func TestBlockWPad(t *testing.T) {
 	tmp2.Mul(tmp1, w2)
 	PrintDense(tmp2)
 	fmt.Println("Distance:", Distance(RowFlatten(r), RowFlatten(tmp2)))
+	c, _ := MultiPlyBlocks(b, wm3)
+	PrintBlocks(c)
+	r = ExpandBlocks(c)
+	PrintDense(r)
+	fmt.Println("_____________________________________________")
+	tmp3 := new(mat.Dense)
+	tmp3.Mul(tmp2, w3)
+	PrintDense(tmp3)
+	fmt.Println("Distance:", Distance(RowFlatten(r), RowFlatten(tmp3))/(128*150))
 }
 
 func TestSumBlock(t *testing.T) {

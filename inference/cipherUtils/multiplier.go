@@ -47,12 +47,12 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 		case *ckks.Ciphertext:
 			switch w.(type) {
 			case *EncDiagMat:
-				ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, false, box)
-			case *PlainWeightDiag:
-				ct = DiagMulLT(x.(*ckks.Ciphertext), dimIn, dimMid, dimOut, w.(*PlainDiagMat), box)
+				ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, box)
+			case *PlainDiagMat:
+				ct = DiagMulLT(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*PlainDiagMat), box)
 			}
 		case *ckks.Plaintext:
-			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, false, box)
+			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, box)
 		}
 		if k == 0 {
 			//I am the accumulator
@@ -127,8 +127,8 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 						switch w.(type) {
 						case *EncDiagMat:
 							ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
-						case *PlainWeightDiag:
-							ct = DiagMulLT(x.(*ckks.Ciphertext), dimIn, dimMid, dimOut, w.(*PlainDiagMat), Box)
+						case *PlainDiagMat:
+							ct = DiagMulLT(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*PlainDiagMat), Box)
 						}
 					case *ckks.Plaintext:
 						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
