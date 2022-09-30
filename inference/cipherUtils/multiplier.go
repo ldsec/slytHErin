@@ -41,13 +41,18 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 		}
 		i, j, k := task.i, task.j, task.k
 		ct := new(ckks.Ciphertext)
-		x := X.GetBlock(i, k)[0]
+		x := X.GetBlock(i, k)
 		w := W.GetBlock(j, k)
 		switch x.(type) {
 		case *ckks.Ciphertext:
-			ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, false, box)
+			switch w.(type) {
+			case *EncDiagMat:
+				ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, false, box)
+			case *PlainWeightDiag:
+				ct = DiagMulLT(x.(*ckks.Ciphertext), dimIn, dimMid, dimOut, w.(*PlainDiagMat), box)
+			}
 		case *ckks.Plaintext:
-			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w, prepack, false, box)
+			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, false, box)
 		}
 		if k == 0 {
 			//I am the accumulator
@@ -71,6 +76,8 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
 	Box := Mul.box
 	xRowP, xColP := X.GetPartitions()
+	xRealRows, _ := X.GetRealDims()
+	_, wRealCols := W.GetRealDims()
 	wRowP, wColP := W.GetPartitions()
 	dimMid, dimOut := W.GetInnerDims()
 
@@ -99,6 +106,8 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 	Out.ColP = wRowP
 	Out.InnerRows = dimIn
 	Out.InnerCols = dimOut
+	Out.RealRows = xRealRows
+	Out.RealCols = wRealCols
 	Out.Blocks = make([][]*ckks.Ciphertext, q)
 	for i := range Out.Blocks {
 		Out.Blocks[i] = make([]*ckks.Ciphertext, r)
@@ -111,13 +120,18 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 				res := new(ckks.Ciphertext)
 				for k := 0; k < s; k++ {
 					ct := new(ckks.Ciphertext)
-					x := X.GetBlock(i, k)[0]
+					x := X.GetBlock(i, k)
 					w := W.GetBlock(j, k)
 					switch x.(type) {
 					case *ckks.Ciphertext:
-						ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, false, Box)
+						switch w.(type) {
+						case *EncDiagMat:
+							ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
+						case *PlainWeightDiag:
+							ct = DiagMulLT(x.(*ckks.Ciphertext), dimIn, dimMid, dimOut, w.(*PlainDiagMat), Box)
+						}
 					case *ckks.Plaintext:
-						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w, prepack, false, Box)
+						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
 					}
 					if k == 0 {
 						res = ct
@@ -159,7 +173,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 		close(ch)
 		wg.Wait()
 	}
-	Mul.RemoveImagFromBlocks(Out)
+	//Mul.RemoveImagFromBlocks(Out)
 	return Out
 }
 
@@ -196,7 +210,7 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
 //  v
 
 //Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
-func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -241,7 +255,19 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.O
 	return
 }
 
-func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+func DiagMulLT(ct *ckks.Ciphertext, dimIn, dimMid, dimOut int, w *PlainDiagMat, Box CkksBox) *ckks.Ciphertext {
+	if w.ComplexTrick {
+		Prepack(ct, dimIn, dimMid, dimOut, Box.Evaluator)
+	}
+	ctR := Box.Evaluator.LinearTransformNew(ct, w.Diags)[0]
+	Box.Evaluator.Rescale(ctR, Box.Params.DefaultScale(), ctR)
+	if w.ComplexTrick {
+		Box.Evaluator.Add(ctR, Box.Evaluator.ConjugateNew(ctR), ctR)
+	}
+	return ctR
+}
+
+func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator

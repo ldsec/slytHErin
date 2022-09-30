@@ -38,33 +38,37 @@ func NewActivator(numOfActivations int, Box CkksBox, poolSize int) (*Activator, 
 
 //Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimentions
 func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int) {
-	poly := new(ckks.Polynomial)
+	//poly := new(ckks.Polynomial)
+	//Box := Act.box
 	i := layer
-	Box := Act.box
 	switch activation.ChebyBase {
 	case false:
 		//if not cheby base we extract the const term and add it later so to use a more efficient poly eval without encoder
-		term0 := activation.Poly.Coeffs[0]
-		poly = activation.Poly
-		Act.isCheby = false
-		term0vec := make([]complex128, innerRows*innerCols)
-		for i := range term0vec {
-			term0vec[i] = term0
-		}
-		Act.poly[i] = activationPoly{}
-		if poly.Depth() > level {
-			panic(errors.New("Not enough levels for poly depth"))
-		}
-		Act.poly[i].term0VecEcd = ckks.NewPlaintext(Box.Params, level-poly.Depth(), scale)
-		Box.Encoder.EncodeSlots(term0vec, Act.poly[i].term0VecEcd, Box.Params.LogSlots())
+		//term0 := activation.Poly.Coeffs[0]
+		//poly = activation.Poly
+		//Act.isCheby = false
+		//term0vec := make([]complex128, innerRows*innerCols)
+		//for i := range term0vec {
+		//	term0vec[i] = term0
+		//}
+		//Act.poly[i] = activationPoly{}
+		//if poly.Depth() > level {
+		//	panic(errors.New("Not enough levels for poly depth"))
+		//}
+		//Act.poly[i].term0VecEcd = ckks.NewPlaintext(Box.Params, level-poly.Depth(), scale)
+		//Box.Encoder.EncodeSlots(term0vec, Act.poly[i].term0VecEcd, Box.Params.LogSlots())
 
-		//copy the polynomial with the 0 const term without affecting the original poly
-		polyCp := new(ckks.Polynomial)
-		*polyCp = *poly
-		polyCp.Coeffs = make([]complex128, len(poly.Coeffs))
-		copy(polyCp.Coeffs, poly.Coeffs)
-		polyCp.Coeffs[0] = complex(0, 0)
-		Act.poly[i].polynomial = polyCp
+		////copy the polynomial with the 0 const term without affecting the original poly
+		//polyCp := new(ckks.Polynomial)
+		//*polyCp = *poly
+		//polyCp.Coeffs = make([]complex128, len(poly.Coeffs))
+		//copy(polyCp.Coeffs, poly.Coeffs)
+		//polyCp.Coeffs[0] = complex(0, 0)
+		//Act.poly[i].polynomial = polyCp
+
+		Act.isCheby = false
+		Act.poly[i] = activationPoly{}
+		Act.poly[i].polynomial = activation.Poly
 
 	case true:
 		Act.isCheby = true
@@ -99,11 +103,12 @@ func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
 		return
 	}
 	var f EvalFunc
-	if !Act.isCheby {
-		f = evalPolyBlocks
-	} else {
-		f = evalPolyBlocksVector
-	}
+	//if !Act.isCheby {
+	//	f = evalPolyBlocks
+	//} else {
+	//	f = evalPolyBlocksVector
+	//}
+	f = evalPolyBlocksVector
 	if Act.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
@@ -147,11 +152,25 @@ func evalPolyBlocksVector(X *EncInput, i, j int, poly activationPoly, Box CkksBo
 	eval := Box.Evaluator.ShallowCopy()
 	ecd := Box.Encoder.ShallowCopy()
 	slotsIndex := make(map[int][]int)
-	idx := make([]int, X.InnerRows*X.InnerCols)
-	for i := 0; i < X.InnerRows*X.InnerCols; i++ {
-		idx[i] = i
+
+	g := new(ckks.Polynomial)
+	g.Coeffs = make([]complex128, len(poly.polynomial.Coeffs)) //g(x) = 0
+
+	r, c := X.InnerRows, X.InnerCols
+	idxF := make([]int, X.InnerRows*X.InnerCols)
+	idxG := make([]int, Box.Params.Slots()-(r*c))
+
+	for i := 0; i < Box.Params.Slots(); i++ {
+		if i < (r * c) {
+			idxF[i] = i // Index with all effective slots
+		} else {
+			idxG[i-(r*c)] = i // Index with all garbage slots
+		}
 	}
-	slotsIndex[0] = idx
-	ct, _ := eval.EvaluatePolyVector(X.Blocks[i][j], []*ckks.Polynomial{poly.polynomial}, ecd, slotsIndex, X.Blocks[i][j].Scale)
+
+	slotsIndex[0] = idxF
+	slotsIndex[1] = idxG
+
+	ct, _ := eval.EvaluatePolyVector(X.Blocks[i][j], []*ckks.Polynomial{poly.polynomial, g}, ecd, slotsIndex, X.Blocks[i][j].Scale)
 	X.Blocks[i][j] = ct
 }

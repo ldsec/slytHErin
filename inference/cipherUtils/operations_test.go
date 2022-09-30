@@ -20,7 +20,7 @@ v
 
 func TestMultiplication(t *testing.T) {
 	X := pU.RandMatrix(40, 90)
-	W := pU.RandMatrix(90, 50)
+	W := pU.RandMatrix(90, 90)
 	//X := pU.MatrixForDebug(3, 3)
 	//W := pU.MatrixForDebug(3, 3)
 
@@ -35,17 +35,13 @@ func TestMultiplication(t *testing.T) {
 	scale := params.DefaultScale()
 
 	Box := NewBox(params)
-	rotations := GenRotations(pU.NumRows(X), pU.NumCols(X), 1, []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, []int{1}, []int{1}, params, nil)
-	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
 
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
-		ops := make([]ckks.Operand, len(Wenc))
-		for i := range Wenc {
-			ops[i] = Wenc[i]
-		}
-		Renc := DiagMul(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), ops, true, true, Box)
+		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), true, Box)
+		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
+
+		Renc := DiagMulLT(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc, Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
@@ -55,12 +51,9 @@ func TestMultiplication(t *testing.T) {
 
 	t.Run("Test/C2C", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
-		ops := make([]ckks.Operand, len(Wenc))
-		for i := range Wenc {
-			ops[i] = Wenc[i]
-		}
-		Renc := DiagMul(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), ops, true, true, Box)
+		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
+		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
+		Renc := DiagMul(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.Diags, true, true, Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
@@ -71,20 +64,16 @@ func TestMultiplication(t *testing.T) {
 
 	t.Run("Test/P2C", func(t *testing.T) {
 		Xenc := EncodeInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), Box)
-		ops := make([]ckks.Operand, len(Wenc))
-		for i := range Wenc {
-			ops[i] = Wenc[i]
-		}
+		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
+		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
 		Xenc = PrepackClearText(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Box)
-		Renc := DiagMulPt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), ops, false, true, Box)
+		Renc := DiagMulPt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.Diags, true, true, Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
 		//we need to tranpose the plaintext result according to the diagonalized multiplication algo
 		valuesWant := pU.RealToComplex(pU.Vectorize(pU.MatToArray(&resPlain), false))
 		PrintDebug(Renc, valuesWant, 0.001, Box)
-
 	})
 
 }

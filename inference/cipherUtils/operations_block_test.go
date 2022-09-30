@@ -1,5 +1,6 @@
 package cipherUtils
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -283,7 +284,7 @@ func TestRepack(t *testing.T) {
 }
 
 //helpers
-/*
+
 //Repack version with repacking also of rows (needs masking)
 func Repack(X *EncInput, rowP, colP int, eval ckks.Evaluator) *EncInput {
 	rows := X.RowP * X.InnerRows

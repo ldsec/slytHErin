@@ -12,59 +12,93 @@ import (
 
 // Interface for generic block matrix. In can be a plaintext or ciphertext matrix
 type BlocksOperand interface {
-	GetBlock(i, j int) []ckks.Operand
+	GetBlock(i, j int) interface{}
 	GetPartitions() (int, int)
 	GetInnerDims() (int, int)
+	GetRealDims() (int, int)
 	Level() int
 	Scale() float64
 }
 
 //Encrypted block matrix, to be used for input or bias layer
 type EncInput struct {
-	Blocks     [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
-	RowP, ColP int                  //num of partitions
-	InnerRows  int                  //rows of sub-matrix
-	InnerCols  int
+	Blocks             [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
+	RowP, ColP         int                  //num of partitions
+	InnerRows          int                  //rows of sub-matrix
+	InnerCols          int
+	RealRows, RealCols int
 }
 
 //Plaintext block matrix, to be used for input or bias layer
 type PlainInput struct {
-	Blocks     [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
-	RowP, ColP int                 //num of partitions
-	InnerRows  int                 //rows of sub-matrix
-	InnerCols  int
+	Blocks             [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
+	RowP, ColP         int                 //num of partitions
+	InnerRows          int                 //rows of sub-matrix
+	InnerCols          int
+	RealRows, RealCols int
 }
 
 //Encrypted matrix in diagonal form
 type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
-	Diags []*ckks.Ciphertext //enc diagonals
+	Diags        []*ckks.Ciphertext //enc diagonals
+	InnerRows    int                //rows of sub-matrix
+	InnerCols    int
+	LeftR, LeftC int //rows cols of left matrix
+}
+
+func (W *EncDiagMat) GetRotations(params ckks.Parameters) []int {
+	var rotations = []int{W.LeftR}
+	for i := 1; i < (W.InnerRows+1)>>1; i++ {
+		r := 2 * i * W.LeftR
+		rotations = append(rotations, r)
+	}
+	rotations = append(rotations, W.InnerRows)
+	rotations = append(rotations, -W.LeftR*W.InnerRows)
+	rotations = append(rotations, -2*W.LeftR*W.InnerRows)
+	if W.InnerRows < W.InnerCols {
+		replicationFactor := GetReplicaFactor(W.InnerRows, W.InnerCols)
+		rotations = append(rotations, params.RotationsForReplicateLog(W.LeftR*W.LeftC, replicationFactor)...)
+	}
+	return rotations
 }
 
 //Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
-	Blocks     [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
-	RowP, ColP int
-	LeftDim    int //rows of left matrix
-	NumDiags   int
-	InnerRows  int //rows of matrix
-	InnerCols  int
+	Blocks             [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
+	RowP, ColP         int
+	LeftR, LeftC       int //rows cols of left matrix
+	NumDiags           int
+	InnerRows          int //rows of matrix
+	InnerCols          int
+	RealRows, RealCols int
 }
 
 //Plaintext matrix in diagonal form
 type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
-	Diags []*ckks.Plaintext //diagonals
+	Diags        ckks.LinearTransform //diagonals
+	ComplexTrick bool
+	D            int //dimention of matrix
+	LeftR, LeftC int //rows cols of left matrix
+}
+
+func (W *PlainDiagMat) GetRotations(params ckks.Parameters) []int {
+	var rots = []int{W.LeftR}
+	rots = append(W.Diags.Rotations(), rots...)
+	rots = append(rots, params.RotationsForReplicateLog(W.LeftR*W.LeftC, GetReplicaFactor(W.D, W.D))...)
+	return rots
 }
 
 //Plaintext block matrix, weight of dense or convolutional layer
 type PlainWeightDiag struct {
-	Blocks     [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
-	RowP, ColP int
-	LeftDim    int //rows of left matrix
-	NumDiags   int
-	InnerRows  int //rows of matrix
-	InnerCols  int
+	Blocks             [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
+	RowP, ColP         int
+	LeftR, LeftC       int //rows of left matrix
+	NumDiags           int
+	InnerRows          int //rows of matrix
+	InnerCols          int
+	RealRows, RealCols int
 }
 
 func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box CkksBox) (*PlainInput, error) {
@@ -78,6 +112,7 @@ func NewPlainInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box 
 	XPlain.ColP = colP
 	XPlain.InnerRows = Xb.InnerRows
 	XPlain.InnerCols = Xb.InnerCols
+	XPlain.RealRows, XPlain.RealCols = Xm.Dims()
 	XPlain.Blocks = make([][]*ckks.Plaintext, rowP)
 	for i := 0; i < rowP; i++ {
 		XPlain.Blocks[i] = make([]*ckks.Plaintext, colP)
@@ -99,6 +134,7 @@ func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box Ck
 	XEnc.ColP = colP
 	XEnc.InnerRows = Xb.InnerRows
 	XEnc.InnerCols = Xb.InnerCols
+	XEnc.RealRows, XEnc.RealCols = Xm.Dims()
 	if float64(XEnc.InnerRows*XEnc.InnerCols*2) > math.Pow(2, float64(Box.Params.LogSlots())) {
 		utils.ThrowErr(errors.New(fmt.Sprintf("Input submatrixes elements must be less than 2^(LogSlots-1): had %d*%d", XEnc.InnerRows, XEnc.InnerCols)))
 	}
@@ -112,8 +148,8 @@ func NewEncInput(Xm *mat.Dense, rowP, colP int, level int, scale float64, Box Ck
 	return XEnc, nil
 }
 
-func (X *EncInput) GetBlock(i, j int) []ckks.Operand {
-	return []ckks.Operand{X.Blocks[i][j]}
+func (X *EncInput) GetBlock(i, j int) interface{} {
+	return X.Blocks[i][j]
 }
 
 func (X *EncInput) GetPartitions() (int, int) {
@@ -124,16 +160,24 @@ func (X *EncInput) GetInnerDims() (int, int) {
 	return X.InnerRows, X.InnerCols
 }
 
+func (X *EncInput) GetRealDims() (int, int) {
+	return X.RealRows, X.RealCols
+}
+
 func (X *EncInput) Level() int {
-	return X.GetBlock(0, 0)[0].Level()
+	return X.GetBlock(0, 0).([]*ckks.Ciphertext)[0].Level()
 }
 
 func (X *EncInput) Scale() float64 {
-	return X.GetBlock(0, 0)[0].ScalingFactor()
+	return X.GetBlock(0, 0).([]*ckks.Ciphertext)[0].ScalingFactor()
 }
 
-func (X *PlainInput) GetBlock(i, j int) []ckks.Operand {
-	return []ckks.Operand{X.Blocks[i][j]}
+func (X *PlainInput) GetBlock(i, j int) interface{} {
+	return X.Blocks[i][j]
+}
+
+func (X *PlainInput) GetRealDims() (int, int) {
+	return X.RealRows, X.RealCols
 }
 
 func (X *PlainInput) GetPartitions() (int, int) {
@@ -145,11 +189,11 @@ func (X *PlainInput) GetInnerDims() (int, int) {
 }
 
 func (X *PlainInput) Level() int {
-	return X.GetBlock(0, 0)[0].Level()
+	return X.GetBlock(0, 0).([]*ckks.Plaintext)[0].Level()
 }
 
 func (X *PlainInput) Scale() float64 {
-	return X.GetBlock(0, 0)[0].ScalingFactor()
+	return X.GetBlock(0, 0).([]*ckks.Plaintext)[0].ScalingFactor()
 }
 
 //	Given a block input matrix, decrypts and returns the underlying original matrix
@@ -157,6 +201,8 @@ func (X *PlainInput) Scale() float64 {
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 
 	Xb := new(plainUtils.BMatrix)
+	Xb.RealRows = XEnc.RealRows
+	Xb.RealCols = XEnc.RealCols
 	Xb.RowP = XEnc.RowP
 	Xb.ColP = XEnc.ColP
 	Xb.InnerRows = XEnc.InnerRows
@@ -181,6 +227,8 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 //Block_ct(i,j) --> Block_pt(i,j)
 func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
 	Xb := new(PlainInput)
+	Xb.RealRows = XEnc.RealRows
+	Xb.RealCols = XEnc.RealCols
 	Xb.RowP = XEnc.RowP
 	Xb.ColP = XEnc.ColP
 	Xb.InnerRows = XEnc.InnerRows
@@ -199,6 +247,8 @@ func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
 //	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
 	Xb := new(plainUtils.BMatrix)
+	Xb.RealRows = XEnc.RealRows
+	Xb.RealCols = XEnc.RealCols
 	Xb.RowP = XEnc.RowP
 	Xb.ColP = XEnc.ColP
 	Xb.InnerRows = XEnc.InnerRows
@@ -220,7 +270,8 @@ func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
 
 //Return encrypted weight in block matrix form. The matrix is also block-transposed
 //i.e the first column of block is stored as row for cache efficiency
-func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*EncWeightDiag, error) {
+//must provide the partitions and the rows and cols of the input inner sumbatrices (as when it will be multiplied)
+func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
@@ -230,17 +281,17 @@ func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Bo
 	WEnc := new(EncWeightDiag)
 	WEnc.RowP = Wbt.RowP
 	WEnc.ColP = Wbt.ColP
-	WEnc.LeftDim = leftInnerDim
+	WEnc.LeftR, WEnc.LeftC = leftR, leftC
 	WEnc.InnerRows = Wb.InnerRows
 	WEnc.InnerCols = Wb.InnerCols
+	WEnc.RealRows, WEnc.RealCols = Wm.Dims()
 	WEnc.Blocks = make([][]*EncDiagMat, Wbt.RowP)
 	for i := 0; i < Wbt.RowP; i++ {
 		WEnc.Blocks[i] = make([]*EncDiagMat, Wbt.ColP)
 		for j := 0; j < Wbt.ColP; j++ {
-			//leftDim has to be the rows of EncInput sub matrices
+			//LeftR has to be the rows of EncInput sub matrices
 			WEnc.Blocks[i][j] = new(EncDiagMat)
-			WEnc.Blocks[i][j].Diags = EncryptWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftInnerDim, Box)
-			WEnc.NumDiags = len(WEnc.Blocks[i][j].Diags)
+			WEnc.Blocks[i][j] = EncryptWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftR, leftC, Box)
 		}
 	}
 	utils.ThrowErr(err)
@@ -249,17 +300,19 @@ func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Bo
 
 //Return plaintex weight in block matrix form. The matrix is also block-transposed
 //i.e the first column of block is stored as row for cache efficiency
-func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, Box CkksBox) (*PlainWeightDiag, error) {
-	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
+//takes block partions, d size of inner square submatrices, rows of input inner submatrices, level, whether to use the complex trick, and box
+func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, d int, leftR, leftC int, level int, complexTrick bool, Box CkksBox) (*PlainWeightDiag, error) {
+	Wb, err := plainUtils.PartitionMatrixSquare(Wm, rowP, colP, d)
 	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
 		utils.ThrowErr(err)
 		return nil, err
 	}
 	Wp := new(PlainWeightDiag)
+	Wp.RealRows, Wp.RealCols = Wm.Dims()
 	Wp.RowP = Wbt.RowP
 	Wp.ColP = Wbt.ColP
-	Wp.LeftDim = leftInnerDim
+	Wp.LeftR, Wp.LeftC = leftR, leftC
 	Wp.InnerRows = Wbt.InnerRows
 	Wp.InnerCols = Wbt.InnerCols
 
@@ -267,22 +320,17 @@ func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftInnerDim int, level int, 
 	for i := 0; i < Wbt.RowP; i++ {
 		Wp.Blocks[i] = make([]*PlainDiagMat, Wbt.ColP)
 		for j := 0; j < Wbt.ColP; j++ {
-			//leftDim has to be the rows of EncInput sub matrices
+			//LeftR has to be the rows of EncInput sub matrices
 			Wp.Blocks[i][j] = new(PlainDiagMat)
-			Wp.Blocks[i][j].Diags = EncodeWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftInnerDim, Box)
-			Wp.NumDiags = len(Wp.Blocks[i][j].Diags)
+			Wp.Blocks[i][j] = EncodeWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftR, leftC, complexTrick, Box)
 		}
 	}
 	utils.ThrowErr(err)
 	return Wp, nil
 }
 
-func (W *EncWeightDiag) GetBlock(i, j int) []ckks.Operand {
-	v := make([]ckks.Operand, len(W.Blocks[i][j].Diags))
-	for k := range v {
-		v[k] = W.Blocks[i][j].Diags[k]
-	}
-	return v
+func (W *EncWeightDiag) GetBlock(i, j int) interface{} {
+	return W.Blocks[i][j]
 }
 
 func (W *EncWeightDiag) GetPartitions() (int, int) {
@@ -293,20 +341,24 @@ func (W *EncWeightDiag) GetInnerDims() (int, int) {
 	return W.InnerRows, W.InnerCols
 }
 
+func (W *EncWeightDiag) GetRealDims() (int, int) {
+	return W.RealRows, W.RealCols
+}
+
 func (W *EncWeightDiag) Level() int {
-	return W.GetBlock(0, 0)[0].Level()
+	return W.GetBlock(0, 0).([]*ckks.Ciphertext)[0].Level()
 }
 
 func (W *EncWeightDiag) Scale() float64 {
-	return W.GetBlock(0, 0)[0].ScalingFactor()
+	return W.GetBlock(0, 0).([]*ckks.Ciphertext)[0].ScalingFactor()
 }
 
-func (W *PlainWeightDiag) GetBlock(i, j int) []ckks.Operand {
-	v := make([]ckks.Operand, len(W.Blocks[i][j].Diags))
-	for k := range v {
-		v[k] = W.Blocks[i][j].Diags[k]
-	}
-	return v
+func (W *EncWeightDiag) GetRotations(params ckks.Parameters) []int {
+	return W.Blocks[0][0].GetRotations(params)
+}
+
+func (W *PlainWeightDiag) GetBlock(i, j int) interface{} {
+	return W.Blocks[i][j]
 }
 
 func (W *PlainWeightDiag) GetPartitions() (int, int) {
@@ -317,10 +369,18 @@ func (W *PlainWeightDiag) GetInnerDims() (int, int) {
 	return W.InnerRows, W.InnerCols
 }
 
+func (W *PlainWeightDiag) GetRealDims() (int, int) {
+	return W.RealRows, W.RealCols
+}
+
 func (W *PlainWeightDiag) Level() int {
-	return W.GetBlock(0, 0)[0].Level()
+	return W.GetBlock(0, 0).(*ckks.LinearTransform).Level
 }
 
 func (W *PlainWeightDiag) Scale() float64 {
-	return W.GetBlock(0, 0)[0].ScalingFactor()
+	return W.GetBlock(0, 0).(*ckks.LinearTransform).Scale
+}
+
+func (W *PlainWeightDiag) GetRotations(params ckks.Parameters) []int {
+	return W.Blocks[0][0].GetRotations(params)
 }

@@ -2,6 +2,7 @@ package cipherUtils
 
 import (
 	"errors"
+	"github.com/tuneinsight/lattigo/v3/ckks"
 	"sync"
 )
 
@@ -27,7 +28,7 @@ func (Ad *Adder) spawnEvaluators(X *EncInput, B BlocksOperand, ch chan []int) {
 			return
 		}
 		i, j := coords[0], coords[1]
-		X.Blocks[i][j] = eval.AddNew(X.Blocks[i][j], B.GetBlock(i, j)[0])
+		X.Blocks[i][j] = eval.AddNew(X.Blocks[i][j], B.GetBlock(i, j).(ckks.Operand))
 	}
 }
 
@@ -45,7 +46,7 @@ func (Ad *Adder) AddBias(X *EncInput, B BlocksOperand) {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				X.Blocks[i][j] = Ad.box.Evaluator.AddNew(X.Blocks[i][j], B.GetBlock(i, j)[0])
+				X.Blocks[i][j] = Ad.box.Evaluator.AddNew(X.Blocks[i][j], B.GetBlock(i, j).(ckks.Operand))
 			}
 		}
 	} else if Ad.poolSize > 1 {
