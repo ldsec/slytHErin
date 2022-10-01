@@ -1,7 +1,6 @@
 package cryptonet
 
 import (
-	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/cluster"
@@ -9,7 +8,6 @@ import (
 	"github.com/ldsec/dnn-inference/inference/distributed"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
-	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"runtime"
 	"strconv"
 	"testing"
@@ -58,7 +56,8 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	params := paramsLogN14
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
-	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
+	possibleSplits.Print()
 
 	Box := cipherUtils.NewBox(params)
 
@@ -68,21 +67,11 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	if len(possibleSplits) == 0 {
-		panic(errors.New("No splits found!"))
-	}
-
-	splits := possibleSplits[0]
-	cipherUtils.PrintSetOfSplits(splits)
-
-	splitInfo, _ := cipherUtils.ExctractInfo(splits)
-
-	batchSize := splitInfo.InputRows * splitInfo.InputRowP
+	splitInfo, _ := possibleSplits.ExctractInfo()
+	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
-
-	cne := cn.NewHE(splits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
 	fmt.Println("Encoded Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
@@ -94,6 +83,9 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
 	iters := 0
 	maxIters := 5
+
+	//generate and store rotation keys
+	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
 
 	for true {
 		X, Y, err := datacn.Batch()
@@ -142,16 +134,16 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	//13s for 41 batch with logn14 mask
 
-	var debug = true       //set to true for debug mode
+	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json")
 
-	params := paramsLogN14Mask
+	params := paramsLogN14
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
-	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
 
 	Box := cipherUtils.NewBox(params)
 
@@ -161,33 +153,16 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	if len(possibleSplits) == 0 {
-		panic(errors.New("No splits found!"))
-	}
+	splitInfo, _ := possibleSplits.ExctractInfo()
 
-	serverAddr := "127.0.0.1:8001"
-	client, err := distributed.NewClient(serverAddr, Box, poolSize, true)
-	utils.ThrowErr(err)
-	server, err := distributed.NewServer(Box, serverAddr, true)
-	go server.Listen()
-	utils.ThrowErr(err)
-
-	splits := possibleSplits[0]
-	cipherUtils.PrintSetOfSplits(splits)
-
-	splitInfo, _ := cipherUtils.ExctractInfo(splits)
-
-	batchSize := splitInfo.InputRows * splitInfo.InputRowP
+	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
-
-	cne := cn.NewHE(splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
-
-	fmt.Println("Encrypted Cryptonet...")
+	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	fmt.Println("Encoded Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
-	err = datacn.Init(batchSize)
+	err := datacn.Init(batchSize)
 	utils.ThrowErr(err)
 
 	result := utils.NewStats(batchSize)
@@ -195,6 +170,17 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 
 	iters := 0
 	maxIters := 5
+
+	//generate and store rotation keys
+	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
+
+	//start server
+	serverAddr := "127.0.0.1:8001"
+	client, err := distributed.NewClient(serverAddr, Box, poolSize, true)
+	utils.ThrowErr(err)
+	server, err := distributed.NewServer(Box, serverAddr, true)
+	go server.Listen()
+	utils.ThrowErr(err)
 
 	for true {
 		X, Y, err := datacn.Batch()
@@ -246,16 +232,16 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	//12.5s for 41 batch with logn14 mask
 
-	var debug = true       //set to true for debug mode
+	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json")
 
-	params := paramsLogN14Mask
+	params := paramsLogN14
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
-	possibleSplits := cipherUtils.FindSplits(-1, features, rows, cols, params)
+	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
 
 	Box := cipherUtils.NewBox(params)
 
@@ -265,9 +251,26 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	if len(possibleSplits) == 0 {
-		panic(errors.New("No splits found!"))
-	}
+	splitInfo, _ := possibleSplits.ExctractInfo()
+
+	batchSize := splitInfo.BatchSize
+	cn.SetBatch(batchSize)
+
+	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	fmt.Println("Encoded Cryptonet...")
+
+	datacn := data.LoadData("cryptonet_data_nopad.json")
+	err := datacn.Init(batchSize)
+	utils.ThrowErr(err)
+
+	result := utils.NewStats(batchSize)
+	resultExp := utils.NewStats(batchSize)
+
+	iters := 0
+	maxIters := 5
+
+	//generate and store rotation keys
+	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
 
 	clusterConfig := cluster.ReadConfig("../cluster/config.json")
 	serverAddr := clusterConfig.ClusterIps[1] //0 is the client
@@ -277,30 +280,6 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 
 	client.ClientSetup(serverAddr, Box.Sk)
 	utils.ThrowErr(err)
-
-	splits := possibleSplits[0]
-	cipherUtils.PrintSetOfSplits(splits)
-
-	splitInfo, _ := cipherUtils.ExctractInfo(splits)
-
-	batchSize := splitInfo.InputRows * splitInfo.InputRowP
-	cn.SetBatch(batchSize)
-
-	Box = cipherUtils.BoxWithSplits(Box, bootstrapping.Parameters{}, false, splits)
-
-	cne := cn.NewHE(splits, true, false, 4, params.MaxLevel(), nil, poolSize, Box)
-
-	fmt.Println("Encrypted Cryptonet...")
-
-	datacn := data.LoadData("cryptonet_data_nopad.json")
-	err = datacn.Init(batchSize)
-	utils.ThrowErr(err)
-
-	result := utils.NewStats(batchSize)
-	resultExp := utils.NewStats(batchSize)
-
-	iters := 0
-	maxIters := 5
 
 	for true {
 		X, Y, err := datacn.Batch()

@@ -7,11 +7,15 @@ import (
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"
 	"time"
 )
 
 type HENetworkI interface {
+	//Rotations needed for inference
+	GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int
 	//Evaluates batch. Treats each layer l as: Act[l](X * weight[l] + bias[l])
 	Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration)
 	//Evaluates batch with debug statements. Needs the batch in clear and the network in cleartext.
@@ -50,22 +54,23 @@ type HENetwork struct {
 
 // Creates a new network for he inference
 // Needs splits of input and weights and loaded network from json
-func NewHENetwork(network NetworkI, splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
+func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
 	if !network.IsInit() {
 		panic("Netowrk in clear is not initialized")
 	}
 	layers := network.GetNumOfLayers()
-	splitInfo, _ := cipherUtils.ExctractInfo(splits)
+	splitInfo, _ := splits.ExctractInfo()
 	innerRows := splitInfo.InputRows
+	innerCols := splitInfo.InputCols
 	inputRowP := splitInfo.InputRowP
 
 	hen := new(HENetwork)
 	hen.Weights = make([]cipherUtils.BlocksOperand, layers)
 	hen.Bias = make([]cipherUtils.BlocksOperand, layers)
 
-	hen.Activator, _ = cipherUtils.NewActivator(network.GetNumOfActivations(), Box, poolsize)
-	hen.Multiplier = cipherUtils.NewMultiplier(Box, poolsize)
-	hen.Adder = cipherUtils.NewAdder(Box, poolsize)
+	hen.Activator, _ = cipherUtils.NewActivator(network.GetNumOfActivations(), poolsize)
+	hen.Multiplier = cipherUtils.NewMultiplier(poolsize)
+	hen.Adder = cipherUtils.NewAdder(poolsize)
 
 	hen.Box = Box
 	hen.MinLevel = minLevel
@@ -107,20 +112,22 @@ func NewHENetwork(network NetworkI, splits []cipherUtils.BlockSplits, encrypted,
 			level = btpCapacity
 		}
 
-		split := splits[splitIdx]
+		split := splits.ExctractInfoAt(splitIdx)
+		_, cols, rowP, colP := split[0], split[1], split[2], split[3]
 		if encrypted {
-			hen.Weights[i], err = cipherUtils.NewEncWeightDiag(weights[i], split.RowP, split.ColP, innerRows, level, Box)
+			hen.Weights[i], err = cipherUtils.NewEncWeightDiag(weights[i], rowP, colP, innerRows, innerCols, level, Box)
 		} else {
-			hen.Weights[i], err = cipherUtils.NewPlainWeightDiag(weights[i], split.RowP, split.ColP, innerRows, level, Box)
+			hen.Weights[i], err = cipherUtils.NewPlainWeightDiag(weights[i], rowP, colP, innerRows, innerCols, level, Box)
 		}
+		innerCols = cols
 		utils.ThrowErr(err)
 		level-- //mul
 
 		if encrypted {
-			hen.Bias[i], err = cipherUtils.NewEncInput(biases[i], inputRowP, split.ColP, level, Box.Params.DefaultScale(), Box)
+			hen.Bias[i], err = cipherUtils.NewEncInput(biases[i], inputRowP, colP, level, Box.Params.DefaultScale(), Box)
 			utils.ThrowErr(err)
 		} else {
-			hen.Bias[i], err = cipherUtils.NewPlainInput(biases[i], inputRowP, split.ColP, level, Box.Params.DefaultScale(), Box)
+			hen.Bias[i], err = cipherUtils.NewPlainInput(biases[i], inputRowP, colP, level, Box.Params.DefaultScale(), Box)
 			utils.ThrowErr(err)
 		}
 
@@ -138,7 +145,7 @@ func NewHENetwork(network NetworkI, splits []cipherUtils.BlockSplits, encrypted,
 		if i < hen.Activator.NumOfActivations {
 			//activation
 			var err error
-			hen.Activator.AddActivation(network.GetActivations()[i], i, level, Box.Params.DefaultScale(), innerRows, split.InnerCols)
+			hen.Activator.AddActivation(network.GetActivations()[i], i, level, Box.Params.DefaultScale(), innerRows, cols, Box)
 			utils.ThrowErr(err)
 			level -= hen.Activator.LevelsOfAct(i) //activation
 
@@ -217,13 +224,13 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 
 		if i == 0 {
 			prepack = false
-			res = n.Multiplier.Multiply(X, n.Weights[i], prepack)
+			res = n.Multiplier.Multiply(X, n.Weights[i], prepack, n.Box)
 		} else {
 			prepack = true
-			res = n.Multiplier.Multiply(res, n.Weights[i], prepack)
+			res = n.Multiplier.Multiply(res, n.Weights[i], prepack, n.Box)
 		}
 
-		n.Adder.AddBias(res, n.Bias[i])
+		n.Adder.AddBias(res, n.Bias[i], n.Box)
 
 		level = res.Level()
 
@@ -234,7 +241,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 			n.Bootstrapper.Bootstrap(res)
 		}
 
-		n.Activator.ActivateBlocks(res, i)
+		n.Activator.ActivateBlocks(res, i, n.Box)
 
 		level = res.Level()
 		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
@@ -272,10 +279,10 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 
 		if i == 0 {
 			prepack = false
-			res = n.Multiplier.Multiply(Xenc, n.Weights[i], prepack)
+			res = n.Multiplier.Multiply(Xenc, n.Weights[i], prepack, n.Box)
 		} else {
 			prepack = true
-			res = n.Multiplier.Multiply(res, n.Weights[i], prepack)
+			res = n.Multiplier.Multiply(res, n.Weights[i], prepack, n.Box)
 		}
 
 		var tmp mat.Dense
@@ -285,7 +292,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
 		fmt.Printf("Multiplication layer %d\n", i+1)
 
-		n.Adder.AddBias(res, n.Bias[i])
+		n.Adder.AddBias(res, n.Bias[i], n.Box)
 
 		var tmp2 mat.Dense
 		tmp2.Add(&tmp, b[i])
@@ -303,7 +310,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 			n.Bootstrapper.Bootstrap(res)
 		}
 
-		n.Activator.ActivateBlocks(res, i)
+		n.Activator.ActivateBlocks(res, i, n.Box)
 		if i < network.GetNumOfActivations() {
 			activations[i].ActivatePlain(&tmp2)
 			tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
@@ -315,4 +322,15 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, resClear, time.Since(start)
+}
+
+func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
+	rs := cipherUtils.NewRotationsSet()
+	for _, w := range n.Weights {
+		rs.Add(w.GetRotations(params))
+	}
+	rots := rs.Rotations()
+	n.Box = cipherUtils.BoxWithRotations(n.Box, rots, n.Bootstrappable, btpParams)
+
+	return rots
 }

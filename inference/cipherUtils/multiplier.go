@@ -13,7 +13,6 @@ import (
 //Deals with multipication between encrypted or plaintext encoded block matrices
 type Multiplier struct {
 	poolSize int
-	box      CkksBox
 }
 
 //feeded to the workers to tell them what to do
@@ -24,15 +23,14 @@ type MulTask struct {
 	//done chan struct{} //flag when accumulator is done
 }
 
-func NewMultiplier(Box CkksBox, poolSize int) *Multiplier {
+func NewMultiplier(poolSize int) *Multiplier {
 	Mul := new(Multiplier)
 	Mul.poolSize = poolSize
-	Mul.box = Box
 	return Mul
 }
 
-func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut int, prepack bool, W BlocksOperand, ch chan MulTask, Out *EncInput) {
-	box := BoxShallowCopy(Mul.box)
+func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut int, prepack bool, W BlocksOperand, ch chan MulTask, Out *EncInput, Box CkksBox) {
+	box := BoxShallowCopy(Box)
 	for {
 		task, ok := <-ch //feed the goroutines
 		if !ok {
@@ -67,9 +65,9 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 }
 
 //Multiplication between encrypted input and plaintext weight
-func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) *EncInput {
+func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, Box CkksBox) *EncInput {
 	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
-	Box := Mul.box
+
 	xRowP, xColP := X.GetPartitions()
 	xRealRows, _ := X.GetRealDims()
 	_, wRealCols := W.GetRealDims()
@@ -81,7 +79,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 		switch X.(type) {
 		case *EncInput:
 			start := time.Now()
-			RepackCols(X.(*EncInput), wColP, Mul.box)
+			RepackCols(X.(*EncInput), wColP, Box)
 			fmt.Println("Done repack: ", time.Since(start))
 		default:
 			panic(errors.New("Block matrices not compatible for multiplication"))
@@ -140,7 +138,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 		for i := 0; i < Mul.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, prepack, W, ch, Out)
+				Mul.spawnEvaluators(X, dimIn, dimMid, dimOut, prepack, W, ch, Out, Box)
 				defer wg.Done()
 			}()
 		}
@@ -168,7 +166,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 }
 
 //To be called after multiply. Applies the rescaling and removes garbage from imaginary part of slots (from multiplication algo with complex packing)
-func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
+func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 
 	poolCh := make(chan struct{}, Mul.poolSize)
 
@@ -180,12 +178,12 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
 		for j := 0; j < X.ColP; j++ {
 			<-poolCh //if not routines are available this is blocking
 			go func(i, j int, eval ckks.Evaluator) {
-				eval.Rescale(X.Blocks[i][j], Mul.box.Params.DefaultScale(), X.Blocks[i][j])
+				eval.Rescale(X.Blocks[i][j], Box.Params.DefaultScale(), X.Blocks[i][j])
 				eval.Add(X.Blocks[i][j], eval.ConjugateNew(X.Blocks[i][j]), X.Blocks[i][j])
 
 				poolCh <- struct{}{} //restore 1 go routine in channel
 
-			}(i, j, Mul.box.Evaluator.ShallowCopy())
+			}(i, j, Box.Evaluator.ShallowCopy())
 		}
 	}
 	for i := 0; i < Mul.poolSize; i++ {

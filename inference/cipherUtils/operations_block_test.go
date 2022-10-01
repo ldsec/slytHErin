@@ -25,9 +25,9 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
-		Mul := NewMultiplier(Box, 1)
+		Mul := NewMultiplier(1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -44,9 +44,9 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
-		Mul := NewMultiplier(Box, runtime.NumCPU())
+		Mul := NewMultiplier(runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -61,9 +61,9 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
-		Mul := NewMultiplier(Box, 1)
+		Mul := NewMultiplier(1)
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -80,9 +80,9 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
 		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
-		Mul := NewMultiplier(Box, runtime.NumCPU())
+		Mul := NewMultiplier(runtime.NumCPU())
 		start := time.Now()
-		resEnc := Mul.Multiply(Xenc, Wpt, true)
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
@@ -101,9 +101,9 @@ func TestAdder_AddBias(t *testing.T) {
 	t.Run("Test/Add", func(t *testing.T) {
 		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Ad := NewAdder(Box, 1)
+		Ad := NewAdder(1)
 		start := time.Now()
-		Ad.AddBias(Xenc, Bpt)
+		Ad.AddBias(Xenc, Bpt, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
@@ -115,9 +115,9 @@ func TestAdder_AddBias(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Ad := NewAdder(Box, runtime.NumCPU())
+		Ad := NewAdder(runtime.NumCPU())
 		start := time.Now()
-		Ad.AddBias(Xenc, Bpt)
+		Ad.AddBias(Xenc, Bpt, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		var res mat.Dense
@@ -137,10 +137,10 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		// we need to rescale the input before the activation
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(1, Box, 1)
-		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
+		Act, _ := NewActivator(1, 1)
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box)
 		start := time.Now()
-		Act.ActivateBlocks(Xenc, 0)
+		Act.ActivateBlocks(Xenc, 0, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		activation.ActivatePlain(Xscaled)
@@ -155,11 +155,11 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		// we need to rescale the input before the activation
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(1, Box, runtime.NumCPU())
-		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
+		Act, _ := NewActivator(1, runtime.NumCPU())
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc, 0)
+		Act.ActivateBlocks(Xenc, 0, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
@@ -172,11 +172,11 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		activation := utils.InitActivationCheby("silu", -5, 5, 10)
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(1, Box, 1)
-		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
+		Act, _ := NewActivator(1, 1)
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc, 0)
+		Act.ActivateBlocks(Xenc, 0, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
@@ -189,11 +189,11 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		activation := utils.InitActivationCheby("silu", -5, 5, 10)
 		Xscaled, _ := activation.Rescale(X, X)
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Act, _ := NewActivator(1, Box, runtime.NumCPU())
-		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
+		Act, _ := NewActivator(1, runtime.NumCPU())
+		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols, Box)
 
 		start := time.Now()
-		Act.ActivateBlocks(Xenc, 0)
+		Act.ActivateBlocks(Xenc, 0, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
@@ -216,9 +216,9 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	t.Run("Test/Bootstrap", func(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Btp := NewBootstrapper(Box, 1)
+		Btp := NewBootstrapper(1)
 		start := time.Now()
-		Btp.Bootstrap(Xenc)
+		Btp.Bootstrap(Xenc, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		Xc := pU.NewDense(pU.MatToArray(X))
@@ -229,9 +229,9 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	t.Run("Test/Bootstrap/MultiThread", func(t *testing.T) {
 
 		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Btp := NewBootstrapper(Box, runtime.NumCPU())
+		Btp := NewBootstrapper(runtime.NumCPU())
 		start := time.Now()
-		Btp.Bootstrap(Xenc)
+		Btp.Bootstrap(Xenc, Box)
 		fmt.Println("Done: ", time.Since(start))
 
 		Xc := pU.NewDense(pU.MatToArray(X))
@@ -272,7 +272,7 @@ func TestRepack(t *testing.T) {
 	utils.ThrowErr(err)
 
 	Box = BoxWithRotations(Box, GenRotations(Xenc.InnerRows, Xenc.InnerCols, 1, []int{Wpt.InnerRows}, []int{Wpt.InnerCols}, []int{Wpt.ColP}, []int{Wpt.RowP}, params, nil), false, bootstrapping.Parameters{})
-	Mul := NewMultiplier(Box, runtime.NumCPU())
+	Mul := NewMultiplier( runtime.NumCPU())
 	start = time.Now()
 	resEnc := Mul.Multiply(Xenc, Wpt, true)
 	fmt.Println("Done: ", time.Since(start))

@@ -16,6 +16,7 @@ type BlocksOperand interface {
 	GetPartitions() (int, int)
 	GetInnerDims() (int, int)
 	GetRealDims() (int, int)
+	GetRotations(params ckks.Parameters) []int
 	Level() int
 	Scale() float64
 }
@@ -191,11 +192,15 @@ func (X *EncInput) GetRealDims() (int, int) {
 }
 
 func (X *EncInput) Level() int {
-	return X.GetBlock(0, 0).([]*ckks.Ciphertext)[0].Level()
+	return X.GetBlock(0, 0).(*ckks.Ciphertext).Level()
 }
 
 func (X *EncInput) Scale() float64 {
-	return X.GetBlock(0, 0).([]*ckks.Ciphertext)[0].ScalingFactor()
+	return X.GetBlock(0, 0).(*ckks.Ciphertext).ScalingFactor()
+}
+
+func (X *EncInput) GetRotations(params ckks.Parameters) []int {
+	return []int{}
 }
 
 func (X *PlainInput) GetBlock(i, j int) interface{} {
@@ -215,11 +220,15 @@ func (X *PlainInput) GetInnerDims() (int, int) {
 }
 
 func (X *PlainInput) Level() int {
-	return X.GetBlock(0, 0).([]*ckks.Plaintext)[0].Level()
+	return X.GetBlock(0, 0).(*ckks.Plaintext).Level()
 }
 
 func (X *PlainInput) Scale() float64 {
-	return X.GetBlock(0, 0).([]*ckks.Plaintext)[0].ScalingFactor()
+	return X.GetBlock(0, 0).(*ckks.Plaintext).ScalingFactor()
+}
+
+func (X *PlainInput) GetRotations(params ckks.Parameters) []int {
+	return []int{}
 }
 
 //	Given a block input matrix, decrypts and returns the underlying original matrix

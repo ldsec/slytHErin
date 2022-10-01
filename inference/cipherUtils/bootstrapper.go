@@ -15,18 +15,16 @@ type IBootstrapper interface {
 //Centralized bootstrapper. Homomorphically evaluates decryption circuit
 type Bootstrapper struct {
 	poolSize int
-	box      CkksBox
 }
 
-func NewBootstrapper(Box CkksBox, poolSize int) *Bootstrapper {
+func NewBootstrapper(poolSize int) *Bootstrapper {
 	Btp := new(Bootstrapper)
 	Btp.poolSize = poolSize
-	Btp.box = Box
 	return Btp
 }
 
-func (Btp *Bootstrapper) spawnEvaluators(X *EncInput, ch chan []int) {
-	btp := Btp.box.BootStrapper.ShallowCopy()
+func (Btp *Bootstrapper) spawnEvaluators(X *EncInput, ch chan []int, Box CkksBox) {
+	btp := Box.BootStrapper.ShallowCopy()
 	for {
 		coords, ok := <-ch //feed the goroutines
 		if !ok {
@@ -39,13 +37,13 @@ func (Btp *Bootstrapper) spawnEvaluators(X *EncInput, ch chan []int) {
 }
 
 //Centralized Bootstrapping
-func (Btp *Bootstrapper) Bootstrap(X *EncInput) {
+func (Btp *Bootstrapper) Bootstrap(X *EncInput, Box CkksBox) {
 
 	if Btp.poolSize == 1 {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				X.Blocks[i][j] = Btp.box.BootStrapper.Bootstrapp(X.Blocks[i][j])
+				X.Blocks[i][j] = Box.BootStrapper.Bootstrapp(X.Blocks[i][j])
 			}
 		}
 	} else if Btp.poolSize > 1 {
@@ -57,7 +55,7 @@ func (Btp *Bootstrapper) Bootstrap(X *EncInput) {
 		for i := 0; i < Btp.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Btp.spawnEvaluators(X, ch)
+				Btp.spawnEvaluators(X, ch, Box)
 				defer wg.Done()
 			}()
 		}

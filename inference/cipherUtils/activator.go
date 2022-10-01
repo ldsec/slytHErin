@@ -17,7 +17,6 @@ type activationPoly struct {
 //Handles an activation layer with a polynomial function on an EncInput
 type Activator struct {
 	poly             []activationPoly
-	box              CkksBox //pool of evaluators to be used
 	isCheby          bool
 	poolSize         int
 	NumOfActivations int
@@ -27,20 +26,19 @@ type EvalFunc func(X *EncInput, i, j int, poly activationPoly, Box CkksBox)
 
 //Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
 //output of the previous linear layer
-func NewActivator(numOfActivations int, Box CkksBox, poolSize int) (*Activator, error) {
+func NewActivator(numOfActivations int, poolSize int) (*Activator, error) {
 	Act := new(Activator)
 	Act.poolSize = poolSize
 	Act.NumOfActivations = numOfActivations
 	Act.poly = make([]activationPoly, Act.NumOfActivations)
-	Act.box = Box
 	return Act, nil
 }
 
 //Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimentions
-func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int) {
+func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int, Box CkksBox) {
 	poly := new(ckks.Polynomial)
 	i := layer
-	Box := Act.box
+
 	switch activation.ChebyBase {
 	case false:
 		//if not cheby base we extract the const term and add it later so to use a more efficient poly eval without encoder
@@ -80,7 +78,7 @@ func (Act *Activator) LevelsOfAct(layer int) int {
 	return Act.poly[layer].polynomial.Depth()
 }
 
-func (Act *Activator) spawnEvaluators(f EvalFunc, poly activationPoly, X *EncInput, ch chan []int) {
+func (Act *Activator) spawnEvaluators(f EvalFunc, poly activationPoly, X *EncInput, ch chan []int, Box CkksBox) {
 	for {
 		coords, ok := <-ch //feed the goroutines
 		if !ok {
@@ -88,12 +86,12 @@ func (Act *Activator) spawnEvaluators(f EvalFunc, poly activationPoly, X *EncInp
 			return
 		}
 		i, j := coords[0], coords[1]
-		f(X, i, j, poly, Act.box)
+		f(X, i, j, poly, Box)
 	}
 }
 
 //Evaluates a polynomial on the ciphertext. If no activation is at layer, applies identity
-func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
+func (Act *Activator) ActivateBlocks(X *EncInput, layer int, Box CkksBox) {
 	if layer >= Act.NumOfActivations {
 		//no more act -> identity
 		return
@@ -108,7 +106,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
 		//single threaded
 		for i := 0; i < X.RowP; i++ {
 			for j := 0; j < X.ColP; j++ {
-				f(X, i, j, Act.poly[layer], Act.box)
+				f(X, i, j, Act.poly[layer], Box)
 			}
 		}
 	} else if Act.poolSize > 1 {
@@ -118,7 +116,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput, layer int) {
 		for i := 0; i < Act.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				Act.spawnEvaluators(f, Act.poly[layer], X, ch)
+				Act.spawnEvaluators(f, Act.poly[layer], X, ch, Box)
 				defer wg.Done()
 			}()
 		}

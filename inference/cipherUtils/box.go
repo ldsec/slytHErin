@@ -13,6 +13,12 @@ type RotationsSet struct {
 	Set map[int]struct{}
 }
 
+func NewRotationsSet() *RotationsSet {
+	rs := new(RotationsSet)
+	rs.Set = make(map[int]struct{})
+	return rs
+}
+
 func (rs *RotationsSet) Add(rots []int) {
 	for i := range rots {
 		if _, exists := rs.Set[rots[i]]; !exists {
@@ -32,6 +38,7 @@ func (rs *RotationsSet) Rotations() []int {
 //wrapper for the classes needed to perform encrypted operations, like a crypto-ToolBox
 type CkksBox struct {
 	Params       ckks.Parameters
+	BtpParams    *bootstrapping.Parameters
 	Encoder      ckks.Encoder
 	Evaluator    ckks.Evaluator
 	Encryptor    ckks.Encryptor
@@ -66,12 +73,21 @@ func NewBox(params ckks.Parameters) CkksBox {
 }
 
 func BoxShallowCopy(Box CkksBox) CkksBox {
+	btp := new(bootstrapping.Bootstrapper)
+	if Box.BootStrapper != nil {
+		btp = Box.BootStrapper.ShallowCopy()
+	}
 	boxNew := CkksBox{
-		Params:    Box.Params,
-		Encoder:   Box.Encoder.ShallowCopy(),
-		Evaluator: Box.Evaluator.ShallowCopy(),
-		Decryptor: Box.Decryptor.ShallowCopy(),
-		Encryptor: Box.Encryptor.ShallowCopy(),
+		Params:       Box.Params,
+		Encoder:      Box.Encoder.ShallowCopy(),
+		Evaluator:    Box.Evaluator.ShallowCopy(),
+		Encryptor:    Box.Encryptor.ShallowCopy(),
+		Decryptor:    Box.Decryptor.ShallowCopy(),
+		BootStrapper: btp,
+		Sk:           Box.Sk.CopyNew(),
+		rtks:         Box.rtks,
+		evk:          Box.evk,
+		kgen:         Box.kgen,
 	}
 	return boxNew
 }
@@ -81,9 +97,11 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *boo
 	if rotations == nil {
 		rotations = []int{}
 	}
+	if Box.rtks == nil {
+		Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
+	}
 	params := Box.Params
 	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
-	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
 		Rlk:  rlk,
 		Rtks: Box.rtks,
@@ -97,6 +115,7 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *boo
 		}
 		Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
 		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
+		Box.BtpParams = btpParams
 		utils.ThrowErr(err)
 	}
 	return Box
@@ -220,7 +239,7 @@ func SerializeBox(path string, Box CkksBox) {
 }
 
 //loads serialized keys from disk into a fresh box
-func DeserealizeBox(path string, params ckks.Parameters, btpParams bootstrapping.Parameters, withBtp bool) CkksBox {
+func DeserealizeBox(path string, params ckks.Parameters, btpParams *bootstrapping.Parameters, withBtp bool) CkksBox {
 	fmt.Println("Reading keys from disk: ", path)
 	dat, err := os.ReadFile(path + "_sk")
 	utils.ThrowErr(err)
@@ -236,13 +255,15 @@ func DeserealizeBox(path string, params ckks.Parameters, btpParams bootstrapping
 
 	Box := CkksBox{
 		Params:       params,
+		BtpParams:    btpParams,
 		Encoder:      ckks.NewEncoder(params),
 		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: kgen.GenRelinearizationKey(&sk, 2), Rtks: &rotKeys}),
-		Decryptor:    ckks.NewDecryptor(params, &sk),
 		Encryptor:    ckks.NewEncryptor(params, &sk),
+		Decryptor:    ckks.NewDecryptor(params, &sk),
 		BootStrapper: nil,
 		Sk:           &sk,
 		rtks:         &rotKeys,
+		evk:          bootstrapping.EvaluationKeys{},
 		kgen:         kgen,
 	}
 	if withBtp {
@@ -272,7 +293,7 @@ func DeserealizeBox(path string, params ckks.Parameters, btpParams bootstrapping
 			SwkDtS:        &keySwDtS,
 			SwkStD:        &keySwStD,
 		}
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(params, btpParams, Box.evk)
+		Box.BootStrapper, err = bootstrapping.NewBootstrapper(params, *btpParams, Box.evk)
 		utils.ThrowErr(err)
 	}
 	return Box

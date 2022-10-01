@@ -54,6 +54,7 @@ type SplitsInfo struct {
 	InputCols     int   `json:"input_cols,omitempty"` //inner dims of input
 	InputRowP     int   `json:"input_row_p,omitempty"`
 	InputColP     int   `json:"input_col_p,omitempty"` //partition of input
+	BatchSize     int   `json:"batch_size,omitempty"`
 	NumWeights    int   `json:"num_weights,omitempty"`
 	RowsOfWeights []int `json:"rows_of_weights,omitempty"` //inner rows of weights
 	ColsOfWeights []int `json:"cols_of_weights,omitempty"`
@@ -333,6 +334,7 @@ func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	info.InputRows = splits[0].InnerRows
 	info.InputCols = splits[0].InnerCols
 	info.InputRowP, info.InputColP = splits[0].RowP, splits[0].ColP
+	info.BatchSize = info.InputRowP * info.InputRows
 	info.NumWeights = len(splits) - 1
 	info.RowsOfWeights = make([]int, info.NumWeights)
 	info.ColsOfWeights = make([]int, info.NumWeights)
@@ -351,7 +353,7 @@ func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	return info, code
 }
 
-//Exctract info useful for splitting input and weights, plus a hashcode for serialization
+//Exctract info for blocksplit at i: rows, cols, rowp, colp
 func (s *Split) ExctractInfoAt(i int) []int {
 	splits := s.S
 	Rows := splits[i].InnerRows

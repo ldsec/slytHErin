@@ -3,7 +3,6 @@ package cryptonet
 
 import (
 	"encoding/json"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/network"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"io/ioutil"
@@ -45,8 +44,4 @@ func (l *CNLoader) Load(path string) network.NetworkI {
 	cn.SetActivations(activations)
 
 	return cn
-}
-
-func (cn *CryptoNet) NewCryptoNet(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *CryptoNetHE {
-	return &CryptoNetHE{cn.NewHE(splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box).(*network.HENetwork)}
 }
