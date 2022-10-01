@@ -127,7 +127,7 @@ func (approx *ChebyPolyApprox) LevelsOfAct() int {
 }
 
 //rescale weights for polynomial activation
-func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (wRescaled, bRescaled *mat.Dense) {
+func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense) {
 	mulC := 2.0 / (approx.B - approx.A)
 	addC := (-approx.A - approx.B) / (approx.B - approx.A)
 

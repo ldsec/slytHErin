@@ -4,11 +4,9 @@ import (
 	"fmt"
 	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
-	"github.com/stretchr/testify/assert"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"
-	"math"
 	"runtime"
 	"testing"
 	"time"
@@ -21,11 +19,11 @@ func TestMultiplier_Multiply(t *testing.T) {
 	Box := NewBox(params)
 
 	t.Run("Test/C2P", func(t *testing.T) {
-		S := NewSplitter(false, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
 		splits := S.FindSplits()
 		splits.Print()
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
-		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], splits.ExctractInfoAt(1)[1], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), true, Box)
+		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, 1)
 		start := time.Now()
@@ -33,23 +31,18 @@ func TestMultiplier_Multiply(t *testing.T) {
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense
 		res.Mul(X, W)
-		resPt := DecInput(resEnc, Box)
-		resArray := pU.MatToArray(&res)
-		for i := range resArray {
-			for j := range resArray[i] {
-				assert.Less(t, math.Abs(resPt[i][j]-resArray[i][j]), 1e-3)
-			}
-		}
+		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
 	})
 
 	t.Run("Test/C2P_Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		S := NewSplitter(false, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
 		splits := S.FindSplits()
 		splits.Print()
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
-		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], splits.ExctractInfoAt(1)[1], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), true, Box)
+		Wpt, _ := NewPlainWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(Box, runtime.NumCPU())
 		start := time.Now()
@@ -58,11 +51,11 @@ func TestMultiplier_Multiply(t *testing.T) {
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
 	})
 
 	t.Run("Test/C2C", func(t *testing.T) {
-		S := NewSplitter(true, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
 		splits := S.FindSplits()
 		splits.Print()
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
@@ -75,13 +68,13 @@ func TestMultiplier_Multiply(t *testing.T) {
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
 	})
 
 	t.Run("Test/C2C_Multithread", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
 
-		S := NewSplitter(true, pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
 		splits := S.FindSplits()
 		splits.Print()
 		Xenc, _ := NewEncInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
@@ -94,13 +87,13 @@ func TestMultiplier_Multiply(t *testing.T) {
 		var res mat.Dense
 		res.Mul(X, W)
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
-		PrintDebugBlocks(resEnc, resPt, 0.01, Box)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
 	})
 }
 
 func TestAdder_AddBias(t *testing.T) {
-	X := pU.RandMatrix(63, 64)
-	B := pU.RandMatrix(63, 64)
+	X := pU.RandMatrix(64, 64)
+	B := pU.RandMatrix(64, 64)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 
 	Box := NewBox(params)
@@ -117,7 +110,6 @@ func TestAdder_AddBias(t *testing.T) {
 		res.Add(X, B)
 		resPt, _ := pU.PartitionMatrix(&res, Xenc.RowP, Xenc.ColP)
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
-
 	})
 	t.Run("Test/Add/Multitrehad", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
@@ -147,12 +139,11 @@ func TestActivator_ActivateBlocks(t *testing.T) {
 		Xenc, _ := NewEncInput(Xscaled, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
 		Act, _ := NewActivator(1, Box, 1)
 		Act.AddActivation(*activation, 0, params.MaxLevel(), params.DefaultScale(), Xenc.InnerRows, Xenc.InnerCols)
-
 		start := time.Now()
 		Act.ActivateBlocks(Xenc, 0)
 		fmt.Println("Done: ", time.Since(start))
 
-		activation.ActivatePlain(Xscaled) //this automatically rescales the input before activating
+		activation.ActivatePlain(Xscaled)
 
 		resPt, _ := pU.PartitionMatrix(Xscaled, Xenc.RowP, Xenc.ColP)
 		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
@@ -220,7 +211,7 @@ func TestBootstrapper_Bootstrap(t *testing.T) {
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
 
 	Box := NewBox(params)
-	Box = BoxWithRotations(Box, GenRotations(16, 16, 0, []int{}, []int{}, []int{}, []int{}, params, &btpParams), true, &btpParams)
+	Box = BoxWithRotations(Box, nil, true, &btpParams)
 
 	t.Run("Test/Bootstrap", func(t *testing.T) {
 

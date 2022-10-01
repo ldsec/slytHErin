@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/utils"
 	"math"
 )
 
@@ -63,8 +64,8 @@ func PrintDebugBlocks(Xenc *EncInput, Pt *plainUtils.BMatrix, thresh float64, Bo
 
 	X := plainUtils.Vectorize(DecInput(Xenc, Box), false)
 	Y := plainUtils.Vectorize(plainUtils.MatToArray(plainUtils.ExpandBlocks(Pt)), false)
-
-	precStats := ckks.GetPrecisionStats(Box.Params, Box.Encoder, nil, Y[:Box.Params.Slots()], X[:Box.Params.Slots()], Box.Params.LogSlots(), 0)
+	l := utils.MinInt(utils.MinInt(len(X), len(Y)), Box.Params.Slots())
+	precStats := ckks.GetPrecisionStats(Box.Params, Box.Encoder, nil, Y[:l], X[:l], Box.Params.LogSlots(), 0)
 	fmt.Println(precStats.String())
 
 	dist := plainUtils.Distance(X, Y)

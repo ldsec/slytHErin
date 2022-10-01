@@ -50,9 +50,12 @@ func NewBox(params ckks.Parameters) CkksBox {
 	enc := ckks.NewEncryptor(params, sk)
 	dec := ckks.NewDecryptor(params, sk)
 	Box := CkksBox{
-		Params:       params,
-		Encoder:      ckks.NewEncoder(params),
-		Evaluator:    nil,
+		Params:  params,
+		Encoder: ckks.NewEncoder(params),
+		Evaluator: ckks.NewEvaluator(params, rlwe.EvaluationKey{
+			Rlk:  ckks.NewRelinearizationKey(params),
+			Rtks: nil,
+		}),
 		Decryptor:    dec,
 		Encryptor:    enc,
 		BootStrapper: nil,
@@ -75,7 +78,10 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 
 //returns Box with Evaluator and Bootstrapper if needed
 func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *bootstrapping.Parameters) CkksBox {
-
+	if rotations == nil {
+		rotations = []int{}
+	}
+	params := Box.Params
 	rlk := Box.kgen.GenRelinearizationKey(Box.Sk, 2)
 	Box.rtks = Box.kgen.GenRotationKeysForRotations(rotations, true, Box.Sk)
 	Box.Evaluator = ckks.NewEvaluator(Box.Params, rlwe.EvaluationKey{
@@ -84,6 +90,11 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *boo
 	})
 	var err error
 	if withBtp {
+		if btpParams != nil {
+			rotations = btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
+		} else {
+			panic("withBtp mbut bootstrapping params is nil")
+		}
 		Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
 		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
 		utils.ThrowErr(err)
@@ -92,6 +103,7 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *boo
 }
 
 //Generates rotatiosns needed for pipeline. Takes input features, as well inner rows,cols and partitions of weights as block matrices
+/*
 func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int, params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rotations := []int{}
 
@@ -149,6 +161,7 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 
 	return rotations
 }
+*/
 
 //serializes keys to disk
 func SerializeBox(path string, Box CkksBox) {

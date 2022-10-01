@@ -42,17 +42,12 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 		i, j, k := task.i, task.j, task.k
 		ct := new(ckks.Ciphertext)
 		x := X.GetBlock(i, k)
-		w := W.GetBlock(j, k)
+		w := W.GetBlock(j, k).(DiagMat)
 		switch x.(type) {
 		case *ckks.Ciphertext:
-			switch w.(type) {
-			case *EncDiagMat:
-				ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, box)
-			case *PlainDiagMat:
-				ct = DiagMulLT(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*PlainDiagMat), box)
-			}
+			ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.GetDiags(), prepack, box)
 		case *ckks.Plaintext:
-			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, box)
+			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w.GetDiags(), box)
 		}
 		if k == 0 {
 			//I am the accumulator
@@ -121,17 +116,12 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 				for k := 0; k < s; k++ {
 					ct := new(ckks.Ciphertext)
 					x := X.GetBlock(i, k)
-					w := W.GetBlock(j, k)
+					w := W.GetBlock(j, k).(DiagMat)
 					switch x.(type) {
 					case *ckks.Ciphertext:
-						switch w.(type) {
-						case *EncDiagMat:
-							ct = DiagMul(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
-						case *PlainDiagMat:
-							ct = DiagMulLT(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.(*PlainDiagMat), Box)
-						}
+						ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.GetDiags(), prepack, Box)
 					case *ckks.Plaintext:
-						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, dimMid, dimOut, w.(*EncDiagMat).Diags, prepack, true, Box)
+						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w.GetDiags(), Box)
 					}
 					if k == 0 {
 						res = ct
@@ -209,8 +199,8 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput) {
 //  | version with optimized dimentions
 //  v
 
-//Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
-func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+//Multiplies a ciphertext or plaintext with a weight matrix in diagonal form: W x A.T
+func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -229,7 +219,7 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.
 	// Lazy inner-product with hoisted rotations
 	res = eval.MulNew(input, weights[0])
 
-	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.Scale)
+	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.ScalingFactor())
 
 	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 
@@ -247,27 +237,15 @@ func DiagMul(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []*ckks.
 	}
 
 	// rescales + erases imaginary part
-	if cleanImag {
-		eval.Rescale(res, params.DefaultScale(), res)
-		eval.Add(res, eval.ConjugateNew(res), res)
-	}
+
+	eval.Rescale(res, params.DefaultScale(), res)
+	eval.Add(res, eval.ConjugateNew(res), res)
 
 	return
 }
 
-func DiagMulLT(ct *ckks.Ciphertext, dimIn, dimMid, dimOut int, w *PlainDiagMat, Box CkksBox) *ckks.Ciphertext {
-	if w.ComplexTrick {
-		Prepack(ct, dimIn, dimMid, dimOut, Box.Evaluator)
-	}
-	ctR := Box.Evaluator.LinearTransformNew(ct, w.Diags)[0]
-	Box.Evaluator.Rescale(ctR, Box.Params.DefaultScale(), ctR)
-	if w.ComplexTrick {
-		Box.Evaluator.Add(ctR, Box.Evaluator.ConjugateNew(ctR), ctR)
-	}
-	return ctR
-}
-
-func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []*ckks.Ciphertext, prepack, cleanImag bool, Box CkksBox) (res *ckks.Ciphertext) {
+//Multiplies a plaintext or plaintext with a weight matrix in diagonal form: W x A.T
+func DiagMulPt(input *ckks.Plaintext, dimIn int, weights []ckks.Operand, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -292,10 +270,9 @@ func DiagMulPt(input *ckks.Plaintext, dimIn, dimMid, dimOut int, weights []*ckks
 	}
 
 	// rescales + erases imaginary part
-	if cleanImag {
-		eval.Rescale(res, params.DefaultScale(), res)
-		eval.Add(res, eval.ConjugateNew(res), res)
-	}
+
+	eval.Rescale(res, params.DefaultScale(), res)
+	eval.Add(res, eval.ConjugateNew(res), res)
 
 	return
 }

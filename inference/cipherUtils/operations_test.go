@@ -38,10 +38,10 @@ func TestMultiplication(t *testing.T) {
 
 	t.Run("Test/C2P", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), true, Box)
+		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
 		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
 
-		Renc := DiagMulLT(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc, Box)
+		Renc := DiagMulCt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.GetDiags(), true, Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
@@ -51,27 +51,26 @@ func TestMultiplication(t *testing.T) {
 
 	t.Run("Test/C2C", func(t *testing.T) {
 		Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
+		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
 		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
-		Renc := DiagMul(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.Diags, true, true, Box)
+
+		Renc := DiagMulCt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.GetDiags(), true, Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
-		//we need to tranpose the plaintext result according to the diagonalized multiplication algo
 		valuesWant := pU.RealToComplex(pU.Vectorize(pU.MatToArray(&resPlain), false))
 		PrintDebug(Renc, valuesWant, 0.001, Box)
 	})
 
 	t.Run("Test/P2C", func(t *testing.T) {
 		Xenc := EncodeInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
-		Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
+		Wenc := EncodeWeights(params.MaxLevel(), pU.MatToArray(W), pU.NumRows(X), pU.NumCols(X), Box)
 		Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
-		Xenc = PrepackClearText(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Box)
-		Renc := DiagMulPt(Xenc, pU.NumRows(X), pU.NumCols(X), pU.NumCols(W), Wenc.Diags, true, true, Box)
+
+		Renc := DiagMulPt(Xenc, pU.NumRows(X), Wenc.GetDiags(), Box)
 		var resPlain mat.Dense
 		resPlain.Mul(X, W)
 
-		//we need to tranpose the plaintext result according to the diagonalized multiplication algo
 		valuesWant := pU.RealToComplex(pU.Vectorize(pU.MatToArray(&resPlain), false))
 		PrintDebug(Renc, valuesWant, 0.001, Box)
 	})

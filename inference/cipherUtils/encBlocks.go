@@ -38,6 +38,10 @@ type PlainInput struct {
 	RealRows, RealCols int
 }
 
+type DiagMat interface {
+	GetDiags() []ckks.Operand
+}
+
 //Encrypted matrix in diagonal form
 type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
@@ -63,12 +67,19 @@ func (W *EncDiagMat) GetRotations(params ckks.Parameters) []int {
 	return rotations
 }
 
+func (W *EncDiagMat) GetDiags() []ckks.Operand {
+	diags := make([]ckks.Operand, len(W.Diags))
+	for i := range diags {
+		diags[i] = W.Diags[i]
+	}
+	return diags
+}
+
 //Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
 	Blocks             [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP         int
 	LeftR, LeftC       int //rows cols of left matrix
-	NumDiags           int
 	InnerRows          int //rows of matrix
 	InnerCols          int
 	RealRows, RealCols int
@@ -77,17 +88,33 @@ type EncWeightDiag struct {
 //Plaintext matrix in diagonal form
 type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
-	Diags        ckks.LinearTransform //diagonals
-	ComplexTrick bool
-	D            int //dimention of matrix
-	LeftR, LeftC int //rows cols of left matrix
+	Diags                []*ckks.Plaintext //diagonals
+	InnerRows, InnerCols int
+	LeftR, LeftC         int //rows cols of left matrix
 }
 
 func (W *PlainDiagMat) GetRotations(params ckks.Parameters) []int {
-	var rots = []int{W.LeftR}
-	rots = append(W.Diags.Rotations(), rots...)
-	rots = append(rots, params.RotationsForReplicateLog(W.LeftR*W.LeftC, GetReplicaFactor(W.D, W.D))...)
-	return rots
+	var rotations = []int{W.LeftR}
+	for i := 1; i < (W.InnerRows+1)>>1; i++ {
+		r := 2 * i * W.LeftR
+		rotations = append(rotations, r)
+	}
+	rotations = append(rotations, W.InnerRows)
+	rotations = append(rotations, -W.LeftR*W.InnerRows)
+	rotations = append(rotations, -2*W.LeftR*W.InnerRows)
+	if W.InnerRows < W.InnerCols {
+		replicationFactor := GetReplicaFactor(W.InnerRows, W.InnerCols)
+		rotations = append(rotations, params.RotationsForReplicateLog(W.LeftR*W.LeftC, replicationFactor)...)
+	}
+	return rotations
+}
+
+func (W *PlainDiagMat) GetDiags() []ckks.Operand {
+	diags := make([]ckks.Operand, len(W.Diags))
+	for i := range diags {
+		diags[i] = W.Diags[i]
+	}
+	return diags
 }
 
 //Plaintext block matrix, weight of dense or convolutional layer
@@ -95,7 +122,6 @@ type PlainWeightDiag struct {
 	Blocks             [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP         int
 	LeftR, LeftC       int //rows of left matrix
-	NumDiags           int
 	InnerRows          int //rows of matrix
 	InnerCols          int
 	RealRows, RealCols int
@@ -199,7 +225,6 @@ func (X *PlainInput) Scale() float64 {
 //	Given a block input matrix, decrypts and returns the underlying original matrix
 //	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
-
 	Xb := new(plainUtils.BMatrix)
 	Xb.RealRows = XEnc.RealRows
 	Xb.RealCols = XEnc.RealCols
@@ -300,9 +325,9 @@ func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Bo
 
 //Return plaintex weight in block matrix form. The matrix is also block-transposed
 //i.e the first column of block is stored as row for cache efficiency
-//takes block partions, d size of inner square submatrices, rows of input inner submatrices, level, whether to use the complex trick, and box
-func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, d int, leftR, leftC int, level int, complexTrick bool, Box CkksBox) (*PlainWeightDiag, error) {
-	Wb, err := plainUtils.PartitionMatrixSquare(Wm, rowP, colP, d)
+//takes block partions, rows of input inner submatrices, level, whether to use the complex trick, and box
+func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Box CkksBox) (*PlainWeightDiag, error) {
+	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -322,7 +347,7 @@ func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, d int, leftR, leftC int, leve
 		for j := 0; j < Wbt.ColP; j++ {
 			//LeftR has to be the rows of EncInput sub matrices
 			Wp.Blocks[i][j] = new(PlainDiagMat)
-			Wp.Blocks[i][j] = EncodeWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftR, leftC, complexTrick, Box)
+			Wp.Blocks[i][j] = EncodeWeights(level, plainUtils.MatToArray(Wbt.Blocks[i][j]), leftR, leftC, Box)
 		}
 	}
 	utils.ThrowErr(err)

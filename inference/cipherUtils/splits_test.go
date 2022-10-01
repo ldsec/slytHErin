@@ -16,7 +16,7 @@ func TestFindSplits_CryptoNet(t *testing.T) {
 		LogSlots:     13,
 		DefaultScale: float64(1 << 30),
 	})
-	S := NewSplitter(false, -1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
+	S := NewSplitter(-1, 28*28, []int{784, 720, 100}, []int{720, 100, 10}, params)
 	split := S.FindSplits()
 	split.Print()
 }
@@ -46,7 +46,7 @@ func TestFindSplits_NN(t *testing.T) {
 		RingType:     ring.Standard,
 	}
 	params, _ := ckks.NewParametersFromLiteral(ckksParams)
-	S := NewSplitter(true, -1, inputFeatures, weightRows, weightCols, params)
+	S := NewSplitter(-1, inputFeatures, weightRows, weightCols, params)
 	split := S.FindSplits()
 	split.Print()
 
