@@ -53,7 +53,7 @@ func NewBox(params ckks.Parameters) CkksBox {
 		Params:  params,
 		Encoder: ckks.NewEncoder(params),
 		Evaluator: ckks.NewEvaluator(params, rlwe.EvaluationKey{
-			Rlk:  ckks.NewRelinearizationKey(params),
+			Rlk:  kgen.GenRelinearizationKey(sk, 2),
 			Rtks: nil,
 		}),
 		Decryptor:    dec,
