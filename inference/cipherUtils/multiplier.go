@@ -452,12 +452,12 @@ func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.P
 	return ptRot
 }
 
-func GenRotationsForRepackCols(innerR, cols, innerC, colP int) []int {
+func GenRotationsForRepackCols(innerR, currCols, innerC, newColP int) []int {
 	var rotations []int
-	for i := 1; i < colP; i++ {
+	for i := 1; i < newColP; i++ {
 		rotations = append(rotations, -innerR*innerC*i)
 	}
-	newInnerC := cols / colP
+	newInnerC := currCols / newColP
 	for i := 1; i < newInnerC; i++ {
 		rotations = append(rotations, -i*innerR)
 		rotations = append(rotations, (newInnerC-i)*innerR)

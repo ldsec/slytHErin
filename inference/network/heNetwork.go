@@ -47,6 +47,8 @@ type HENetwork struct {
 	MinLevel       int
 	BtpCapacity    int
 	init           bool
+	batchSize      int
+	inputInnerRows int
 	NumOfLayers    int
 
 	Box cipherUtils.CkksBox
@@ -65,6 +67,10 @@ func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootst
 	inputRowP := splitInfo.InputRowP
 
 	hen := new(HENetwork)
+
+	hen.batchSize = splitInfo.BatchSize
+	hen.inputInnerRows = innerRows
+
 	hen.Weights = make([]cipherUtils.BlocksOperand, layers)
 	hen.Bias = make([]cipherUtils.BlocksOperand, layers)
 
@@ -326,8 +332,18 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 
 func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rs := cipherUtils.NewRotationsSet()
-	for _, w := range n.Weights {
+	for i, w := range n.Weights {
 		rs.Add(w.GetRotations(params))
+		if (i + 1) <= len(n.Weights) {
+			_, currColp := n.Weights[i].GetPartitions()
+			_, currInCols := n.Weights[i].GetInnerDims()
+			_, currCols := n.Weights[i].GetRealDims()
+			nextRowP, _ := n.Weights[i+1].GetPartitions()
+			if currColp != nextRowP {
+				rs.Add(cipherUtils.GenRotationsForRepackCols(n.inputInnerRows, currCols, currInCols, nextRowP))
+			}
+		}
+
 	}
 	rots := rs.Rotations()
 	n.Box = cipherUtils.BoxWithRotations(n.Box, rots, n.Bootstrappable, btpParams)
