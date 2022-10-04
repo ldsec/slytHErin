@@ -110,13 +110,11 @@ func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *boo
 	if withBtp {
 		if btpParams != nil {
 			rotations = btpParams.RotationsForBootstrapping(params.LogN(), params.LogSlots())
-		} else {
-			panic("withBtp mbut bootstrapping params is nil")
-		}
-		Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
-		Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
-		Box.BtpParams = btpParams
-		utils.ThrowErr(err)
+			Box.evk = bootstrapping.GenEvaluationKeys(*btpParams, Box.Params, Box.Sk)
+			Box.BootStrapper, err = bootstrapping.NewBootstrapper(Box.Params, *btpParams, Box.evk)
+			Box.BtpParams = btpParams
+			utils.ThrowErr(err)
+		} //else is distributed
 	}
 	return Box
 }

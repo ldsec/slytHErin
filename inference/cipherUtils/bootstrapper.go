@@ -9,7 +9,7 @@ import (
 
 //Interface for bootstrappers
 type IBootstrapper interface {
-	Bootstrap(input *EncInput)
+	Bootstrap(input *EncInput, Box CkksBox)
 }
 
 //Centralized bootstrapper. Homomorphically evaluates decryption circuit

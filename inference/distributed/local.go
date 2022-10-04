@@ -39,8 +39,7 @@ type LocalMaster struct {
 	runningMux    sync.RWMutex
 	runningProtos int //counter for how many protos are running
 
-	poolSize int //bound on parallel protocols
-	Box      cipherUtils.CkksBox
+	poolSize int       //bound on parallel protocols
 	Done     chan bool //flag caller that master is done with all instances
 }
 
@@ -60,7 +59,7 @@ type LocalPlayer struct {
 //Creates and returns new master node. This node is in charge of the computations using the encrypted model
 //and orchestrates the distributed bootstrap and refresh
 //Set localhost to true if LAN is simulated on localhost
-func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, Box cipherUtils.CkksBox, poolSize int, localhost bool) (*LocalMaster, error) {
+func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, poolSize int, localhost bool) (*LocalMaster, error) {
 	master := new(LocalMaster)
 	master.sk = sk
 	master.Cpk = cpk
@@ -77,7 +76,6 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 		utils.ThrowErr(err)
 	}
 	master.poolSize = poolSize
-	master.Box = Box
 	master.Network = Lan
 	if localhost {
 		master.Network = Local
@@ -110,7 +108,7 @@ func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 
 //MASTER PROTOCOL
 
-func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, proto ProtocolType, pkQ *rlwe.PublicKey, ch chan []int) {
+func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, proto ProtocolType, pkQ *rlwe.PublicKey, ch chan []int, Box cipherUtils.CkksBox) {
 	var err error
 	for {
 		coords, ok := <-ch //feed the goroutines
@@ -120,7 +118,7 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 		}
 		i, j := coords[0], coords[1]
 		if proto == REFRESH && X.Blocks[i][j].Level() > minLevel {
-			lmst.Box.Evaluator.ShallowCopy().DropLevel(X.Blocks[i][j], X.Blocks[i][j].Level()-minLevel)
+			Box.Evaluator.ShallowCopy().DropLevel(X.Blocks[i][j], X.Blocks[i][j].Level()-minLevel)
 		}
 		X.Blocks[i][j], err = lmst.initProto(proto, pkQ, X.Blocks[i][j], i*X.ColP+j)
 		utils.ThrowErr(err)
@@ -128,7 +126,7 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 }
 
 //starts protocol instances in parallel
-func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int) {
+func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int, Box cipherUtils.CkksBox) {
 	var err error
 	if proto == END {
 		lmst.initProto(proto, nil, nil, -1)
@@ -151,7 +149,7 @@ func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput,
 		for i := 0; i < lmst.poolSize; i++ {
 			wg.Add(1)
 			go func() {
-				lmst.spawnEvaluators(X, minLevel, proto, pkQ, ch)
+				lmst.spawnEvaluators(X, minLevel, proto, pkQ, ch, Box)
 				defer wg.Done()
 			}()
 		}

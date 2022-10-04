@@ -219,7 +219,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
-			n.Bootstrapper.Bootstrap(res)
+			n.Bootstrapper.Bootstrap(res, n.Box)
 		}
 
 		if i == 0 {
@@ -238,7 +238,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
-			n.Bootstrapper.Bootstrap(res)
+			n.Bootstrapper.Bootstrap(res, n.Box)
 		}
 
 		n.Activator.ActivateBlocks(res, i, n.Box)
@@ -274,7 +274,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
 			fmt.Println("Bootstrapping...")
-			n.Bootstrapper.Bootstrap(res)
+			n.Bootstrapper.Bootstrap(res, n.Box)
 		}
 
 		if i == 0 {
@@ -307,7 +307,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
 			fmt.Println("Bootstrapping...")
-			n.Bootstrapper.Bootstrap(res)
+			n.Bootstrapper.Bootstrap(res, n.Box)
 		}
 
 		n.Activator.ActivateBlocks(res, i, n.Box)

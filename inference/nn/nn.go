@@ -74,6 +74,6 @@ func (l *NNLoader) Load(path string) network.NetworkI {
 	return nn
 }
 
-func (nn *NN) NewNN(splits []cipherUtils.BlockSplits, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *NNHE {
+func (nn *NN) NewNN(splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *NNHE {
 	return &NNHE{nn.NewHE(splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box).(*network.HENetwork)}
 }

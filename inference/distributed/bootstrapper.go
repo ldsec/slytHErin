@@ -13,6 +13,6 @@ func NewDistributedBootstrapper(master *LocalMaster, minLevel int) *DistributedB
 }
 
 //Starts refresh protocol with master
-func (Btp *DistributedBtp) Bootstrap(X *cipherUtils.EncInput) {
-	Btp.master.StartProto(REFRESH, X, nil, Btp.minLevel)
+func (Btp *DistributedBtp) Bootstrap(X *cipherUtils.EncInput, Box cipherUtils.CkksBox) {
+	Btp.master.StartProto(REFRESH, X, nil, Btp.minLevel, Box)
 }
