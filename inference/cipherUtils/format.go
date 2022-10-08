@@ -35,7 +35,7 @@ func FormatWeights(w [][]float64, leftdim int) (m map[int][]complex128) {
 	//odd
 	if len(w)&1 == 1 {
 
-		idx := len(m) - 1
+		idx := (len(w)+1)/2 - 1
 
 		d := make([]complex128, leftdim*len(w[0]))
 		isZero := true

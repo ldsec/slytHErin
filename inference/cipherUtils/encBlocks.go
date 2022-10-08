@@ -43,6 +43,7 @@ type PlainInput struct {
 type DiagMat interface {
 	GetDiags() map[int]ckks.Operand
 	GetRotations(parameters ckks.Parameters) []int
+	IsEncrypted() bool
 }
 
 //Encrypted matrix in diagonal form
@@ -52,6 +53,7 @@ type EncDiagMat struct {
 	InnerRows    int                      //rows of sub-matrix
 	InnerCols    int
 	LeftR, LeftC int //rows cols of left matrix
+	Encrypted    bool
 }
 
 func (W *EncDiagMat) GetRotations(params ckks.Parameters) []int {
@@ -77,6 +79,10 @@ func (W *EncDiagMat) GetDiags() map[int]ckks.Operand {
 	return diags
 }
 
+func (W *EncDiagMat) IsEncrypted() bool {
+	return W.Encrypted
+}
+
 //Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
 	Blocks             [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
@@ -93,6 +99,7 @@ type PlainDiagMat struct {
 	Diags                map[int]*ckks.Plaintext //diagonals
 	InnerRows, InnerCols int
 	LeftR, LeftC         int //rows cols of left matrix
+	Encrypted            bool
 }
 
 func (W *PlainDiagMat) GetRotations(params ckks.Parameters) []int {
@@ -116,6 +123,10 @@ func (W *PlainDiagMat) GetDiags() map[int]ckks.Operand {
 		diags[k] = v
 	}
 	return diags
+}
+
+func (W *PlainDiagMat) IsEncrypted() bool {
+	return W.Encrypted
 }
 
 //Plaintext block matrix, weight of dense or convolutional layer

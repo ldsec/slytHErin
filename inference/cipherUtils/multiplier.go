@@ -216,7 +216,11 @@ func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights DiagMa
 	diags := weights.GetDiags()
 
 	// Lazy inner-product with hoisted rotations
-	res = ckks.NewCiphertext(params, 1, input.Level()-1, input.Scale)
+	deg := 1
+	if weights.IsEncrypted() {
+		deg = 2
+	}
+	res = ckks.NewCiphertext(params, deg, input.Level(), input.Scale)
 
 	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.ScalingFactor())
 
@@ -248,7 +252,7 @@ func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (
 
 	diags := weights.GetDiags()
 	// Lazy inner-product with hoisted rotations
-	res = ckks.NewCiphertext(Box.Params, 1, input.Level()-1, input.Scale)
+	res = ckks.NewCiphertext(Box.Params, 1, input.Level(), input.Scale)
 
 	i := 0
 	rotations := make([]int, len(diags))

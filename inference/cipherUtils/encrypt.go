@@ -2,7 +2,6 @@ package cipherUtils
 
 import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
-	"sync"
 )
 
 func EncryptInput(level int, scale float64, w [][]float64, Box CkksBox) *ckks.Ciphertext {
@@ -41,17 +40,12 @@ func EncryptWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *En
 	//	ecd.EncodeSlots(wF[i], pt, params.LogSlots())
 	//	ctW[i] = enc.EncryptNew(pt)
 	//}
-	var wg sync.WaitGroup
+
 	for i := range wF {
-		wg.Add(1)
-		go func(i int, ecd ckks.Encoder, enc ckks.Encryptor) {
-			defer wg.Done()
-			pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
-			ecd.EncodeSlots(wF[i], pt, params.LogSlots())
-			ctW[i] = enc.EncryptNew(pt)
-		}(i, ecd.ShallowCopy(), enc.ShallowCopy())
+		pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
+		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+		ctW[i] = enc.EncryptNew(pt)
 	}
-	wg.Wait()
 
 	return &EncDiagMat{
 		Diags:     ctW,
@@ -59,6 +53,7 @@ func EncryptWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *En
 		InnerCols: len(w[0]),
 		LeftR:     leftR,
 		LeftC:     leftC,
+		Encrypted: true,
 	}
 }
 
@@ -66,7 +61,6 @@ func EncryptWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *En
 func EncodeWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *PlainDiagMat {
 	params := Box.Params
 	ecd := Box.Encoder
-	enc := Box.Encryptor
 
 	wF := FormatWeights(w, leftR)
 	ctW := make(map[int]*ckks.Plaintext)
@@ -76,22 +70,17 @@ func EncodeWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *Pla
 	//	ecd.EncodeSlots(wF[i], pt, params.LogSlots())
 	//	ctW[i] = enc.EncryptNew(pt)
 	//}
-	var wg sync.WaitGroup
 	for i := range wF {
-		wg.Add(1)
-		go func(i int, ecd ckks.Encoder, enc ckks.Encryptor) {
-			defer wg.Done()
-			pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
-			ecd.EncodeSlots(wF[i], pt, params.LogSlots())
-			ctW[i] = pt
-		}(i, ecd.ShallowCopy(), enc.ShallowCopy())
+		pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
+		ecd.EncodeSlots(wF[i], pt, params.LogSlots())
+		ctW[i] = pt
 	}
-	wg.Wait()
 	return &PlainDiagMat{
 		Diags:     ctW,
 		InnerRows: len(w),
 		InnerCols: len(w[0]),
 		LeftR:     leftR,
 		LeftC:     leftC,
+		Encrypted: false,
 	}
 }
