@@ -13,8 +13,8 @@ import (
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(40, 768)
-	W := pU.RandMatrix(768, 768)
+	X := pU.RandMatrix(256, 256)
+	W := pU.RandMatrix(256, 256)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	Box := NewBox(params)
 

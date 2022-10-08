@@ -85,9 +85,6 @@ func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootst
 	hen.NumOfLayers = network.GetNumOfLayers()
 
 	if bootstrappable {
-		if Bootstrapper == nil {
-			panic("Bootstrappable but Bootstrapper is nil")
-		}
 		hen.Bootstrapper = Bootstrapper
 	}
 
@@ -214,7 +211,6 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	fmt.Println("Starting inference...")
 	start := time.Now()
 
-	var prepack bool
 	level := X.Level()
 	res := new(cipherUtils.EncInput)
 	for i := 0; i < n.NumOfLayers; i++ {
@@ -227,15 +223,11 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 			}
 			n.Bootstrapper.Bootstrap(res, n.Box)
 		}
-
 		if i == 0 {
-			prepack = false
-			res = n.Multiplier.Multiply(X, n.Weights[i], prepack, n.Box)
+			res = n.Multiplier.Multiply(X, n.Weights[i], false, n.Box)
 		} else {
-			prepack = true
-			res = n.Multiplier.Multiply(res, n.Weights[i], prepack, n.Box)
+			res = n.Multiplier.Multiply(res, n.Weights[i], true, n.Box)
 		}
-
 		n.Adder.AddBias(res, n.Bias[i], n.Box)
 
 		level = res.Level()
@@ -263,7 +255,6 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 	fmt.Println("Starting inference DEBUG...")
 	start := time.Now()
 
-	var prepack bool
 	level := Xenc.Level()
 	res := new(cipherUtils.EncInput)
 
@@ -284,11 +275,9 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		}
 
 		if i == 0 {
-			prepack = false
-			res = n.Multiplier.Multiply(Xenc, n.Weights[i], prepack, n.Box)
+			res = n.Multiplier.Multiply(Xenc, n.Weights[i], false, n.Box)
 		} else {
-			prepack = true
-			res = n.Multiplier.Multiply(res, n.Weights[i], prepack, n.Box)
+			res = n.Multiplier.Multiply(res, n.Weights[i], true, n.Box)
 		}
 
 		var tmp mat.Dense
@@ -334,7 +323,7 @@ func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrappin
 	rs := cipherUtils.NewRotationsSet()
 	for i, w := range n.Weights {
 		rs.Add(w.GetRotations(params))
-		if (i + 1) <= len(n.Weights) {
+		if (i + 1) < len(n.Weights) {
 			_, currColp := n.Weights[i].GetPartitions()
 			_, currInCols := n.Weights[i].GetInnerDims()
 			_, currCols := n.Weights[i].GetRealDims()

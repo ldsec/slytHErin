@@ -39,24 +39,25 @@ type PlainInput struct {
 	RealRows, RealCols int
 }
 
+//A matrix in diagonal form
 type DiagMat interface {
-	GetDiags() []ckks.Operand
+	GetDiags() map[int]ckks.Operand
+	GetRotations(parameters ckks.Parameters) []int
 }
 
 //Encrypted matrix in diagonal form
 type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
-	Diags        []*ckks.Ciphertext //enc diagonals
-	InnerRows    int                //rows of sub-matrix
+	Diags        map[int]*ckks.Ciphertext //enc diagonals
+	InnerRows    int                      //rows of sub-matrix
 	InnerCols    int
 	LeftR, LeftC int //rows cols of left matrix
 }
 
 func (W *EncDiagMat) GetRotations(params ckks.Parameters) []int {
 	var rotations = []int{W.LeftR}
-	for i := 1; i < (W.InnerRows+1)>>1; i++ {
-		r := 2 * i * W.LeftR
-		rotations = append(rotations, r)
+	for i := range W.Diags {
+		rotations = append(rotations, i)
 	}
 	rotations = append(rotations, W.InnerRows)
 	rotations = append(rotations, -W.LeftR*W.InnerRows)
@@ -68,10 +69,10 @@ func (W *EncDiagMat) GetRotations(params ckks.Parameters) []int {
 	return rotations
 }
 
-func (W *EncDiagMat) GetDiags() []ckks.Operand {
-	diags := make([]ckks.Operand, len(W.Diags))
-	for i := range diags {
-		diags[i] = W.Diags[i]
+func (W *EncDiagMat) GetDiags() map[int]ckks.Operand {
+	diags := make(map[int]ckks.Operand)
+	for k, v := range W.Diags {
+		diags[k] = v
 	}
 	return diags
 }
@@ -89,16 +90,15 @@ type EncWeightDiag struct {
 //Plaintext matrix in diagonal form
 type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
-	Diags                []*ckks.Plaintext //diagonals
+	Diags                map[int]*ckks.Plaintext //diagonals
 	InnerRows, InnerCols int
 	LeftR, LeftC         int //rows cols of left matrix
 }
 
 func (W *PlainDiagMat) GetRotations(params ckks.Parameters) []int {
 	var rotations = []int{W.LeftR}
-	for i := 1; i < (W.InnerRows+1)>>1; i++ {
-		r := 2 * i * W.LeftR
-		rotations = append(rotations, r)
+	for i := range W.Diags {
+		rotations = append(rotations, i)
 	}
 	rotations = append(rotations, W.InnerRows)
 	rotations = append(rotations, -W.LeftR*W.InnerRows)
@@ -110,10 +110,10 @@ func (W *PlainDiagMat) GetRotations(params ckks.Parameters) []int {
 	return rotations
 }
 
-func (W *PlainDiagMat) GetDiags() []ckks.Operand {
-	diags := make([]ckks.Operand, len(W.Diags))
-	for i := range diags {
-		diags[i] = W.Diags[i]
+func (W *PlainDiagMat) GetDiags() map[int]ckks.Operand {
+	diags := make(map[int]ckks.Operand)
+	for k, v := range W.Diags {
+		diags[k] = v
 	}
 	return diags
 }
@@ -367,7 +367,9 @@ func (W *EncWeightDiag) GetBlock(i, j int) interface{} {
 	return W.Blocks[i][j]
 }
 
+//colP, rowP
 func (W *EncWeightDiag) GetPartitions() (int, int) {
+	//weights are block transposed
 	return W.RowP, W.ColP
 }
 
@@ -395,6 +397,7 @@ func (W *PlainWeightDiag) GetBlock(i, j int) interface{} {
 	return W.Blocks[i][j]
 }
 
+//colP, rowP
 func (W *PlainWeightDiag) GetPartitions() (int, int) {
 	return W.RowP, W.ColP
 }

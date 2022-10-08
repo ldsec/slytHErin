@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 )
 import "github.com/tuneinsight/lattigo/v3/ckks"
 import "github.com/tuneinsight/lattigo/v3/rlwe"
@@ -132,7 +133,6 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //Server offers an oblivious decryption service
 //EDIT: this version uses localhost to simulate LAN environment
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
-	//13s for 41 batch with logn14 mask
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -158,8 +158,8 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
-	fmt.Println("Encoded Cryptonet...")
+	cne := cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	fmt.Println("Encrypted Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
 	err := datacn.Init(batchSize)
@@ -194,8 +194,10 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 		cipherUtils.PrepackBlocks(Xp, splitInfo.ColsOfWeights[0], Box)
 
 		if !debug {
-			resHE, end := cne.Eval(Xp)
+			start := time.Now()
+			resHE, _ := cne.Eval(Xp)
 			resMasked := client.StartProto(distributed.MASKING, resHE)
+			end := time.Since(start)
 			fmt.Println("End ", end)
 
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
@@ -203,8 +205,10 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 			fmt.Println("Accuracy HE: ", accuracy)
 			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 		} else {
-			resHE, resExp, end := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
+			start := time.Now()
+			resHE, resExp, _ := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
 			resMasked := client.StartProto(distributed.MASKING, resHE)
+			end := time.Since(start)
 			fmt.Println("End ", end)
 
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
@@ -230,7 +234,6 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 //Server offers an oblivious decryption service
 //EDIT: this version spawns the server on a server on the iccluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
-	//12.5s for 41 batch with logn14 mask
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -293,8 +296,10 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		cipherUtils.PrepackBlocks(Xp, splitInfo.ColsOfWeights[0], Box)
 
 		if !debug {
-			resHE, end := cne.Eval(Xp)
+			start := time.Now()
+			resHE, _ := cne.Eval(Xp)
 			resMasked := client.StartProto(distributed.MASKING, resHE)
+			end := time.Since(start)
 			fmt.Println("End ", end)
 
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
@@ -302,8 +307,10 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 			fmt.Println("Accuracy HE: ", accuracy)
 			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
 		} else {
-			resHE, resExp, end := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
+			start := time.Now()
+			resHE, resExp, _ := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
 			resMasked := client.StartProto(distributed.MASKING, resHE)
+			end := time.Since(start)
 			fmt.Println("End ", end)
 
 			resClear := cipherUtils.DecodeInput(resMasked, Box)

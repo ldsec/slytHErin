@@ -43,9 +43,9 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 		w := W.GetBlock(j, k).(DiagMat)
 		switch x.(type) {
 		case *ckks.Ciphertext:
-			ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.GetDiags(), prepack, box)
+			ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, box)
 		case *ckks.Plaintext:
-			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w.GetDiags(), box)
+			ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w, box)
 		}
 		if k == 0 {
 			//I am the accumulator
@@ -66,8 +66,6 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 
 //Multiplication between encrypted input and plaintext weight
 func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, Box CkksBox) *EncInput {
-	//multiplies 2 block matrices, one is encrypted(input) and one not (weight)
-
 	xRowP, xColP := X.GetPartitions()
 	xRealRows, _ := X.GetRealDims()
 	_, wRealCols := W.GetRealDims()
@@ -117,9 +115,9 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, 
 					w := W.GetBlock(j, k).(DiagMat)
 					switch x.(type) {
 					case *ckks.Ciphertext:
-						ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w.GetDiags(), prepack, Box)
+						ct = DiagMulCt(x.(*ckks.Ciphertext).CopyNew(), dimIn, dimMid, dimOut, w, prepack, Box)
 					case *ckks.Plaintext:
-						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w.GetDiags(), Box)
+						ct = DiagMulPt(x.(*ckks.Plaintext), dimIn, w, Box)
 					}
 					if k == 0 {
 						res = ct
@@ -161,7 +159,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, 
 		close(ch)
 		wg.Wait()
 	}
-	//Mul.RemoveImagFromBlocks(Out)
+	Mul.RemoveImagFromBlocks(Out, Box)
 	return Out
 }
 
@@ -178,9 +176,11 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 		for j := 0; j < X.ColP; j++ {
 			<-poolCh //if not routines are available this is blocking
 			go func(i, j int, eval ckks.Evaluator) {
+				if X.Blocks[i][j].Degree() > 1 {
+					eval.Relinearize(X.Blocks[i][j], X.Blocks[i][j])
+				}
 				eval.Rescale(X.Blocks[i][j], Box.Params.DefaultScale(), X.Blocks[i][j])
 				eval.Add(X.Blocks[i][j], eval.ConjugateNew(X.Blocks[i][j]), X.Blocks[i][j])
-
 				poolCh <- struct{}{} //restore 1 go routine in channel
 
 			}(i, j, Box.Evaluator.ShallowCopy())
@@ -197,8 +197,8 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 //  | version with optimized dimentions
 //  v
 
-//Multiplies a ciphertext or plaintext with a weight matrix in diagonal form: W x A.T
-func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks.Operand, prepack bool, Box CkksBox) (res *ckks.Ciphertext) {
+//Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
+func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights DiagMat, prepack bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
 	eval := Box.Evaluator
@@ -213,65 +213,62 @@ func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights []ckks
 		replicaFactor := GetReplicaFactor(dimMid, dimOut)
 		eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
 	}
+	diags := weights.GetDiags()
 
 	// Lazy inner-product with hoisted rotations
-	res = eval.MulNew(input, weights[0])
+	res = ckks.NewCiphertext(params, 1, input.Level()-1, input.Scale)
 
 	inputRot := ckks.NewCiphertext(params, 1, input.Level(), input.ScalingFactor())
 
 	eval.GetKeySwitcher().DecomposeNTT(input.Level(), params.PCount()-1, params.PCount(), input.Value[1], eval.GetKeySwitcher().BuffDecompQP)
 
-	for i := 1; i < len(weights); i++ {
-
-		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().BuffDecompQP, 2*dimIn*i, inputRot.Value[0], inputRot.Value[1])
-
-		eval.MulAndAdd(inputRot, weights[i], res)
-
+	for i, d := range diags {
+		eval.PermuteNTTHoisted(input.Level(), input.Value[0], input.Value[1], eval.GetKeySwitcher().BuffDecompQP, i, inputRot.Value[0], inputRot.Value[1])
+		eval.MulAndAdd(inputRot, d, res)
 	}
 
 	// Rescale
 	if res.Degree() > 1 {
 		eval.Relinearize(res, res)
 	}
-
-	// rescales + erases imaginary part
-
-	eval.Rescale(res, params.DefaultScale(), res)
-	eval.Add(res, eval.ConjugateNew(res), res)
-
+	//
+	//// rescales + erases imaginary part
+	//
+	//eval.Rescale(res, params.DefaultScale(), res)
+	//eval.Add(res, eval.ConjugateNew(res), res)
+	//
 	return
 }
 
-//Multiplies a plaintext or plaintext with a weight matrix in diagonal form: W x A.T
-func DiagMulPt(input *ckks.Plaintext, dimIn int, weights []ckks.Operand, Box CkksBox) (res *ckks.Ciphertext) {
+//Multiplies a plaintext with a weight matrix in diagonal form: W x A.T
+func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (res *ckks.Ciphertext) {
 
-	params := Box.Params
+	//params := Box.Params
 	eval := Box.Evaluator
 
+	diags := weights.GetDiags()
 	// Lazy inner-product with hoisted rotations
-	res = eval.MulNew(input, weights[0])
+	res = ckks.NewCiphertext(Box.Params, 1, input.Level()-1, input.Scale)
 
-	rotations := make([]int, len(weights)-1)
-	for i := 1; i < len(weights); i++ {
-		rotations[i-1] = 2 * dimIn * i
+	i := 0
+	rotations := make([]int, len(diags))
+	for k := range diags {
+		rotations[i] = k
+		i++
 	}
 	inputRot := RotatePlaintext(input, rotations, Box)
 
-	for i := 1; i < len(weights); i++ {
-		eval.MulAndAdd(inputRot[i-1], weights[i], res)
-
+	for i := range rotations {
+		eval.MulAndAdd(inputRot[i], diags[i], res)
 	}
 
 	// Rescale
-	if res.Degree() > 1 {
-		eval.Relinearize(res, res)
-	}
-
-	// rescales + erases imaginary part
-
-	eval.Rescale(res, params.DefaultScale(), res)
-	eval.Add(res, eval.ConjugateNew(res), res)
-
+	//
+	//// rescales + erases imaginary part
+	//
+	//eval.Rescale(res, params.DefaultScale(), res)
+	//eval.Add(res, eval.ConjugateNew(res), res)
+	//
 	return
 }
 

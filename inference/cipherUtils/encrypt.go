@@ -34,7 +34,7 @@ func EncryptWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *En
 	enc := Box.Encryptor
 
 	wF := FormatWeights(w, leftR)
-	ctW := make([]*ckks.Ciphertext, len(wF))
+	ctW := make(map[int]*ckks.Ciphertext, len(wF))
 
 	//for i := range ctW {
 	// pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
@@ -42,7 +42,7 @@ func EncryptWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *En
 	//	ctW[i] = enc.EncryptNew(pt)
 	//}
 	var wg sync.WaitGroup
-	for i := range ctW {
+	for i := range wF {
 		wg.Add(1)
 		go func(i int, ecd ckks.Encoder, enc ckks.Encryptor) {
 			defer wg.Done()
@@ -69,7 +69,7 @@ func EncodeWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *Pla
 	enc := Box.Encryptor
 
 	wF := FormatWeights(w, leftR)
-	ctW := make([]*ckks.Plaintext, len(wF))
+	ctW := make(map[int]*ckks.Plaintext)
 
 	//for i := range ctW {
 	// pt := ckks.NewPlaintext(params, level, params.QiFloat64(level))
@@ -77,7 +77,7 @@ func EncodeWeights(level int, w [][]float64, leftR, leftC int, Box CkksBox) *Pla
 	//	ctW[i] = enc.EncryptNew(pt)
 	//}
 	var wg sync.WaitGroup
-	for i := range ctW {
+	for i := range wF {
 		wg.Add(1)
 		go func(i int, ecd ckks.Encoder, enc ckks.Encryptor) {
 			defer wg.Done()

@@ -64,15 +64,15 @@ func generateMask(params ckks.Parameters, level int, scale float64, lambda int) 
 	sign = bound.Cmp(boundMax)
 
 	if sign == 1 || bound.Cmp(boundMax) == 1 {
-		panic("ciphertext level is not large enough for refresh correctness")
+		panic("ciphertext level is not large enough for masking correctness")
 	}
 
 	boundHalf := new(big.Int).Rsh(bound, 1)
 
 	dslots := 1 << params.LogSlots()
-	//if ringQ.Type() == ring.Standard {
-	//	dslots *= 2
-	//}
+	if ringQ.Type() == ring.Standard {
+		dslots *= 2 //in case of error comment this out
+	}
 
 	// Generate the mask in Z[Y] for Y = X^{N/(2*slots)}
 	maskBigint := make([]*big.Int, dslots)
@@ -103,7 +103,7 @@ func generateMask(params ckks.Parameters, level int, scale float64, lambda int) 
 	return maskPt, maskPtNeg
 }
 
-//Masks ct with 128 bit security mask: ct = ct - mask. Ensures indistinguishabilty
+//Masks ct with 128 bit security mask: ct = ct - mask. Ensures IND-CPA with 128 bit security
 func Mask(ct *ckks.Ciphertext, Box CkksBox) *ckks.Plaintext {
 	mask, maskNeg := generateMask(Box.Params, ct.Level(), ct.Scale, 128)
 	Box.Evaluator.Add(ct, maskNeg, ct)

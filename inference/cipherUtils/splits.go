@@ -11,6 +11,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/utils"
 	"math"
+	"runtime"
 )
 
 //Describes how to split a matrix
@@ -86,31 +87,29 @@ func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Param
 //Compute tha average multiplication complexity of a series of splits
 func GetAvgComplexity(s *Split) float64 {
 	splits := s.S
-	complexity := 0
+	complexity := 0.0
 	n := splits[0].RowP
 	for i := 0; i < len(splits)-1; i++ {
 		m := splits[i].ColP
 		l := splits[i+1].ColP
-		complexity += n * m * l
+		d := splits[i].InnerCols
+		complexity += (math.Ceil(float64(n*m*l)) / float64(runtime.NumCPU())) * float64(d)
 	}
 	return float64(complexity) / float64(len(splits)-1)
 }
 
-//Compute tha max multiplication complexity of a series of splits
-func GetMaxComplexity(s *Split) float64 {
+//Compute tha total multiplication complexity of a series of splits
+func GetComplexity(s *Split) float64 {
 	splits := s.S
-	complexity := 0
-	maxComplexity := complexity
+	complexity := 0.0
 	n := splits[0].RowP
 	for i := 0; i < len(splits)-1; i++ {
 		m := splits[i].ColP
 		l := splits[i+1].ColP
-		complexity = n * m * l
-		if complexity > maxComplexity {
-			maxComplexity = complexity
-		}
+		d := splits[i].InnerCols
+		complexity += (math.Ceil(float64(n*m*l)) / float64(runtime.NumCPU())) * float64(d)
 	}
-	return float64(maxComplexity)
+	return complexity
 }
 
 // Finds all possible splits for the current model, given the number
@@ -157,135 +156,135 @@ func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, 
 	var blockSplits []*Split
 
 	for i := range batchSizes {
-		for filltresh := 0.9; filltresh >= 0.0; filltresh = filltresh - 0.1 {
-			for _, strategyOnBatch := range []bool{true, false} {
-				batch := batchSizes[i]
-				colP := colPartitions[i]
-				inCols := innerCols[i]
+		//for filltresh := 0.9; filltresh >= 0.0; filltresh = filltresh - 0.1 {
+		for _, strategyOnBatch := range []bool{true, false} {
+			batch := batchSizes[i]
+			colP := colPartitions[i]
+			inCols := innerCols[i]
 
-				//keeps track of the evolution of the matrix down the model
-				currCols := inCols
-				currColP := colP
+			//keeps track of the evolution of the matrix down the model
+			currCols := inCols
+			currColP := colP
 
-				isValid := true
+			isValid := true
 
-				blockSplit := make([]BlockSplit, len(weightRows)+1) //input + weights
+			blockSplit := make([]BlockSplit, len(weightRows)+1) //input + weights
 
-				for w := range weightRows {
-					inRowsW := weightRows[w] / currColP
-					var inColsW int
+			for w := range weightRows {
+				inRowsW := weightRows[w] / currColP
+				var inColsW int
 
-					//find cols without padding
-					inColsW = plainUtils.Min(int(math.Floor(slotsAvailable/float64(inRowsW))), weightCols[w])
-					for weightCols[w]%inColsW != 0 {
-						inColsW--
+				//find cols without padding
+				inColsW = plainUtils.Min(int(math.Floor(slotsAvailable/float64(inRowsW))), weightCols[w])
+				for weightCols[w]%inColsW != 0 {
+					inColsW--
+				}
+
+				for {
+					//adjust weight inner col split or batch depending on strategy
+					adjusted := true
+					diagReplicaFactor := 1
+
+					//check if weight submatrix can be stored in diagonal form and that the fillratio > threshold
+					if inRowsW*inColsW*diagReplicaFactor > int(slotsAvailable) { //|| GetFillRatio(inRowsW, inColsW, diagReplicaFactor, slotsAvailable) < filltresh {
+						adjusted = false
 					}
 
-					for {
-						//adjust weight inner col split or batch depending on strategy
-						adjusted := true
-						diagReplicaFactor := 1
+					//check if replication of input can be stored
+					if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) { //|| GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < filltresh {
+						adjusted = false
+					}
 
-						//check if weight submatrix can be stored in diagonal form and that the fillratio > threshold
-						if inRowsW*inColsW*diagReplicaFactor > int(slotsAvailable) || GetFillRatio(inRowsW, inColsW, diagReplicaFactor, slotsAvailable) < filltresh {
-							adjusted = false
-						}
-
-						//check if replication of input can be stored
-						if GetReplicaFactor(inRowsW, inColsW)*batch*currCols > int(slotsAvailable) || GetFillRatio(batch, currCols, GetReplicaFactor(inRowsW, inColsW), slotsAvailable) < filltresh {
-							adjusted = false
-						}
-
-						if !adjusted {
-							if strategyOnBatch {
-								//loop until divisor or lower than 1
-								if inColsW <= 1 {
-									isValid = false
-									break
-								} else {
-									inColsW--
-								}
-								for weightCols[w]%inColsW != 0 && inColsW > 1 {
-									inColsW--
-								}
+					if !adjusted {
+						if strategyOnBatch {
+							//loop until divisor or lower than 1
+							if inColsW <= 1 {
+								isValid = false
+								break
 							} else {
-								//decrease batch
-								if batch <= 1 {
-									isValid = false
-									break
-								} else if batch > 1 {
-									batch--
-								}
-								if inputRows != -1 {
-									for inputRows%batch != 0 && batch >= 1 {
-										//resize to input rows divider
-										batch--
-									}
-								}
+								inColsW--
+							}
+							for weightCols[w]%inColsW != 0 && inColsW > 1 {
+								inColsW--
 							}
 						} else {
-							//is adjusted now
-							break
+							//decrease batch
+							if batch <= 1 {
+								isValid = false
+								break
+							} else if batch > 1 {
+								batch--
+							}
+							if inputRows != -1 {
+								for inputRows%batch != 0 && batch >= 1 {
+									//resize to input rows divider
+									batch--
+								}
+							}
 						}
-					}
-					if !isValid {
+					} else {
+						//is adjusted now
 						break
 					}
-					blockSplit[w+1] = BlockSplit{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
-					currColP = weightCols[w] / inColsW
-					currCols = inColsW
+				}
+				if !isValid {
+					break
+				}
+				blockSplit[w+1] = BlockSplit{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
+				currColP = weightCols[w] / inColsW
+				currCols = inColsW
 
-					if w < len(weightRows)-1 && currColP != 1 {
-						nextInnerRowW := weightRows[w+1] / currColP
-						nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w+1])
-						nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
+				if w < len(weightRows)-1 && currColP != 1 {
+					nextInnerRowW := weightRows[w+1] / currColP
+					nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w+1])
+					nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
 
-						//repack only if matrices are big 'enough'
-						if float64(batch*currCols*nextReplicaFactor) > 0.5*slotsAvailable && float64(nextInnerRowW*nextInnerColW) > 0.5*slotsAvailable {
-							//fmt.Println("Repacking...")
-							possibleNewColP := make([]int, currCols)
-							f := 0
-							for div := 1; div <= currCols; div++ {
-								if currCols%div == 0 {
-									if currCols/div < currColP {
-										possibleNewColP[f] = currCols / div
-										f++
-									}
+					//repack only if matrices are big 'enough'
+					if float64(batch*currCols*nextReplicaFactor) > 0.5*slotsAvailable && float64(nextInnerRowW*nextInnerColW) > 0.5*slotsAvailable {
+						//fmt.Println("Repacking...")
+						possibleNewColP := make([]int, currCols)
+						f := 0
+						for div := 1; div <= currCols; div++ {
+							if currCols%div == 0 {
+								if currCols/div < currColP {
+									possibleNewColP[f] = currCols / div
+									f++
 								}
 							}
-							possibleNewColP = possibleNewColP[:f]
+						}
+						possibleNewColP = possibleNewColP[:f]
 
-							for f := len(possibleNewColP) - 1; f >= 0; f-- {
-								tmpColP := possibleNewColP[f]
-								nextInnerRowW := weightRows[w+1] / tmpColP
-								nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w])
-								nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
+						for f := len(possibleNewColP) - 1; f >= 0; f-- {
+							tmpColP := possibleNewColP[f]
+							nextInnerRowW := weightRows[w+1] / tmpColP
+							nextInnerColW := plainUtils.Min(int(math.Floor(slotsAvailable/float64(nextInnerRowW))), weightCols[w])
+							nextReplicaFactor := GetReplicaFactor(nextInnerRowW, nextInnerColW)
 
-								tmpCols := currCols * currColP / tmpColP
-								if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
-									//fmt.Println("Repacking done...")
-									//fmt.Println("ColP was: ", currColP)
-									currColP = tmpColP
-									currCols = tmpCols
-									//fmt.Println("ColP now: ", currColP)
-									break
-								}
+							tmpCols := currCols * currColP / tmpColP
+							if float64(batch*tmpCols*nextReplicaFactor) < slotsAvailable {
+								//fmt.Println("Repacking done...")
+								//fmt.Println("ColP was: ", currColP)
+								currColP = tmpColP
+								currCols = tmpCols
+								//fmt.Println("ColP now: ", currColP)
+								break
 							}
 						}
 					}
 				}
-				if isValid {
-					//save this split
-					var rowP int
-					if inputRows == -1 {
-						rowP = 1
-					} else {
-						rowP = inputRows / batch
-					}
-					blockSplit[0] = BlockSplit{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
-					blockSplits = append(blockSplits, NewSplit(blockSplit))
-				}
 			}
+			if isValid {
+				//save this split
+				var rowP int
+				if inputRows == -1 {
+					rowP = 1
+				} else {
+					rowP = inputRows / batch
+				}
+				blockSplit[0] = BlockSplit{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
+				blockSplits = append(blockSplits, NewSplit(blockSplit))
+			}
+			//}
 		}
 	}
 	if len(blockSplits) == 0 {
@@ -293,33 +292,42 @@ func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, 
 	}
 
 	//filtering by ratio between batch size and complexity
-	maxRatio := float64(blockSplits[0].ExctractInfoAt(0)[0]) / GetMaxComplexity(blockSplits[0])
+	info, _ := blockSplits[0].ExctractInfo()
+	maxRatio := float64(info.BatchSize) / GetComplexity(blockSplits[0])
 
 	for i := 0; i < len(blockSplits); i++ {
-		complexity := GetMaxComplexity(blockSplits[i])
-		if float64(blockSplits[0].ExctractInfoAt(0)[0])/complexity > maxRatio {
-			maxRatio = float64(blockSplits[0].ExctractInfoAt(0)[0]) / complexity
+		complexity := GetComplexity(blockSplits[i])
+		info, _ := blockSplits[i].ExctractInfo()
+		ratio := float64(float64(info.BatchSize) / complexity)
+		if ratio > maxRatio {
+			maxRatio = ratio
 		}
 	}
 	var filteredSplits []*Split
 
 	for i := 0; i < len(blockSplits); i++ {
-		if float64(blockSplits[0].ExctractInfoAt(0)[0])/GetMaxComplexity(blockSplits[i]) == maxRatio {
+		complexity := GetComplexity(blockSplits[i])
+		info, _ := blockSplits[i].ExctractInfo()
+		ratio := float64(float64(info.BatchSize) / complexity)
+		if ratio >= maxRatio {
 			filteredSplits = append(filteredSplits, blockSplits[i])
 		}
 	}
 
 	if len(filteredSplits) > 1 {
-		//filtering by smallest num of colP
-		minColP := filteredSplits[0].ExctractInfoAt(0)[0]
-		idxMinColP := 0
+		//filtering by largest batch
+		info, _ := filteredSplits[0].ExctractInfo()
+		largestBatch := info.BatchSize
+		idx := 0
 		for i := range filteredSplits {
-			if filteredSplits[i].ExctractInfoAt(0)[3] < minColP {
-				minColP = filteredSplits[i].ExctractInfoAt(0)[3]
-				idxMinColP = i
+			info, _ := filteredSplits[0].ExctractInfo()
+			batch := info.BatchSize
+			if batch > largestBatch {
+				largestBatch = batch
+				idx = i
 			}
 		}
-		filteredSplits = []*Split{filteredSplits[idxMinColP]}
+		filteredSplits = []*Split{filteredSplits[idx]}
 	}
 	return filteredSplits[0], nil
 }

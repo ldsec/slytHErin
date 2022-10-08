@@ -239,7 +239,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		}
 	}
 
-	path = fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("~/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 
 	skP := new(rlwe.SecretKey)
@@ -255,7 +255,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		utils.ThrowErr(errors.New("Not enough levels to ensure correcness and 128 security"))
 	}
 
-	if _, err := os.Stat(path + "_sk"); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path + "_sk"); err != nil {
 		skShares, skP, pkP, kgenP = distributed.DummyEncKeyGen(params, crs, parties)
 		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
 
@@ -426,7 +426,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 		partiesAddr[i] = clusterConfig.ClusterIps[i]
 	}
 
-	path = fmt.Sprintf("/root/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("~/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
 
 	skP := new(rlwe.SecretKey)
