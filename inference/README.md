@@ -1,11 +1,16 @@
 ## Documentation
 
 See ```dnn-inference/README.md``` for how to generate the json files needed.
-Use ```help.sh``` to spawn the documentation on your browser
+Use ```help.sh``` to spawn the documentation on your browser.
 If the script does not work, make sure you have godoc installed.
 The page should be open at ```localhost:6060```
 
+## Examples
+In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
+shows many examples on how to use our framework.
+
 ## Methods
+Explanation on the methods we use,
 
 ### Matrix Multiplication
 The algorithm

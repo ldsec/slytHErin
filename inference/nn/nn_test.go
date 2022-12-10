@@ -21,6 +21,9 @@ import (
 	"testing"
 )
 
+var ACCNN50 = 0.9126233552631579 //after training model with relu, using softplus as approximation, in clear
+var ACCNN20 = 0.9693667763157895 //after training model with minimax approx of silu, in clear
+
 var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         14,
 	LogSlots:     13,
@@ -38,9 +41,9 @@ var paramsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 var paramsLogN15_NN20, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
 	LogSlots:     14,
-	LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35},
-	LogP:         []int{50, 50, 50, 50},
-	DefaultScale: 1 << 35,
+	LogQ:         []int{45, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36},
+	LogP:         []int{47, 47, 47, 47},
+	DefaultScale: 1 << 36,
 	Sigma:        rlwe.DefaultSigma,
 	RingType:     ring.Standard,
 })
@@ -52,9 +55,9 @@ var paramsLogN15_NN20, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 var paramsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
 	LogSlots:     14,
-	LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35},
-	LogP:         []int{50, 50, 50, 50},
-	DefaultScale: 1 << 35,
+	LogQ:         []int{45, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36},
+	LogP:         []int{47, 47, 47, 47},
+	DefaultScale: 1 << 36,
 	Sigma:        rlwe.DefaultSigma,
 	RingType:     ring.Standard,
 })
@@ -79,7 +82,7 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	loader := new(NNLoader)
-	nn := loader.Load(path)
+	nn := loader.Load(path, InitActivations)
 
 	params := paramsLogN16
 	btpParams := btpParamsLogN16
@@ -195,7 +198,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	loader := new(NNLoader)
-	nn := loader.Load(path)
+	nn := loader.Load(path, InitActivations)
 
 	params := paramsLogN15_NN20
 
@@ -384,7 +387,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	path := fmt.Sprintf("nn%d%s_packed.json", layers, suffix)
 
 	loader := new(NNLoader)
-	nn := loader.Load(path)
+	nn := loader.Load(path, InitActivations)
 
 	params := paramsLogN15_NN20
 

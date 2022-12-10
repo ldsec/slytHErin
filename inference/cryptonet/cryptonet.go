@@ -23,12 +23,12 @@ type CryptoNetHE struct {
 	*network.HENetwork
 }
 
-func (cn *CryptoNet) InitActivations() []utils.ChebyPolyApprox {
+func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
 	approx := utils.InitReLU(3)
 	return []utils.ChebyPolyApprox{*approx, *approx}
 }
 
-func (l *CNLoader) Load(path string) network.NetworkI {
+func (l *CNLoader) Load(path string, initActivations network.Initiator) network.NetworkI {
 
 	jsonFile, err := os.Open(path)
 	utils.ThrowErr(err)
@@ -40,7 +40,7 @@ func (l *CNLoader) Load(path string) network.NetworkI {
 	utils.ThrowErr(err)
 	cn := new(CryptoNet)
 	cn.SetLayers(nj.Layers)
-	activations := cn.InitActivations()
+	activations := initActivations()
 	cn.SetActivations(activations)
 
 	return cn

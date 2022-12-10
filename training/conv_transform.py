@@ -8,24 +8,23 @@ import os
 import glob
 import json
 
-
-
 types = ['weight', 'bias']
 
 def rotR(a,k):
     """
-        rot right a k positions
+        rot right a by k positions
     """
     rot_a = deque(a)
     rot_a.rotate(k)
     return list(rot_a)
 
-"""
+
+def flat_tensor(X):
+    """
     Given a tensor of dimention CxHxDxD returns 2D np array of dim Cx(HxDxD)
     i.e for each input, for each channel of the input, this is row-flattened and then
     all flattened channels are horizontally stacked
-"""
-def flat_tensor(X):
+    """
     #input
     rows, chans, dim1,dim2 = X.shape[0], X.shape[1], X.shape[2], X.shape[3]
     X_flat = np.zeros((rows, ((dim1*dim2)*chans)))
@@ -38,12 +37,38 @@ def flat_tensor(X):
             X_flat[i] = np.array(flat)
     return X_flat
 
-"""
-    Transform each kernel of a conv layer in a matrix m:
-        Conv(input,k) --> m @ input.T.flatten()
-        where @ is the usual matrix multiplication
-"""
+
 def gen_kernel_matrix(kernel, kernel_size, stride, dim, tranpose=False):
+    """
+    The idea:
+        gen_kernel_matrix(k) returns for each channel of a kernel in a conv layer, a matrix m s.t
+        m @ x.T = conv(k,x) (where @ is the matrix multiplication)
+
+        if we have n kernels with f channels (meaning that input image has f dimensions),
+        we can generate a matrix M
+
+        M = | m(k1_ch1) |...| m(k1_chf)|
+            | m(k2_ch1) |...| m(k2_chf)|
+            | .........................|
+            | m(kn_ch1) |...| m(kn_chf)|
+
+        s.t
+
+        M @ X.T = conv(k,X)
+        where each row of x is a flattened data sample |x_1|...|x_f|
+
+        The output is going to be a matrix b x (output_dim**2)*n
+        where n is the number of output channels (i.e kernels)
+        and output_dim is the dimention of a single convolution between x_i and a channel j of a kernel i,
+        so
+        X @ M.T =
+         |x1 * k1|...|x1 * kn|
+         |x2 * k1|...|x2 * kn|
+         |...................|
+         |xb * k1|...|xb * kn|
+
+        Following this, is easy to pack the subsequent layers as the output format is consistent with the input
+    """
     out_dim = math.floor((dim - kernel_size)/stride + 1)
     ## create a matrix of dimention nxm, where:
     ##  n is the lenght of flattened output
@@ -86,11 +111,34 @@ def gen_kernel_matrix(kernel, kernel_size, stride, dim, tranpose=False):
 
 def gen_kernel_matrix_rect(kernel, kernel_rows, kernel_cols, stride, input_rows, input_cols, tranpose=False):
     """
-    Transform each kernel of a conv layer in a matrix m:
-        Conv(input,k) --> m @ input.T.flatten()
-        where @ is the usual matrix multiplication
+   The idea:
+       gen_kernel_matrix_rect(k) returns for each channel of a kernel in a conv layer, a matrix m s.t
+       m @ x.T = conv(k,x) (where @ is the matrix multiplication). Handles non square filters
 
-    Handles non square matrixes
+       if we have n kernels with f channels (meaning that input image has f dimensions),
+       we can generate a matrix M
+
+       M = | m(k1_ch1) |...| m(k1_chf)|
+           | m(k2_ch1) |...| m(k2_chf)|
+           | .........................|
+           | m(kn_ch1) |...| m(kn_chf)|
+
+       s.t
+
+       M @ X.T = conv(k,X)
+       where each row of x is a flattened data sample |x_1|...|x_f|
+
+       The output is going to be a matrix b x (output_dim**2)*n
+       where n is the number of output channels (i.e kernels)
+       and output_dim is the dimention of a single convolution between x_i and a channel j of a kernel i,
+       so
+       X @ M.T =
+        |x1 * k1|...|x1 * kn|
+        |x2 * k1|...|x2 * kn|
+        |...................|
+        |xb * k1|...|xb * kn|
+
+       Following this, is easy to pack the subsequent layers as the output format is consistent with the input
     """
     out_rows = math.floor((input_rows - kernel_rows)/stride + 1)
     out_cols = math.floor((input_cols - kernel_cols)/stride + 1)

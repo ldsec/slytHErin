@@ -262,15 +262,15 @@ func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (
 	}
 	inputRot := RotatePlaintext(input, rotations, Box)
 
-	for i := range rotations {
-		eval.MulAndAdd(inputRot[i], diags[i], res)
+	for i, d := range diags {
+		eval.MulAndAdd(inputRot[i], d, res)
 	}
 
 	// Rescale
 	//
 	//// rescales + erases imaginary part
 	//
-	//eval.Rescale(res, params.DefaultScale(), res)
+	//eval.Rescale(res, Box.Params.DefaultScale(), res)
 	//eval.Add(res, eval.ConjugateNew(res), res)
 	//
 	return
@@ -442,13 +442,13 @@ func GetReplicaFactor(dimMid, dimOut int) int {
 	}
 }
 
-//returns array of Plaintexts, where ith plaintext is rotated by rot[i] to the left
-func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) []*ckks.Plaintext {
-	ptRot := make([]*ckks.Plaintext, len(rotations))
-	for i, rot := range rotations {
+//returns map of Plaintexts, where rot[i] plaintext is rotated by rot[i] to the left
+func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) map[int]*ckks.Plaintext {
+	ptRot := make(map[int]*ckks.Plaintext)
+	for _, rot := range rotations {
 		tmp := box.Encoder.Decode(pt, box.Params.LogSlots())
 		tmp = plainUtils.RotateComplexArray(tmp, rot)
-		ptRot[i] = box.Encoder.EncodeNew(tmp, pt.Level(), pt.Scale, box.Params.LogSlots())
+		ptRot[rot] = box.Encoder.EncodeNew(tmp, pt.Level(), pt.Scale, box.Params.LogSlots())
 	}
 	return ptRot
 }

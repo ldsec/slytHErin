@@ -7,17 +7,17 @@ import (
 )
 
 func TestRotateRealArray(t *testing.T) {
-	v := make([]float64, 9)
+	v := make([]float64, 3)
 
 	for i := range v {
 		v[i] = float64(i) + 1.0
 	}
 	fmt.Println(v)
-	fmt.Println(RotateRealArray(v, -4))
+	fmt.Println(RotateRealArray(v, -1))
 	for i := range v {
 		v[i] = float64(i) + 1.0
 	}
-	fmt.Println(RotateRealArray(v, 4))
+	fmt.Println(RotateRealArray(v, 1))
 }
 
 func TestBlock(t *testing.T) {

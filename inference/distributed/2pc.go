@@ -105,6 +105,8 @@ func (cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 		ColP:      X.ColP,
 		InnerRows: X.InnerRows,
 		InnerCols: X.InnerCols,
+		RealRows:  X.RealRows,
+		RealCols:  X.RealCols,
 	}
 	for i := range res.Blocks {
 		res.Blocks[i] = make([]*ckks.Plaintext, res.ColP)

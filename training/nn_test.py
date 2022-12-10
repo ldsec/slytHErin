@@ -1,3 +1,6 @@
+"""
+    Script for testing nn with approximations for homomorphic encryption
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,9 +15,7 @@ from utils import *
 from conv_transform import *
 from activation import *
 
-"""
-    Script for testing nn with approximations for homomorphic encryption
-"""
+
 os.chdir(".")
 
 # explicit function to normalize array
@@ -116,12 +117,13 @@ if __name__=="__main__":
     device = 'cpu'
     if "nn" not in args.model:
         print("call --model nn20, nn50 or nn100")
-        exit()
+        exit(1)
     try:
         if "poly" in args.activation:
             args.activation = "_"+args.activation
             activation = silu_np
         else:
+            args.activation = ""
             activation = soft_relu_np
     except:
         args.activation = ""

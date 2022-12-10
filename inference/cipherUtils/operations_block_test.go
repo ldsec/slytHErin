@@ -89,6 +89,41 @@ func TestMultiplier_Multiply(t *testing.T) {
 		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
 		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
 	})
+
+	t.Run("Test/P2C", func(t *testing.T) {
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewPlainInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
+		Mul := NewMultiplier(1)
+		start := time.Now()
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
+		fmt.Println("Done: ", time.Since(start))
+		var res mat.Dense
+		res.Mul(X, W)
+		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
+	})
+
+	t.Run("Test/P2C_Multithread", func(t *testing.T) {
+		S := NewSplitter(pU.NumRows(X), pU.NumCols(X), []int{pU.NumRows(W)}, []int{pU.NumCols(W)}, params)
+		splits := S.FindSplits()
+		splits.Print()
+		Xenc, _ := NewPlainInput(X, splits.ExctractInfoAt(0)[2], splits.ExctractInfoAt(0)[3], params.MaxLevel(), params.DefaultScale(), Box)
+		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
+		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
+		Mul := NewMultiplier(runtime.NumCPU())
+		start := time.Now()
+		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
+		fmt.Println("Done: ", time.Since(start))
+		var res mat.Dense
+		res.Mul(X, W)
+		resPt, _ := pU.PartitionMatrix(&res, resEnc.RowP, resEnc.ColP)
+		PrintDebugBlocks(resEnc, resPt, 0.001, Box)
+	})
+
 }
 
 func TestAdder_AddBias(t *testing.T) {

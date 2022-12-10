@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import json
 
 class DataHandler():
+  #loads data for training
   def __init__(self, dataset : str, batch_size : int, shuffle=True, scale=True):
     if dataset == "MNIST":
       self.batch_size = batch_size
@@ -41,33 +42,6 @@ class DataHandler():
       test_ds = CIFAR10("data/", train=False, download=True, transform=transform)
       self.train_dl = DataLoader(train_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
       self.test_dl = DataLoader(test_ds, batch_size = batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2, pin_memory=True)
-
-class DataHandlerNN():
-  """
-    Specific loader for NN
-    Uses Zama validation set of .npz samples
-  """
-  def __init__(self, path : str, batchsize: int):
-      self.path = path
-      self.batchsize = batchsize
-      self.data = []
-      self.num_samples = 1000
-      self.num_batches = self.num_samples // batchsize
-      self.idx = 0
-      
-      for idx in range(self.num_samples):
-        self.data.append(np.load(f"{path}/sample_{idx}.npz")["arr_0"].reshape(1,28,28))
-
-      with open(f"{path}/expected_results.txt", "r", encoding="utf-8") as f:
-        labels = f.readlines()
-      self.labels = list(map(int,labels))
-
-  def batch(self):
-    while self.idx < self.num_batches:
-      yield (self.data[self.idx*self.batchsize:(self.idx+1)*self.batchsize],
-            self.labels[self.idx*self.batchsize:(self.idx+1)*self.batchsize])
-      self.idx += 1
-
 
 if __name__=="__main__":
   

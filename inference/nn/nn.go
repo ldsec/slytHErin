@@ -28,8 +28,10 @@ type NNHE struct {
 	*network.HENetwork
 }
 
-//Initialize activation function. Needs path of json file of intervals
-func (nn *NN) InitActivations(layers int, HEtrain bool) []utils.ChebyPolyApprox {
+//Initialize activation function
+func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
+	layers := args[0].(int)
+	HEtrain := args[1].(bool)
 	var suffix string
 	var act string
 	activations := make([]utils.ChebyPolyApprox, layers)
@@ -54,7 +56,7 @@ func (nn *NN) InitActivations(layers int, HEtrain bool) []utils.ChebyPolyApprox 
 	return activations
 }
 
-func (l *NNLoader) Load(path string) network.NetworkI {
+func (l *NNLoader) Load(path string, initActivations network.Initiator) network.NetworkI {
 	jsonFile, err := os.Open(path)
 	if err != nil {
 		utils.ThrowErr(err)
@@ -69,7 +71,7 @@ func (l *NNLoader) Load(path string) network.NetworkI {
 
 	nn := new(NN)
 	nn.SetLayers(nj.Layers)
-	activations := nn.InitActivations(nn.GetNumOfLayers()-1, HEtrain)
+	activations := initActivations(nn.GetNumOfLayers()-1, HEtrain)
 	nn.SetActivations(activations)
 	return nn
 }

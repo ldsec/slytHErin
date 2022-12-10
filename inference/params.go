@@ -47,30 +47,22 @@ var NNparamsLogN14, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	RingType:     ring.Standard,
 })
 
-//Given a deg of approximation of 63 (so 6 level needed for evaluation) this set of params performs really good:
-//It has 18 levels, so it invokes a bootstrap every 2 layers (1 lvl for mul + 6 lvl for activation) when the level
-//is 4, which is the minimum level. In this case, bootstrap is called only when needed
-//In case of NN50, cut the modulo chain at 11 levels, so to spare memory. In this case Btp happens every layer
 var NNparamsLogN15_NN20, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
 	LogSlots:     14,
-	LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35},
-	LogP:         []int{50, 50, 50, 50},
-	DefaultScale: 1 << 35,
+	LogQ:         []int{45, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36},
+	LogP:         []int{47, 47, 47, 47},
+	DefaultScale: 1 << 36,
 	Sigma:        rlwe.DefaultSigma,
 	RingType:     ring.Standard,
 })
 
-//Given a deg of approximation of 63 (so 6 level needed for evaluation) this set of params performs really good:
-//It has 18 levels, so it invokes a bootstrap every 2 layers (1 lvl for mul + 6 lvl for activation) when the level
-//is 4, which is the minimum level. In this case, bootstrap is called only when needed
-//In case of NN50, cut the modulo chain at 11 levels, so to spare memory. In this case Btp happens every layer
 var NNparamsLogN15_NN50, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
 	LogSlots:     14,
-	LogQ:         []int{44, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35},
-	LogP:         []int{50, 50, 50, 50},
-	DefaultScale: 1 << 35,
+	LogQ:         []int{45, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36},
+	LogP:         []int{47, 47, 47, 47},
+	DefaultScale: 1 << 36,
 	Sigma:        rlwe.DefaultSigma,
 	RingType:     ring.Standard,
 })

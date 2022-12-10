@@ -2,6 +2,7 @@ import torch
 from packing import *
 import numpy as np
 
+# Simple test for testing the convolution packing
 def test_conv():
     X = torch.randn(2,3,28,28)
     M = torch.randn(1,3,4,2)

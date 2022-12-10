@@ -29,11 +29,12 @@ def reserialize_cryptonet():
     with open("./models/cryptonet_packed.json", "w") as f:
         json.dump(net.Serialize(),f)
 
-#changes the keys name in the serialized representation
-#the returned dictionary will contain the name of each layers as key,
-#and a dictionary with keys 'weight' and 'bias' and values the row-flattened tensors as value
-#for example, given conv1.weight as key, returns conv1 : {weight: [...], bias: [...]}
+
 def format_cryptonet(serialized):
+    #changes the keys name in the serialized representation
+    #the returned dictionary will contain the name of each layers as key,
+    #and a dictionary with keys 'weight' and 'bias' and values the row-flattened tensors as value
+    #for example, given conv1.weight as key, returns conv1 : {weight: [...], bias: [...]}
     formatted = {}
     ## get all layers name
     layers = [k.split(".")[0] for k in serialized.keys()]
@@ -46,12 +47,13 @@ def format_cryptonet(serialized):
     return formatted
 
 
-#Params are extracted in row-major order:
-#suppose you have a CONV layer with (k,C,W,H), 
-#i.e k kernels wich are tensors of dim C x W x H with C filters of dim W x H
-#each kernel is flattened such that every W x H matrix
-#is flattened by row, for C matrixes. This for every k kernel 
+
 def extract_param(param_name, param):
+    #Params are extracted in row-major order:
+    #suppose you have a CONV layer with (k,C,W,H),
+    #i.e k kernels wich are tensors of dim C x W x H with C filters of dim W x H
+    #each kernel is flattened such that every W x H matrix
+    #is flattened by row, for C matrixes. This for every k kernel
     if 'weight' in param_name:
         weights = []
         data = param.data.cpu().numpy()            
@@ -82,6 +84,7 @@ def serialize_cryptonet(model):
 
 
 def pack_cryptonet(serialized):
+    # Packer method for cryptonet
     conv1 = np.array(serialized['conv1']['weight']).reshape(5,1,5,5)
     pool1 = np.array(serialized['pool1']['weight']).reshape(100,5,12,12)
     pool2 = np.array(serialized['pool2']['weight']).reshape(10,1,100,1)
@@ -143,47 +146,6 @@ class Cryptonet(nn.Module):
           nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_out', nonlinearity='relu')
         elif self.init_method == "xavier":
           nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
-
-
-class SimpleNet(nn.Module):
-    '''
-      Simpliefied network used in paper for inference https://www.microsoft.com/en-us/research/publication/cryptonets-applying-neural-networks-to-encrypted-data-with-high-throughput-and-accuracy/
-    '''
-
-    def __init__(self, batch_size: int, activation: str, init_method: str, verbose: bool):
-        super().__init__()
-        self.verbose = verbose
-        self.init_method = init_method
-        self.batch_size = batch_size
-
-        if activation == "square":
-            self.activation = torch.square
-        elif activation == "relu":
-            self.activation = nn.ReLU()
-        elif activation == "relu_approx":
-            self.activation = ReLUApprox()
-
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=5, kernel_size=5, stride=2)
-        self.pool1 = nn.Conv2d(in_channels=5, out_channels=100, kernel_size=12, stride=1000)
-        self.pool2 = nn.Conv2d(in_channels=1, out_channels=10, kernel_size=(100, 1), stride=1000)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.activation(x)
-        x = self.pool1(x)
-        x = x.reshape([self.batch_size, 1, 100, 1])  # batch_size tensors in 1 channel, 100x1
-        x = self.activation(x)
-        x = self.pool2(x)
-        x = x.reshape(x.shape[0], -1)
-        return x
-
-    def weights_init(self, m):
-        for m in self.children():
-            if isinstance(m, nn.Conv2d):
-                if self.init_method == "he":
-                    nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_out', nonlinearity='relu')
-                elif self.init_method == "xavier":
-                    nn.init.xavier_uniform_(m.weight, gain=math.sqrt(2))
 
 if __name__ == "__main__":
   ##############################

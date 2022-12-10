@@ -7,12 +7,17 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+//initiator for activation functions
+type Initiator func(args ...interface{}) []utils.ChebyPolyApprox
+
 //Custom Network Loader.
 //Exposes the method Load to load model from file
-//User should make sure that this method initiates also activation functions with a user-defined init method
+//User should make sure that this method initiates also activation functions with a user-defined init method:
+//this means that Load should return an initiliazed network, with the activations field populated by SetActivations.
+//It is user responsability to provide and invoke an initiator method within Load
 //The json structure should be compatible with Network
 type NetworkLoader interface {
-	Load(path string) NetworkI
+	Load(path string, initActivations Initiator) NetworkI
 }
 
 //Network loaded from json

@@ -1,3 +1,8 @@
+"""
+    Script to serialize nn models from go training in a json format ready to be deserialized in Go implementation
+    Place the json file to be serialized under ./nn_go_training
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,10 +23,7 @@ from conv_transform import *
 from packing import *
 from os.path import exists
 
-"""
-    Script to serialize nn models from go training in a json format ready to be deserialized in Go implementation 
-    Place the json file to be serialized under ./go_training
-"""
+
 
 os.chdir("./models")
 
@@ -50,8 +52,10 @@ def serialize_nn(json_data):
     serialized['numLayers'] = layers    
     return serialized
 
-## given a serialized representation from read_nn, packs it in json format for Go inference under HE
+
 def pack_nn(serialized):
+    # given a serialized representation from read_nn, packs it in json format for Go inference under HE
+    # this is an example of packer method
     num_layers = serialized['numLayers']
     num_chans = serialized['conv']['weight']['kernels']
     conv_matrix,_ = pack_conv(np.array(serialized['conv']['weight']['w']),
@@ -96,9 +100,9 @@ if __name__ == '__main__':
 
             j_name = f"{args.model}{args.activation}_packed.json"
 
-            #if exists(j_name):
-            #    resereliaze_nn(j_name)
-            #    exit(0)
+            if not exists(j_name):
+                print(f"{j_name} does not exist")
+                exit(1)
 
             ##go stuff
             with open(f'../nn_go_training/{args.model}{args.activation}_go.json', 'r') as f:

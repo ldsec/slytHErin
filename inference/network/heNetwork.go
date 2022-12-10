@@ -29,11 +29,12 @@ type HENetworkI interface {
 	//Returns number of levels requested to complete pipeline from current layer
 	//afterMul: if already multiplied by weight
 	LevelsToComplete(currLayer int, afterMul bool) int
+	//True if network is initialized correctly
 	IsInit() bool
 }
 
 // Network for HE, either in clear or encrypted
-// The implemented network should evaluate layers as: Input * Weight + bias -> Activation
+// The implemented network should evaluate layers as: Activation(Input * Weight + bias)
 type HENetwork struct {
 	Weights []cipherUtils.BlocksOperand
 	Bias    []cipherUtils.BlocksOperand
