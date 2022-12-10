@@ -238,6 +238,7 @@ func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights DiagMa
 	//
 	//// rescales + erases imaginary part
 	//
+	//uncomment for operation_test
 	//eval.Rescale(res, params.DefaultScale(), res)
 	//eval.Add(res, eval.ConjugateNew(res), res)
 	//
@@ -270,6 +271,7 @@ func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (
 	//
 	//// rescales + erases imaginary part
 	//
+	//uncomment for operation_test
 	//eval.Rescale(res, Box.Params.DefaultScale(), res)
 	//eval.Add(res, eval.ConjugateNew(res), res)
 	//

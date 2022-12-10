@@ -48,7 +48,7 @@ func TestPrepackClearText(t *testing.T) {
 
 func TestRotatePlaintext(t *testing.T) {
 	X := pU.RandMatrix(40, 90)
-	W := pU.RandMatrix(90, 90)
+
 	//X := pU.MatrixForDebug(3, 3)
 	//W := pU.MatrixForDebug(3, 3)
 
@@ -63,21 +63,25 @@ func TestRotatePlaintext(t *testing.T) {
 	scale := params.DefaultScale()
 
 	Box := NewBox(params)
-	Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), 40, 90, Box)
-	Box = BoxWithRotations(Box, Wenc.GetRotations(params), false, nil)
+	rotations := make([]int, 20)
+	for i := range rotations {
+		rotations[i] = 2 * i * 40
+	}
+	Box = BoxWithRotations(Box, rotations, false, nil)
 	Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
 	Xpt := EncodeInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
 
-	rotPt := RotatePlaintext(Xpt, Wenc.GetRotations(params), Box)
-	rotCt := Box.Evaluator.RotateHoistedNew(Xenc, Wenc.GetRotations(params))
+	rotPt := RotatePlaintext(Xpt, rotations, Box)
+	rotCt := Box.Evaluator.RotateHoistedNew(Xenc, rotations)
 
 	for i, r := range rotCt {
 		r1 := Box.Encoder.Decode(rotPt[i], Box.Params.LogSlots())
-		PrintDebug(r, r1, 0.001, Box)
+		PrintDebug(r, r1, 0.1, Box)
 	}
 }
 
 func TestMultiplication(t *testing.T) {
+	//check that DiagMul have the rescale and add conj uncommented
 	X := pU.RandMatrix(40, 90)
 	W := pU.RandMatrix(90, 90)
 	//X := pU.MatrixForDebug(3, 3)

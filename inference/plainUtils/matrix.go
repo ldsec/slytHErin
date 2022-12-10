@@ -231,9 +231,9 @@ func RotateRealArray(v []float64, k int) []float64 {
 	var r int
 	if k < 0 {
 		//Right
-		r = len(v) + k%len(v) - 1
+		r = len(v) - k%len(v)
 	} else {
-		r = k%len(v) + 1
+		r = k % len(v)
 	}
 	v = append(v[r:], v[:r]...)
 	return v
@@ -247,9 +247,9 @@ func RotateComplexArray(v []complex128, k int) []complex128 {
 	var r int
 	if k < 0 {
 		//Right
-		r = len(v) + k%len(v) - 1
+		r = len(v) - k%len(v)
 	} else {
-		r = k%len(v) + 1
+		r = k % len(v)
 	}
 	v = append(v[r:], v[:r]...)
 	return v
