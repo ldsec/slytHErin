@@ -17,6 +17,41 @@ REGULAR MATRICES OPS
 |
 v
 *********************************************/
+func TestRotatePlaintext(t *testing.T) {
+	X := pU.RandMatrix(40, 90)
+
+	//X := pU.MatrixForDebug(3, 3)
+	//W := pU.MatrixForDebug(3, 3)
+
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{60, 60},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 30),
+	})
+	scale := params.DefaultScale()
+
+	rotations := make([]int, 20)
+	for i := range rotations {
+		rotations[i] = 2 * i * 40
+	}
+
+	Box := NewBox(params)
+	//Wenc := EncryptWeights(params.MaxLevel(), pU.MatToArray(W), 40, Box)
+	Box = BoxWithRotations(Box, rotations, false, bootstrapping.Parameters{})
+	Xenc := EncryptInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
+	Xpt := EncodeInput(params.MaxLevel(), scale, pU.MatToArray(X), Box)
+
+	rotPt := RotatePlaintext(Xpt, rotations, Box)
+	rotCt := Box.Evaluator.RotateHoistedNew(Xenc, rotations)
+
+	for i, rot := range rotations {
+		r1 := Box.Encoder.Decode(rotPt[i], Box.Params.LogSlots())
+		PrintDebug(rotCt[rot], r1, 0.1, Box)
+	}
+}
 
 func TestMultiplication(t *testing.T) {
 	X := pU.RandMatrix(40, 90)
