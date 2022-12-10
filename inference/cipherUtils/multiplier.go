@@ -159,7 +159,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool) 
 		close(ch)
 		wg.Wait()
 	}
-	Mul.RemoveImagFromBlocks(Out)
+	//Mul.RemoveImagFromBlocks(Out)
 	return Out
 }
 
