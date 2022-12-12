@@ -150,7 +150,7 @@ func SetDegOfParam(Params ApproxParams) ApproxParams {
 			Param.Deg = 7
 		} else if diff <= 8 {
 			Param.Deg = 15
-		} else if diff <= 16 {
+		} else if diff <= 12 {
 			Param.Deg = 31
 		} else {
 			Param.Deg = 63

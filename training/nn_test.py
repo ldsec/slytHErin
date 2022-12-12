@@ -133,9 +133,11 @@ if __name__=="__main__":
     with open(f'./models/{args.model}{args.activation}_packed.json', 'r') as f:
         serialized = json.load(f)
     if args.model == "nn20":
+        batchsize = 292 * 15
         layers = 20
 
     elif args.model == "nn50":
+        batchsize = 585*10
         layers = 50
 
     elif args.model == "nn100":
@@ -146,7 +148,6 @@ if __name__=="__main__":
         intervals.append([0, 0])
 
 
-    batchsize = 512
     dataHandler = DataHandler(dataset="MNIST", batch_size=batchsize, scale=False)
     corrects = 0
 
@@ -154,6 +155,7 @@ if __name__=="__main__":
     for X,Y in dataHandler.test_dl:
         corrects += linear_eval(X.double(),Y.double(),serialized, activation)
         tot += batchsize
+        break
 
     print("Accuracy:")
     print(corrects/tot)

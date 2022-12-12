@@ -233,10 +233,10 @@ func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, share
 
 //writes key from experiment to file
 func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet, path string) {
-	fmt.Println("Writing keys to disk: ", path)
+	fmt.Println("Writing keys to disk: ", os.ExpandEnv(path))
 	dat, err := sk.MarshalBinary()
 	utils.ThrowErr(err)
-	f, err := os.Create(path + "_sk")
+	f, err := os.Create(os.ExpandEnv(path + "_sk"))
 	utils.ThrowErr(err)
 	_, err = f.Write(dat)
 	utils.ThrowErr(err)
@@ -245,7 +245,7 @@ func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.Ro
 	for i, sks := range skshares {
 		dat, err := sks.MarshalBinary()
 		utils.ThrowErr(err)
-		f, err := os.Create(path + "_P" + strconv.Itoa(i+1) + "_sk")
+		f, err := os.Create(os.ExpandEnv(path + "_P" + strconv.Itoa(i+1) + "_sk"))
 		utils.ThrowErr(err)
 		_, err = f.Write(dat)
 		utils.ThrowErr(err)
@@ -254,7 +254,7 @@ func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.Ro
 
 	dat, err = rtks.MarshalBinary()
 	utils.ThrowErr(err)
-	f, err = os.Create(path + "_rtks")
+	f, err = os.Create(os.ExpandEnv(path + "_rtks"))
 	utils.ThrowErr(err)
 	_, err = f.Write(dat)
 	utils.ThrowErr(err)
@@ -269,17 +269,17 @@ func DeserializeKeys(path string, parties int) (sk *rlwe.SecretKey, skShares []*
 	for i := range skShares {
 		skShares[i] = new(rlwe.SecretKey)
 	}
-	fmt.Println("Reading keys from disk: ", path)
-	dat, err := os.ReadFile(path + "_sk")
+	fmt.Println("Reading keys from disk: ", os.ExpandEnv(path))
+	dat, err := os.ReadFile(os.ExpandEnv(path + "_sk"))
 	utils.ThrowErr(err)
 	sk.UnmarshalBinary(dat)
 
-	dat, err = os.ReadFile(path + "_rtks")
+	dat, err = os.ReadFile(os.ExpandEnv(path + "_rtks"))
 	utils.ThrowErr(err)
 	rtks.UnmarshalBinary(dat)
 
 	for i := 0; i < parties; i++ {
-		dat, err := os.ReadFile(path + "_P" + strconv.Itoa(i+1) + "_sk")
+		dat, err := os.ReadFile(os.ExpandEnv(path + "_P" + strconv.Itoa(i+1) + "_sk"))
 		utils.ThrowErr(err)
 		skShares[i].UnmarshalBinary(dat)
 	}

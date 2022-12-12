@@ -16,6 +16,8 @@ import (
 import "github.com/tuneinsight/lattigo/v3/ckks"
 import "github.com/tuneinsight/lattigo/v3/rlwe"
 
+var ACC = 96.80
+
 var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	LogN:         15,
 	LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ)
@@ -47,7 +49,8 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 //Querier sends encrypted data to server to get privacy preserving prediction
 func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	//3892.666667ms for 41 batch with logn14
-	//3516.000000ms for 1 sample with logn14 = -10% runtime
+	//5343.933333 for 83 batch with logn14
+	//3516.000000ms for 1 sample with logn14
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -61,7 +64,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	rows, cols := cn.GetDimentions()
 
 	//we define a new splitter providing all the information needed and we find how to split our model weights
-	possibleSplits := cipherUtils.NewSplitter(1, features, rows, cols, params).FindSplits()
+	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
 	possibleSplits.Print()
 
 	//define a new Box: this is just a wrapper for all the cryptography related objects, like a toolbox
@@ -143,9 +146,9 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //EXPERIMENT 2 - Model encrypted,data in clear:
 //In this scenario the model is sent by server to the client in encrypted form
 //Server offers an oblivious decryption service
-//EDIT: this version uses localhost to simulate LAN environment
+//EDIT: this version uses localhost to simulate Inter-DC network
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
-
+	//10014.466667ms for batch 83
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
@@ -156,7 +159,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
 	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
-
+	possibleSplits.Print()
 	Box := cipherUtils.NewBox(params)
 
 	poolSize := 1
@@ -247,6 +250,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 //Server offers an oblivious decryption service
 //This version spawns the server on a server on the iccluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
+	//10633ms for 83 batch with logN14
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -258,7 +262,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
 	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
-
+	possibleSplits.Print()
 	Box := cipherUtils.NewBox(params)
 
 	poolSize := 1
@@ -272,8 +276,8 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
-	fmt.Println("Encoded Cryptonet...")
+	cne := cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	fmt.Println("Encrypted Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
 	err := datacn.Init(batchSize)

@@ -182,6 +182,7 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 
 //serializes keys to disk
 func SerializeBox(path string, Box CkksBox) {
+	path = os.ExpandEnv(path)
 	sk := Box.Sk
 	rotKeys := Box.rtks
 	fmt.Println("Writing keys to disk: ", path)
@@ -238,6 +239,7 @@ func SerializeBox(path string, Box CkksBox) {
 
 //loads serialized keys from disk into a fresh box
 func DeserealizeBox(path string, params ckks.Parameters, btpParams *bootstrapping.Parameters, withBtp bool) CkksBox {
+	path = os.ExpandEnv(path)
 	fmt.Println("Reading keys from disk: ", path)
 	dat, err := os.ReadFile(path + "_sk")
 	utils.ThrowErr(err)

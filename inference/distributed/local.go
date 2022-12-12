@@ -17,6 +17,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -72,7 +73,12 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	master.Addr, _ = net.ResolveTCPAddr("tcp", partiesAddr[0])
 	var err error
 	for i := 1; i < parties; i++ {
-		master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i]+":"+strconv.Itoa(ServicePort))
+		if strings.Contains(partiesAddr[i], ":") {
+			//has port
+			master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i])
+		} else {
+			master.PartiesAddr[i], err = net.ResolveTCPAddr("tcp", partiesAddr[i]+":"+strconv.Itoa(ServicePort))
+		}
 		utils.ThrowErr(err)
 	}
 	master.poolSize = poolSize
