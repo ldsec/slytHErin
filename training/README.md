@@ -4,7 +4,7 @@ training some neural networks used for our test cases. In particular you can
 find training scripts for Cryptonet neural network model, as well as
 a ```.json``` file with the already trained model parameters. For ZAMA NN we provide the json file with 
 the network parameters.
-In any case, you can find all the trained models as ```.json``` files in ```/models```.
+***In any case, you can find all the already trained models as ```.json``` files in ```/models```***
 
 #### Dependencies
 The code has been tested using ```Python 3.10```.
@@ -41,7 +41,7 @@ def Pack(self, net):
 ```
 that is first serializes the model (```.pt``` or any other format) in a format that
 can be understood by your packer method, and then it packs it for Go inference.
-The packer method *must* invoke the ```pack_*``` methods in ```packing.py```,
+The packer method ***must*** invoke the ```pack_*``` methods in ```packing.py```,
 used to create a ```packing.Net``` class and return ```Net.Serialize()```
 
 

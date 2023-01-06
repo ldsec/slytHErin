@@ -58,13 +58,15 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
+	// define how many threads we can use on current machine
 	poolSize := 1
 	if multiThread {
 		poolSize = runtime.NumCPU()
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	//First we load the network. Note that we pass a custom InitActivations method to the loader (have a look in cryptonet.go)
+	//First we load the network. Note that we pass a custom network.Initiator method called "InitActivations" to the loader.
+	//Have a look at cryptonet.go to see how this method is created. This must be customly defined for each network architecture
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json", InitActivations)
 
@@ -73,6 +75,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	rows, cols := cn.GetDimentions()
 
 	//we define a new splitter providing all the information needed and we find how to split our model weights
+	//note that we pass -1 as inputRows to heuristically find the best batch size to evaluate
 	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
 	splitInfo, splitCode := possibleSplits.ExctractInfo()
 	batchSize := splitInfo.BatchSize
@@ -89,7 +92,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
 	var cne network.HENetworkI
 
-	//check if keys are already on disk
+	//check if keys are already on disk, if yes load them -> saves much time during test
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
 		// and that is not encrypted (weights are in clear)
@@ -113,8 +116,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	iters := 0
 	maxIters := 15
 
-	//generate and store rotation keys
-	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
+	Box = cne.GetBox()
 
 	for true {
 		X, Y, err := datacn.Batch()
@@ -219,7 +221,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	maxIters := 15
 
 	//generate and store rotation keys
-	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
+	Box = cne.GetBox()
 
 	//start server with decryption oracle
 	serverAddr := "127.0.0.1:8001"
@@ -338,7 +340,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	maxIters := 15
 
 	//generate and store rotation keys
-	Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(Box.Params, nil), false, nil)
+	Box = cne.GetBox()
 
 	clusterConfig := cluster.ReadConfig("../cluster/config.json")
 	serverAddr := clusterConfig.ClusterIps[1] //0 is the client

@@ -403,7 +403,13 @@ func (W *EncWeightDiag) Scale() float64 {
 }
 
 func (W *EncWeightDiag) GetRotations(params ckks.Parameters) []int {
-	return W.Blocks[0][0].GetRotations(params)
+	rs := NewRotationsSet()
+	for i := range W.Blocks {
+		for j := range W.Blocks[0] {
+			rs.Add(W.Blocks[i][j].GetRotations(params))
+		}
+	}
+	return rs.Rotations()
 }
 
 func (W *PlainWeightDiag) GetBlock(i, j int) interface{} {
@@ -432,5 +438,11 @@ func (W *PlainWeightDiag) Scale() float64 {
 }
 
 func (W *PlainWeightDiag) GetRotations(params ckks.Parameters) []int {
-	return W.Blocks[0][0].GetRotations(params)
+	rs := NewRotationsSet()
+	for i := range W.Blocks {
+		for j := range W.Blocks[0] {
+			rs.Add(W.Blocks[i][j].GetRotations(params))
+		}
+	}
+	return rs.Rotations()
 }

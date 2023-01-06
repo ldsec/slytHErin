@@ -12,6 +12,9 @@ The main library used by the package is [Lattigo](https://github.com/tuneinsight
 In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
 shows many examples on how to use our framework.
 
+### Tutorial 1: CryptoNet
+Have a look at ```TestCryptonet_EvalBatchEncrypted``` [here](cryptonet/cryptonet_test.go)
+
 ## Methods
 Explanation on the methods we use.
 

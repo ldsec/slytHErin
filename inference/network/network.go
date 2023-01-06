@@ -7,7 +7,8 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-//initiator for activation functions
+//initiator for activation functions. Must return a list of polynomials which approximate the activation function at each layer
+//note that Identity activations functions are supported only at the end of the network (otherwise adjacent linear layers can be collapsed)
 type Initiator func(args ...interface{}) []utils.ChebyPolyApprox
 
 //Custom Network Loader.
@@ -32,6 +33,7 @@ type NetworkI interface {
 	GetActivations() []utils.ChebyPolyApprox
 	GetNumOfLayers() int
 	GetNumOfActivations() int
+	//gets rows and cols of weights as linear layers
 	GetDimentions() ([]int, []int)
 	//true if network is initialized, i.e if batch is defined as well as layers and activations
 	IsInit() bool
