@@ -26,6 +26,7 @@ type EvalFunc func(X *EncInput, i, j int, poly activationPoly, Box CkksBox)
 
 //Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
 //output of the previous linear layer
+//Identity is not considered an activation, so don't count it for numOfActivations
 func NewActivator(numOfActivations int, poolSize int) (*Activator, error) {
 	Act := new(Activator)
 	Act.poolSize = poolSize
@@ -34,7 +35,8 @@ func NewActivator(numOfActivations int, poolSize int) (*Activator, error) {
 	return Act, nil
 }
 
-//Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimentions
+//Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimention
+//You don't have to add identity activations
 func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int, Box CkksBox) {
 	poly := new(ckks.Polynomial)
 	i := layer

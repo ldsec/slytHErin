@@ -82,6 +82,7 @@ func TestRotatePlaintext(t *testing.T) {
 
 func TestMultiplication(t *testing.T) {
 	//check that DiagMul have the rescale and add conj uncommented
+	//Why? We use a specific optimization called late rescaling for block operations
 	X := pU.RandMatrix(40, 90)
 	W := pU.RandMatrix(90, 90)
 	//X := pU.MatrixForDebug(3, 3)

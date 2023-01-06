@@ -13,8 +13,8 @@ import (
 )
 
 func TestMultiplier_Multiply(t *testing.T) {
-	X := pU.RandMatrix(256, 256)
-	W := pU.RandMatrix(256, 256)
+	X := pU.RandMatrix(128, 128)
+	W := pU.RandMatrix(128, 128)
 	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	Box := NewBox(params)
 
@@ -98,6 +98,8 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Wpt, _ := NewEncWeightDiag(W, splits.ExctractInfoAt(1)[2], splits.ExctractInfoAt(1)[3], Xenc.InnerRows, Xenc.InnerCols, params.MaxLevel(), Box)
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(1)
+		//we need to explicitly prepack cleartext input
+		PrepackBlocks(Xenc, Wpt.InnerCols, Box)
 		start := time.Now()
 		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
@@ -116,6 +118,8 @@ func TestMultiplier_Multiply(t *testing.T) {
 		Box = BoxWithRotations(Box, Wpt.GetRotations(params), false, nil)
 		Mul := NewMultiplier(runtime.NumCPU())
 		start := time.Now()
+		//we need to explicitly prepack cleartext input
+		PrepackBlocks(Xenc, Wpt.InnerCols, Box)
 		resEnc := Mul.Multiply(Xenc, Wpt, true, Box)
 		fmt.Println("Done: ", time.Since(start))
 		var res mat.Dense

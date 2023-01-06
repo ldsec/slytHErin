@@ -267,9 +267,7 @@ func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (
 		eval.MulAndAdd(inputRot[i], d, res)
 	}
 
-	// Rescale
-	//
-	//// rescales + erases imaginary part
+	// rescales + erases imaginary part
 	//
 	//uncomment for operation_test
 	//eval.Rescale(res, Box.Params.DefaultScale(), res)

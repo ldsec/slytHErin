@@ -16,7 +16,7 @@ import (
 
 //Describes how to split a matrix
 type BlockSplit struct {
-	InnerRows, InnerCols, RowP, ColP int
+	Rows, Cols, InnerRows, InnerCols, RowP, ColP int
 }
 
 //Splits for a model
@@ -51,16 +51,19 @@ func NewSplitter(inputRows, inputFeatures int, weightRows, weightCols []int, par
 
 //Information on the current split
 type SplitsInfo struct {
-	InputRows     int   `json:"input_rows,omitempty"`
-	InputCols     int   `json:"input_cols,omitempty"` //inner dims of input
-	InputRowP     int   `json:"input_row_p,omitempty"`
-	InputColP     int   `json:"input_col_p,omitempty"` //partition of input
-	BatchSize     int   `json:"batch_size,omitempty"`
-	NumWeights    int   `json:"num_weights,omitempty"`
-	RowsOfWeights []int `json:"rows_of_weights,omitempty"` //inner rows of weights
-	ColsOfWeights []int `json:"cols_of_weights,omitempty"`
-	RowPOfWeights []int `json:"row_p_of_weights,omitempty"` //row partition of weights
-	ColPOfWeights []int `json:"col_p_of_weights,omitempty"`
+	Features          int   `json:"features,omitempty"`
+	InputRows         int   `json:"input_rows,omitempty"`
+	InputCols         int   `json:"input_cols,omitempty"` //inner dims of input
+	InputRowP         int   `json:"input_row_p,omitempty"`
+	InputColP         int   `json:"input_col_p,omitempty"` //partition of input
+	BatchSize         int   `json:"batch_size,omitempty"`
+	NumWeights        int   `json:"num_weights,omitempty"`
+	RowsOfWeights     []int `json:"rows_of_weights,omitempty"` //inner rows of weights
+	ColsOfWeights     []int `json:"cols_of_weights,omitempty"`
+	RowPOfWeights     []int `json:"row_p_of_weights,omitempty"` //row partition of weights
+	ColPOfWeights     []int `json:"col_p_of_weights,omitempty"`
+	RealRowsOfWeights []int `json:"real_rows_of_weights,omitempty"` //rows of weights before block partition
+	RealColsOfWeights []int `json:"real_cols_of_weights,omitempty"`
 }
 
 func GetFillRatio(rows, cols, replicaFactor int, slotsAvailable float64) float64 {
@@ -230,7 +233,7 @@ func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, 
 				if !isValid {
 					break
 				}
-				blockSplit[w+1] = BlockSplit{InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
+				blockSplit[w+1] = BlockSplit{Rows: weightRows[w], Cols: weightCols[w], InnerRows: inRowsW, InnerCols: inColsW, RowP: currColP, ColP: weightCols[w] / inColsW}
 				currColP = weightCols[w] / inColsW
 				currCols = inColsW
 
@@ -281,7 +284,7 @@ func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, 
 				} else {
 					rowP = inputRows / batch
 				}
-				blockSplit[0] = BlockSplit{InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
+				blockSplit[0] = BlockSplit{Rows: batch * rowP, Cols: inputFeatures, InnerRows: batch, InnerCols: inCols, RowP: rowP, ColP: colP}
 				blockSplits = append(blockSplits, NewSplit(blockSplit))
 			}
 			//}
@@ -339,15 +342,20 @@ func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	info.InputRows = splits[0].InnerRows
 	info.InputCols = splits[0].InnerCols
 	info.InputRowP, info.InputColP = splits[0].RowP, splits[0].ColP
-	info.BatchSize = info.InputRowP * info.InputRows
+	info.BatchSize = splits[0].Rows
+	info.Features = splits[0].Cols
 	info.NumWeights = len(splits) - 1
 	info.RowsOfWeights = make([]int, info.NumWeights)
 	info.ColsOfWeights = make([]int, info.NumWeights)
+	info.RealRowsOfWeights = make([]int, info.NumWeights)
+	info.RealColsOfWeights = make([]int, info.NumWeights)
 	info.RowPOfWeights = make([]int, info.NumWeights)
 	info.ColPOfWeights = make([]int, info.NumWeights)
 	for i, split := range splits[1:] {
 		info.RowsOfWeights[i] = split.InnerRows
 		info.ColsOfWeights[i] = split.InnerCols
+		info.RealRowsOfWeights[i] = split.Rows
+		info.RealColsOfWeights[i] = split.Cols
 		info.RowPOfWeights[i] = split.RowP
 		info.ColPOfWeights[i] = split.ColP
 	}
@@ -358,13 +366,14 @@ func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	return info, code
 }
 
-//Exctract info for blocksplit at i: rows, cols, rowp, colp
+//Exctract info for blocksplit at i: inner rows, inner cols, rowp, colp, original rows and cols
 func (s *Split) ExctractInfoAt(i int) []int {
 	splits := s.S
-	Rows := splits[i].InnerRows
-	Cols := splits[i].InnerCols
+	Rows, Cols := splits[i].Rows, splits[i].Cols
+	InRows := splits[i].InnerRows
+	InCols := splits[i].InnerCols
 	RowP, ColP := splits[i].RowP, splits[i].ColP
-	return []int{Rows, Cols, RowP, ColP}
+	return []int{InRows, InCols, RowP, ColP, Rows, Cols}
 }
 
 func (s *Split) Print() {
@@ -380,7 +389,49 @@ func (s *Split) Print() {
 		split := setOfSplits[j]
 		fmt.Println("-------------------------------------------------------------")
 		fmt.Println("Splits for ", splittingWhat)
-		fmt.Printf("Inner Rows: %d Inner Cols: %d Row Partitions: %d Col Partitions: %d\n\n", split.InnerRows, split.InnerCols, split.RowP, split.ColP)
+		fmt.Printf("RxC = %dx%d --> Inner Rows: %d Inner Cols: %d Row Partitions: %d Col Partitions: %d\n\n", split.Rows, split.Cols, split.InnerRows, split.InnerCols, split.RowP, split.ColP)
 	}
 	fmt.Println("-------------------------------------------------------------------------------------------")
+}
+
+//Generate the rotations needed to evaluate a network with this Split
+func (s *Split) GetRotations(params ckks.Parameters) []int {
+	rs := NewRotationsSet()
+	info, _ := s.ExctractInfo()
+	for i := 0; i < info.NumWeights; i++ {
+		r, c := info.RowsOfWeights[i], info.ColsOfWeights[i]
+		cp := info.ColPOfWeights[i]
+		var diags []int
+		for j := 1; j < r>>1; j++ {
+			diags = append(diags, 2*j*info.InputRows)
+		}
+		if r&1 == 1 {
+			diags = append(diags, ((r+1)/2)*2*info.InputRows)
+		}
+		rotations := []int{info.InputRows}
+		for d := range diags {
+			rotations = append(rotations, d)
+		}
+		rotations = append(rotations, r)
+		rotations = append(rotations, -info.InputRows*r)
+		rotations = append(rotations, -2*info.InputRows*r)
+		if r < c {
+			replicationFactor := GetReplicaFactor(r, c)
+			rotations = append(rotations, params.RotationsForReplicateLog(info.InputRows*c, replicationFactor)...)
+		}
+		rs.Add(rotations)
+
+		if (i + 1) < info.NumWeights {
+			currColp := cp
+			currInCols := s.S[i].InnerCols
+			currCols := s.S[i].Cols
+			nextRowP := s.S[i+1].RowP
+			if currColp != nextRowP {
+				rs.Add(GenRotationsForRepackCols(info.InputRows, currCols, currInCols, nextRowP))
+			}
+		}
+	}
+	rots := rs.Rotations()
+
+	return rots
 }

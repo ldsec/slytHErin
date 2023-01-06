@@ -320,6 +320,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 	return res, resClear, time.Since(start)
 }
 
+//Generate the rotations needed to evaluate the network and updates the network box with the rotation keys
 func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rs := cipherUtils.NewRotationsSet()
 	for i, w := range n.Weights {
