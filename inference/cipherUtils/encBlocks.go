@@ -13,6 +13,8 @@ import (
 // Interface for generic block matrix. In can be a plaintext or ciphertext matrix
 type BlocksOperand interface {
 	GetBlock(i, j int) interface{}
+	//Returns RowP and ColP. Note that, if this is a weight, actually RowP will represent column partition
+	//and viceversa since weights are block transposed
 	GetPartitions() (int, int)
 	GetInnerDims() (int, int)
 	GetRealDims() (int, int)

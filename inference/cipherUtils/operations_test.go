@@ -227,7 +227,7 @@ func TestBootstrapDistributed(t *testing.T) {
 		for _, parties := range PARTIES { //parties = 3 is fine always
 			fmt.Printf("Test: parties %d, params %d\n\n", parties, ckksParams.LogN)
 			params, _ := ckks.NewParametersFromLiteral(ckksParams)
-			crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+			crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 			skShares, skP, pkP, _ := distributed.DummyEncKeyGen(params, crs, parties)
 			rlk := distributed.DummyRelinKeyGen(params, crs, skShares)
 			decP := ckks.NewDecryptor(params, skP)

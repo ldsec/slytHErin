@@ -14,8 +14,11 @@ import (
 )
 
 type HENetworkI interface {
-	//Rotations needed for inference
+	//Rotations needed for inference. Also updates the box in the network with rotation keys
 	GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int
+
+	GetBox() cipherUtils.CkksBox
+	SetBox(Box cipherUtils.CkksBox)
 	//Evaluates batch. Treats each layer l as: Act[l](X * weight[l] + bias[l])
 	Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration)
 	//Evaluates batch with debug statements. Needs the batch in clear and the network in cleartext.
@@ -172,6 +175,14 @@ func (n *HENetwork) IsInit() bool {
 	return n.init
 }
 
+func (n *HENetwork) GetBox() cipherUtils.CkksBox {
+	return n.Box
+}
+
+func (n *HENetwork) SetBox(box cipherUtils.CkksBox) {
+	n.Box = box
+}
+
 //computes how many levels are needed to complete the pipeline in he version
 func (n *HENetwork) LevelsToComplete(currLayer int, afterMul bool) int {
 	if !n.IsInit() {
@@ -326,10 +337,10 @@ func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrappin
 	for i, w := range n.Weights {
 		rs.Add(w.GetRotations(params))
 		if (i + 1) < len(n.Weights) {
-			_, currColp := n.Weights[i].GetPartitions()
+			currColp, _ := n.Weights[i].GetPartitions()
 			_, currInCols := n.Weights[i].GetInnerDims()
 			_, currCols := n.Weights[i].GetRealDims()
-			nextRowP, _ := n.Weights[i+1].GetPartitions()
+			_, nextRowP := n.Weights[i+1].GetPartitions()
 			if currColp != nextRowP {
 				rs.Add(cipherUtils.GenRotationsForRepackCols(n.inputInnerRows, currCols, currInCols, nextRowP))
 			}

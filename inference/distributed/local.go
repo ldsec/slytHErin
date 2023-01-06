@@ -196,7 +196,7 @@ func (lmst *LocalMaster) initProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *
 		}
 		//creates proto instance
 		protocol := dckks.NewRefreshProtocol(lmst.Params, logBound, 3.2)
-		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+		crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 		crp := protocol.SampleCRP(lmst.Params.MaxLevel(), crs)
 		lmst.ProtoBuf.Store(ctId, &Protocol{
 			Protocol:     protocol,

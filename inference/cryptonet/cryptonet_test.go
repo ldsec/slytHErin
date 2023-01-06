@@ -1,13 +1,16 @@
 package cryptonet
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/cipherUtils"
 	"github.com/ldsec/dnn-inference/inference/cluster"
 	"github.com/ldsec/dnn-inference/inference/data"
 	"github.com/ldsec/dnn-inference/inference/distributed"
+	"github.com/ldsec/dnn-inference/inference/network"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
+	"os"
 	"runtime"
 	"strconv"
 	"testing"
@@ -55,6 +58,12 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
+	poolSize := 1
+	if multiThread {
+		poolSize = runtime.NumCPU()
+		fmt.Println("Num VCPUs: ", poolSize)
+	}
+
 	//First we load the network. Note that we pass a custom InitActivations method to the loader (have a look in cryptonet.go)
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json", InitActivations)
@@ -65,26 +74,33 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
 	//we define a new splitter providing all the information needed and we find how to split our model weights
 	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
-	possibleSplits.Print()
-
-	//define a new Box: this is just a wrapper for all the cryptography related objects, like a toolbox
-	Box := cipherUtils.NewBox(params)
-
-	poolSize := 1
-	if multiThread {
-		poolSize = runtime.NumCPU()
-		fmt.Println("Num VCPUs: ", poolSize)
-	}
-
-	splitInfo, _ := possibleSplits.ExctractInfo()
+	splitInfo, splitCode := possibleSplits.ExctractInfo()
 	batchSize := splitInfo.BatchSize
+	possibleSplits.Print()
 
 	//we have to set the batchSize this network accepts: the batch determines how the network is split
 	cn.SetBatch(batchSize)
 
-	// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
-	// and that is not encrypted (weights are in clear)
-	cne := cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	//define a new Box: this is just a wrapper for all the cryptography related objects, like a toolbox
+	Box := cipherUtils.NewBox(params)
+
+	path := fmt.Sprintf("$HOME/keys/cryptonet_encdata_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	fmt.Println("Key path: ", path)
+
+	var cne network.HENetworkI
+
+	//check if keys are already on disk
+	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
+		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
+		// and that is not encrypted (weights are in clear)
+		cne = cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne.GetRotations(params, nil)
+		fmt.Println("Created rotation keys...")
+		cipherUtils.SerializeBox(path, cne.GetBox())
+	} else {
+		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
+		cne = cn.NewHE(possibleSplits, false, true, 0, params.MaxLevel(), nil, poolSize, Box)
+	}
 	fmt.Println("Encoded Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
@@ -168,13 +184,28 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	splitInfo, _ := possibleSplits.ExctractInfo()
+	splitInfo, splitCode := possibleSplits.ExctractInfo()
 
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
+	path := fmt.Sprintf("$HOME/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	fmt.Println("Key path: ", path)
+
+	var cne network.HENetworkI
+	//check if keys are already on disk
+	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
+		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
+		// and that is not encrypted (weights are in clear)
+		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne.GetRotations(params, nil)
+		fmt.Println("Created rotation keys...")
+		cipherUtils.SerializeBox(path, cne.GetBox())
+	} else {
+		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
+		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	}
 	//note that this time the network is encrypted!
-	cne := cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
 	fmt.Println("Encrypted Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")
@@ -271,12 +302,29 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		fmt.Println("Num VCPUs: ", poolSize)
 	}
 
-	splitInfo, _ := possibleSplits.ExctractInfo()
+	splitInfo, splitCode := possibleSplits.ExctractInfo()
 
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	cne := cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	path := fmt.Sprintf("$HOME/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	fmt.Println("Key path: ", path)
+
+	var cne network.HENetworkI
+	//check if keys are already on disk
+	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
+		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
+		// and that is not encrypted (weights are in clear)
+		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne.GetRotations(params, nil)
+
+		fmt.Println("Created rotation keys...")
+		cipherUtils.SerializeBox(path, cne.GetBox())
+	} else {
+		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
+		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+	}
+	//note that this time the network is encrypted!
 	fmt.Println("Encrypted Cryptonet...")
 
 	datacn := data.LoadData("cryptonet_data_nopad.json")

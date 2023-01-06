@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/dnn-inference/inference/cluster"
 	"github.com/ldsec/dnn-inference/inference/data"
 	"github.com/ldsec/dnn-inference/inference/distributed"
+	"github.com/ldsec/dnn-inference/inference/network"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"github.com/ldsec/dnn-inference/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
@@ -109,16 +110,17 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 
 	//we define a new bootstrapper for centralized bootstrapping. Note that the network is defined as bootstrappable
 	Btp := cipherUtils.NewBootstrapper(poolSize)
-	cne := nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
 
 	path = fmt.Sprintf("$HOME/keys/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
+	var cne network.HENetworkI
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Creating rotation keys...")
-		Box = cipherUtils.BoxWithRotations(Box, cne.GetRotations(params, &btpParams), true, &btpParams)
+		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne.GetRotations(params, &btpParams)
 		fmt.Println("Created rotation keys...")
-		cipherUtils.SerializeBox(path, Box)
+		cipherUtils.SerializeBox(path, cne.GetBox())
 	} else {
 		fmt.Println("Reading keys from disk")
 		Box = cipherUtils.DeserealizeBox(path, params, &btpParams, true)
@@ -267,8 +269,8 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
 
 		//mock network just to get the rotations
-		cneMock := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), nil, poolSize, Box)
-		rotations := cneMock.GetRotations(params, nil)
+
+		rotations := splits.GetRotations(params)
 		rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
 
 		distributed.SerializeKeys(skP, skShares, rtks, path) //write to file
@@ -454,8 +456,9 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 		rlk = distributed.DummyRelinKeyGen(params, crs, skShares)
 
 		//just for rotations
-		cneMock := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), nil, poolSize, Box)
-		rotations := cneMock.GetRotations(params, nil)
+		//cneMock := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), nil, poolSize, Box)
+		//rotations := cneMock.GetRotations(params, nil)
+		rotations := splits.GetRotations(params)
 		rtks = kgenP.GenRotationKeysForRotations(rotations, true, skP)
 
 		distributed.SerializeKeys(skP, skShares, rtks, path) //write to file

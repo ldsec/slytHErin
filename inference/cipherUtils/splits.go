@@ -402,30 +402,30 @@ func (s *Split) GetRotations(params ckks.Parameters) []int {
 		r, c := info.RowsOfWeights[i], info.ColsOfWeights[i]
 		cp := info.ColPOfWeights[i]
 		var diags []int
-		for j := 1; j < r>>1; j++ {
+		for j := 0; j < r>>1; j++ {
 			diags = append(diags, 2*j*info.InputRows)
 		}
 		if r&1 == 1 {
-			diags = append(diags, ((r+1)/2)*2*info.InputRows)
+			diags = append(diags, ((r+1)/2-1)*2*info.InputRows)
 		}
 		rotations := []int{info.InputRows}
-		for d := range diags {
-			rotations = append(rotations, d)
-		}
+
+		rotations = append(rotations, diags...)
+
 		rotations = append(rotations, r)
 		rotations = append(rotations, -info.InputRows*r)
 		rotations = append(rotations, -2*info.InputRows*r)
 		if r < c {
 			replicationFactor := GetReplicaFactor(r, c)
-			rotations = append(rotations, params.RotationsForReplicateLog(info.InputRows*c, replicationFactor)...)
+			rotations = append(rotations, params.RotationsForReplicateLog(info.InputRows*info.InputCols, replicationFactor)...)
 		}
 		rs.Add(rotations)
 
 		if (i + 1) < info.NumWeights {
 			currColp := cp
-			currInCols := s.S[i].InnerCols
-			currCols := s.S[i].Cols
-			nextRowP := s.S[i+1].RowP
+			currInCols := info.ColsOfWeights[i]
+			currCols := info.RealColsOfWeights[i]
+			nextRowP := info.RowPOfWeights[i+1]
 			if currColp != nextRowP {
 				rs.Add(GenRotationsForRepackCols(info.InputRows, currCols, currInCols, nextRowP))
 			}
