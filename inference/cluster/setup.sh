@@ -51,16 +51,13 @@ echo "Light mode: $light"
 i=0
 cwd=$(pwd)
 while [ $i -lt $parties ]; do
-  id=$(jq ".cluster_ids[${i}]" < $FILE)
-  if [ $id -lt 100 ]; then
-      id="0""$id"
-  fi
-  echo "connecting to: '${user}:${pwd}@iccluster${id}.iccluster.epfl.ch'"
+    ip=$(jq ".cluster_ips[${i}]" < $FILE)
+  echo "connecting to: '${user}:${pwd}@${ip}'"
 
   if [ "$light" == "n" ]; then
-    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "rmdir dnn; mkdir dnn; cd dnn; rmdir config; mkdir config; exit"
+    lftp sftp://"${user}":"${pwd}"@ip -e "rmdir dnn; mkdir dnn; cd dnn; rmdir config; mkdir config; exit"
   else
-    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd dnn/config; rm inference; exit"
+    lftp sftp://"${user}":"${pwd}"@ip -e "cd dnn/config; rm inference; exit"
   fi
 
   cd ../../config
@@ -69,12 +66,12 @@ while [ $i -lt $parties ]; do
   if [ "$light" == "n" ]; then
   # move all
     for f in *; do
-      lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put ${f}; exit"
+      lftp sftp://"${user}":"${pwd}"ip -e "cd /root/dnn/config; put ${f}; exit"
     done
-    sshpass -p "${pwd}" ssh -o StrictHostKeyChecking=no "${user}"@iccluster"${id}".iccluster.epfl.ch "mkdir ~/keys; cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
+    sshpass -p "${pwd}" ssh -o StrictHostKeyChecking=no "${user}"@ip "mkdir ~/keys; cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
   else
     # move only inference binary
-    lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "mkdir ~/keys; cd /root/dnn/config; put inference; exit"
+    lftp sftp://"${user}":"${pwd}"@ip -e "mkdir ~/keys; cd /root/dnn/config; put inference; exit"
     #lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put go_install.sh; exit"
     #sshpass -p "${pwd}" ssh -o StrictHostKeyChecking=no "${user}"@iccluster"${id}".iccluster.epfl.ch "cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
   fi

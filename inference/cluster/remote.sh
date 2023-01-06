@@ -60,12 +60,8 @@ pwd=$(echo "$pwd" | tr -d '"')
 
 i=1 #first one is the master node / client
 while [ $i -lt $parties ]; do
-  id=$(jq ".cluster_ids[${i}]" < $FILE)
-  if [ $id -lt 100 ]; then
-    id="0""$id"
-  fi
   ip=$(jq ".cluster_ips[${i}]" < $FILE)
-  echo "connecting to: ${user}:${pwd}@iccluster${id}.iccluster.epfl.ch at address ${ip}"
-  sshpass -p 1 ssh -o StrictHostKeyChecking=no root@iccluster"${id}".iccluster.epfl.ch "cd /root/dnn/config; chmod +x inference; ./inference --nn ${nn} --model ${model} --logN ${logN} --addr ${ip};" &
+  echo "connecting to: ${user}:${pwd} at ${ip}"
+  sshpass -p 1 ssh -o StrictHostKeyChecking=no root@ip "cd /root/dnn/config; chmod +x inference; ./inference --nn ${nn} --model ${model} --logN ${logN} --addr ${ip};" &
   i=$((i+1))
 done

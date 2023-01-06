@@ -1,16 +1,19 @@
-## Documentation
-
-See ```dnn-inference/README.md``` for how to generate the json files needed.
+# Documentation
 Use ```help.sh``` to spawn the documentation on your browser.
-If the script does not work, make sure you have godoc installed.
+If the script does not work, make sure you have [godoc](https://pkg.go.dev/golang.org/x/tools/cmd/godoc)  and [Python](https://www.python.org/downloads/) installed.
 The page should be open at ```localhost:6060```
+
+#### Dependencies
+The code has been tested using ```go1.18.3```. To install [Go](https://go.dev/doc/install).
+
+The main library used by the package is [Lattigo](https://github.com/tuneinsight/lattigo).
 
 ## Examples
 In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
 shows many examples on how to use our framework.
 
 ## Methods
-Explanation on the methods we use,
+Explanation on the methods we use.
 
 ### Matrix Multiplication
 The algorithm

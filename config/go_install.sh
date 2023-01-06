@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# this scripts install go on the iccluster
+# this scripts install go on a remote machine
 
 #wget https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
 #tar -C /usr/local -xzf go1.18.3.linux-amd64.tar.gz
