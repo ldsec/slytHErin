@@ -41,7 +41,7 @@ class Packer:
     #   serializer:
     #       method customly defined that takes data (e.g model from pytorch, json file...)
     #       and outputs a serialized version of the model.
-    #       For reference, the serializers we created returns dictionaries in which item corresponds to a representation of a layer,
+    #       For reference, the serializers we created returns dictionaries in which each item corresponds to a representation of a layer,
     #       with weights and bias.
     #       The only constraint is that the dictionary is compliant with your packer
     #   packer:
