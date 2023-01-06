@@ -110,6 +110,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	err := datacn.Init(batchSize)
 	utils.ThrowErr(err)
 
+	// this is used to store the results of the run, if needed to compare with the not encrypted pipeline
 	result := utils.NewStats(batchSize)
 	resultExp := utils.NewStats(batchSize)
 

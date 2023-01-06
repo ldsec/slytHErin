@@ -11,12 +11,110 @@ The main library used by the package is [Lattigo](https://github.com/tuneinsight
 ## Examples
 In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
 shows many examples on how to use our framework.
-
-### Tutorial 1: CryptoNet
+***Warning: make sure to create a directory "keys" in your $HOME:***
+```mkdir $HOME/keys```
+### Tutorial: CryptoNet
 Have a look at ```TestCryptonet_EvalBatchEncrypted``` [here](cryptonet/cryptonet_test.go)
 
+#### Defining your own network
+Let's have a look at how you can define your own network by looking at some examples:
+```
+type CNLoader struct {
+	network.NetworkLoader
+}
+
+type CryptoNet struct {
+	network.Network
+}
+
+type CryptoNetHE struct {
+	*network.HENetwork
+}
+```
+First we define a Loader wrapper for our network and wrapper structs
+for the network in cleartext and the encoded/encrypted version for the HE pipeline.
+```
+func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
+	approx := utils.InitReLU(3)
+	return []utils.ChebyPolyApprox{*approx, *approx}
+}
+```
+Now we define a custom method to initiate the activation functions.
+In this case it's very simple, all the approximation are degree 3 approximation
+of the ReLU function obtained by approximating a smooth version of ReLU.
+```
+//Taken from nn/nn.go
+
+//Initialize activation function
+func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
+	layers := args[0].(int)
+	HEtrain := args[1].(bool)
+	var suffix string
+	var act string
+	activations := make([]utils.ChebyPolyApprox, layers)
+	if HEtrain {
+		suffix = "_poly"
+		act = "silu"
+	} else {
+		suffix = ""
+		act = "soft relu"
+	}
+	jsonFile, err := os.Open(fmt.Sprintf("nn%d%s_intervals.json", layers, suffix))
+	utils.ThrowErr(err)
+	defer jsonFile.Close()
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	var intervals utils.ApproxParams
+	json.Unmarshal([]byte(byteValue), &intervals)
+	intervals = utils.SetDegOfParam(intervals)
+	for i := range intervals.Params {
+		interval := intervals.Params[i]
+		activations[i] = *utils.InitActivationCheby(act, interval.A, interval.B, interval.Deg)
+	}
+	return activations
+}
+```
+In this case things get more tricky! What we do here is to load
+information about the approximation intervals and degree from some custom ```.json``` files.
+Also we use different activations function depending on the model we are loading (NN20 or NN50).
+
+Remember: whatever custom method you code, you should always return
+an array of ```utils.ChebyPolyApprox``` to stick with the method signature!
+```
+func (l *CNLoader) Load(path string, initActivations network.Initiator) network.NetworkI {
+
+	jsonFile, err := os.Open(path)
+	utils.ThrowErr(err)
+	defer jsonFile.Close()
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+
+	nj := new(network.NetworkJ)
+	err = json.Unmarshal([]byte(byteValue), nj)
+	utils.ThrowErr(err)
+	cn := new(CryptoNet)
+	cn.SetLayers(nj.Layers)
+	activations := initActivations()
+	cn.SetActivations(activations)
+
+	return cn
+}
+```
+Finally, here is our custom ```Loader.Load()``` method. The structure is always the same, whatever network you define:
+```
+cn := new(CryptoNet)
+cn.SetLayers(nj.Layers)
+activations := initActivations()
+cn.SetActivations(activations)
+```
+First you create a new ```network.Network```, you set the layers
+from the json wrapper, you get the activations from your custom ```InitActivations``` method and you
+set them in the network with the setter method. That's it!
+
+### Advanced:
+Have a look at ```TestCryptonet_EvalBatchClearModelEnc``` [here](cryptonet/cryptonet_test.go)
+and to the examples with [Zama NN](nn/nn_test.go) for more advanced usages.
+
 ## Methods
-Explanation on the methods we use.
+Understand how things work under the hood.
 
 ### Matrix Multiplication
 The algorithm
