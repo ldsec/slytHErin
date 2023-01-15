@@ -11,8 +11,7 @@ The main library used by the package is [Lattigo](https://github.com/tuneinsight
 ## Examples
 In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
 shows many examples on how to use our framework.
-***Warning: make sure to create a directory "keys" in your $HOME:***
-```mkdir $HOME/keys```
+
 ### Tutorial: CryptoNet
 Have a look at ```TestCryptonet_EvalBatchEncrypted``` [here](cryptonet/cryptonet_test.go)
 

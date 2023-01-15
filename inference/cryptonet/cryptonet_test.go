@@ -54,6 +54,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	//3892.666667ms for 41 batch with logn14
 	//5343.933333 for 83 batch with logn14
 	//3516.000000ms for 1 sample with logn14
+	utils.SetupDirectory()
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -87,7 +88,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	//define a new Box: this is just a wrapper for all the cryptography related objects, like a toolbox
 	Box := cipherUtils.NewBox(params)
 
-	path := fmt.Sprintf("$HOME/keys/cryptonet_encdata_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encdata_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -168,6 +169,8 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //EDIT: this version uses localhost to simulate Inter-DC network
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	//10014.466667ms for batch 83
+	utils.SetupDirectory()
+
 	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
@@ -192,7 +195,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	path := fmt.Sprintf("$HOME/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -286,6 +289,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 //This version spawns the server on a server on the iccluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	//10633ms for 83 batch with logN14
+	utils.SetupDirectory()
 
 	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
@@ -311,7 +315,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	path := fmt.Sprintf("$HOME/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI

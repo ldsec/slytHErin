@@ -35,7 +35,7 @@ func main() {
 
 	if *model == "crypto" {
 		if *logN == 14 {
-			params = CNparamsLogN14Mask
+			params = CNparamsLogN14
 		} else {
 			panic("LogN15 is not supported for Cryptonet")
 		}
