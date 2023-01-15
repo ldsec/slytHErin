@@ -218,35 +218,35 @@ Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
 - Step 3: before running experiments, run remote.sh -- this will start the servers listening for experiment configuration
 - Step 4: upon ending the experiment (if fail), run cleanup.sh -- this will kill the processes holding the ports
 ##### Experiment 1
-| Batch 	| LogN 	| Latency(s) 	|
-|-------	|------	|------------	|
-| 41    	| 14   	| 5.6        	|
+##### Experiment 1
+| Batch 	| LogN 	| LogQP | Latency(s) 	|
+|-------	|------	|------	|------------	|
+| 41    	| 14   	| 365   | 5.6        	|
 
 ##### Experiment 2 -- localhost
-| Batch 	| LogN 	| Latency(s) 	  |
-|-------	|------	|---------------|
-| 41    	| 14   	| 12.9        	 |
+| Batch 	| LogN 	| LogQP | Latency(s) 	  |
+|-------	|------	|------	|---------------|
+| 41    	| 14   	| 438   | 12.9        	|
 
 ##### Experiment 2 -- Cluster LAN
-| Batch 	| LogN 	| Latency(s) 	  |
-|-------	|------	|---------------|
-| 41    	| 14   	| 11.7        	 |
+| Batch 	| LogN 	| LogQP | Latency(s) 	  |
+|-------	|------	|------	|---------------|
+| 41    	| 14   	| 438   | 11.7          |
 
 ##### Experiment 3
-| Batch 	 | LogN 	 | Latency(s) 	    |
-|---------|--------|-----------------|
-| 96    	 | 16   	 | 2298.3        	 |
+| Batch 	 | LogN 	| LogQP | Latency(s) 	    |
+|---------|--------|------	|-----------------|
+| 96    	 | 16    | 1546   | 2298.3        	 |
 
 ##### Experiment 4 -- localhost
-| Batch 	 | LogN 	 | Parties | Latency(s) 	   |
-|---------|--------|---------|----------------|
-| 48    	 | 15   	 | 10      | 240.7        	 |
+| Batch 	 | LogN 	 | LogQP | Parties | Latency(s) 	   |
+|---------|--------|--------|---------|----------------|
+| 48    	 | 15   	 | 874   	 | 10      | 240.7        	 |
 
 ##### Experiment 4 -- Cluster LAN
-| Batch 	 | LogN 	 | Parties | Latency(s) 	   |
-|---------|--------|---------|----------------|
-| 48    	 | 15   	 | 10      | 226.4        	 |
-
+| Batch 	 | LogN 	 | LogQP | Parties | Latency(s) 	   |
+|---------|--------|--------|---------|----------------|
+| 48    	 | 15   	 | 874   	 | 10      | 226.4        	 |
 ###### Notes
 - Experiment 1 can run in around 4s with batch size = 1
 - Experiment 3 shows a loss in accuracy of around 0.2% over 5 iters
