@@ -245,8 +245,8 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		}
 	}
 
-	path = fmt.Sprintf("$HOME/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
-	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+	path = fmt.Sprintf("$HOME/inference/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 
 	// PARTIES key material
 	skP := new(rlwe.SecretKey)

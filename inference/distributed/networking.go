@@ -17,10 +17,16 @@ var MB = 1024 * KB
 
 var MAX_SIZE = 30 * MB //LogN = 15, setup included
 
-var Local = latency.Network{ //simulates inter-DC on localhost https://medium.com/slalom-technology/examining-cross-region-communication-speeds-in-aws-9a0bee31984f
-	Kbps:    160 * 1024, //200 Mbps //aws regions us-west eu-west
-	Latency: 100 * time.Millisecond,
-	MTU:     1500, // Ethernet
+//var Local = latency.Network{ //simulates inter-DC on localhost https://medium.com/slalom-technology/examining-cross-region-communication-speeds-in-aws-9a0bee31984f
+//	Kbps:    160 * 1024, //200 Mbps //aws regions us-west eu-west
+//	Latency: 100 * time.Millisecond,
+//	MTU:     1500, // Ethernet
+//}
+
+var Local = latency.Network{ //simulate cluster LAN on localhost
+	Kbps:    1024 * 1024, //1Gbps
+	Latency: 20 * time.Millisecond,
+	MTU:     1500, //ethernet
 }
 
 var Lan = latency.Local //no overhead, used in real distributed env.

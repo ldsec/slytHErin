@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/drlwe"
+	"github.com/tuneinsight/lattigo/v3/ring"
 	"sync"
 )
 
@@ -31,9 +32,10 @@ type Protocol struct {
 
 //Masking protocol for scenario data clear - model encrypted
 type MaskProtocol struct {
-	Ct           *ckks.Ciphertext //ct to be blindly decrypted
-	Mask         *ckks.Plaintext  //used for masking
-	Pt           *ckks.Plaintext  //result of decryption by server
+	Ct *ckks.Ciphertext //ct to be blindly decrypted
+	//Mask         *ckks.Plaintext  //used for masking
+	Mask         *ring.Poly      //used for masking
+	Pt           *ckks.Plaintext //result of decryption by server
 	FeedbackChan chan *ckks.Plaintext
 }
 

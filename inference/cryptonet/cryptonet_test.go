@@ -168,13 +168,13 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //EDIT: this version uses localhost to simulate Inter-DC network
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	//10014.466667ms for batch 83
-	var debug = false      //set to true for debug mode
+	var debug = true       //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	loader := new(CNLoader)
 	cn := loader.Load("cryptonet_packed.json", InitActivations)
 
-	params := paramsLogN14Mask
+	params := paramsLogN14
 	features := 28 * 28
 	rows, cols := cn.GetDimentions()
 	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
@@ -221,14 +221,15 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	iters := 0
 	maxIters := 15
 
-	//generate and store rotation keys
-	Box = cne.GetBox()
-
+	//we create a new box for the client with its own ephemeral secret key
+	//server box will be the same one which encrypted the network
+	BoxServer := cne.GetBox()
+	BoxClient := cipherUtils.NewBox(params)
 	//start server with decryption oracle
 	serverAddr := "127.0.0.1:8001"
-	client, err := distributed.NewClient(serverAddr, Box, poolSize, true)
+	client, err := distributed.NewClient(serverAddr, BoxClient, poolSize, true)
 	utils.ThrowErr(err)
-	server, err := distributed.NewServer(Box, serverAddr, true)
+	server, err := distributed.NewServer(BoxServer, serverAddr, true)
 	go server.Listen()
 	utils.ThrowErr(err)
 

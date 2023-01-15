@@ -81,7 +81,7 @@ func TestRotatePlaintext(t *testing.T) {
 }
 
 func TestMultiplication(t *testing.T) {
-	//check that DiagMul have the rescale and add conj uncommented
+	//check that DiagMul have the rescale and add conj uncommented in multiplier.go
 	//Why? We use a specific optimization called late rescaling for block operations
 	X := pU.RandMatrix(40, 90)
 	W := pU.RandMatrix(90, 90)
@@ -140,6 +140,33 @@ func TestMultiplication(t *testing.T) {
 		PrintDebug(Renc, valuesWant, 0.001, Box)
 	})
 
+}
+
+func TestNewObliviousDec(t *testing.T) {
+	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+		LogN:         14,
+		LogQ:         []int{35, 30, 30, 30, 30, 30, 30, 30}, //Log(PQ) <= 438 for LogN 14
+		LogP:         []int{60, 60},
+		Sigma:        rlwe.DefaultSigma,
+		LogSlots:     13,
+		DefaultScale: float64(1 << 30),
+	})
+	scale := params.DefaultScale()
+	BoxC := NewBox(params)
+	BoxS := NewBox(params)
+	X := pU.Vectorize(pU.MatToArray(pU.RandMatrix(40, 90)), true)
+	Xenc := BoxS.Encryptor.EncryptNew(BoxS.Encoder.EncodeNew(X, params.MaxLevel(), scale, params.LogSlots()))
+	mask := BoxC.Encryptor.EncryptNew(BoxC.Encoder.EncodeNew([]float64{0.0}, params.MaxLevel(), scale, params.LogSlots()))
+	mask_c0 := mask.Ciphertext.Value[0]
+	mask_c1 := mask.Ciphertext.Value[1]
+	params.RingQ().Add(Xenc.Value[0], mask_c0, Xenc.Value[0])
+	Xdec := BoxS.Decryptor.DecryptNew(Xenc)
+	params.RingQ().MulCoeffsMontgomery(mask_c1, BoxC.Sk.Value.Q, mask_c1)
+	params.RingQ().Add(Xdec.Value, mask_c1, Xdec.Value)
+	Xunmasked := BoxC.Encoder.Decode(Xdec, params.LogSlots())
+	for i := 0; i < len(X); i++ {
+		fmt.Printf("%f vs %f\n", X[i], Xunmasked[i])
+	}
 }
 
 func TestBootstrap(t *testing.T) {

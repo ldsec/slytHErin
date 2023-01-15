@@ -41,6 +41,7 @@ func MaskInputEcdMask(Xenc *EncInput, Box CkksBox) *PlainInput {
 	}
 }
 
+/*
 //generate a random mask for lambda bit security. Returns mask (for unmasking) and -mask (for masking)
 func generateMask(params ckks.Parameters, level int, scale float64, lambda int) (*ckks.Plaintext, *ckks.Plaintext) {
 	ringQ := params.RingQ()
@@ -104,6 +105,7 @@ func generateMask(params ckks.Parameters, level int, scale float64, lambda int) 
 }
 
 //Masks ct with 128 bit security mask: ct = ct - mask. Ensures IND-CPA with 128 bit security
+
 func Mask(ct *ckks.Ciphertext, Box CkksBox) *ckks.Plaintext {
 	mask, maskNeg := generateMask(Box.Params, ct.Level(), ct.Scale, 128)
 	Box.Evaluator.Add(ct, maskNeg, ct)
@@ -118,7 +120,30 @@ func UnMask(pt, mask *ckks.Plaintext, Box CkksBox) {
 	Box.Evaluator.Add(ct, mask, ct)
 	Box.Decryptor.WithKey(skEph).Decrypt(ct, pt)
 }
+*/
 
+//generates a new encryption of 0 under client secret key
+func generateMask(Box CkksBox, level int) (*ring.Poly, *ring.Poly) {
+	mask := Box.Encryptor.EncryptNew(Box.Encoder.EncodeNew([]float64{0.0}, level, Box.Params.DefaultScale(), Box.Params.LogSlots()))
+	mask_c0 := mask.Ciphertext.Value[0]
+	mask_c1 := mask.Ciphertext.Value[1]
+	return mask_c0, mask_c1
+}
+
+// Masks ct = Enc(msg, sk_server) = (ct0, ct1) as (ct0 + Enc(0, sk_client), ct1)
+func Mask(ct *ckks.Ciphertext, Box CkksBox) *ring.Poly {
+	mask_c0, mask_c1 := generateMask(Box, ct.Level())
+	Box.Params.RingQ().Add(ct.Value[0], mask_c0, ct.Value[0])
+	return mask_c1
+}
+
+//Removes mask from pt = (msg + Enc(0,sk_client) -> msg
+func UnMask(pt *ckks.Plaintext, mask_c1 *ring.Poly, Box CkksBox) {
+	Box.Params.RingQ().MulCoeffsMontgomery(mask_c1, Box.Sk.Value.Q, mask_c1)
+	Box.Params.RingQ().Add(pt.Value, mask_c1, pt.Value)
+}
+
+/*
 //mask input with lambda bit security
 func MaskInput(Xenc *EncInput, Box CkksBox, lambda int) *PlainInput {
 	// Generate the mask in Z[Y] for Y = X^{N/(2*slots)}
@@ -145,3 +170,4 @@ func UnmaskInput(Xmask, mask *PlainInput, Box CkksBox) {
 		}
 	}
 }
+*/
