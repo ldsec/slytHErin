@@ -51,9 +51,6 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 //EXPERIMENT 1 - Model in clear - data encrypted:
 //Querier sends encrypted data to server to get privacy preserving prediction
 func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
-	//3892.666667ms for 41 batch with logn14
-	//5343.933333 for 83 batch with logn14
-	//3516.000000ms for 1 sample with logn14
 	utils.SetupDirectory()
 
 	var debug = false      //set to true for debug mode
@@ -168,7 +165,6 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 //Server offers an oblivious decryption service
 //EDIT: this version uses localhost to simulate Inter-DC network
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
-	//10014.466667ms for batch 83
 	utils.SetupDirectory()
 
 	var debug = true       //set to true for debug mode
@@ -222,7 +218,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	resultExp := utils.NewStats(batchSize)
 
 	iters := 0
-	maxIters := 15
+	maxIters := 5
 
 	//we create a new box for the client with its own ephemeral secret key
 	//server box will be the same one which encrypted the network
@@ -286,9 +282,8 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 //EXPERIMENT 2 - Model encrypted,data in clear:
 //In this scenario the model is sent by server to the client in encrypted form
 //Server offers an oblivious decryption service
-//This version spawns the server on a server on the iccluster
+//This version spawns the server on a server on remote cluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
-	//10633ms for 83 batch with logN14
 	utils.SetupDirectory()
 
 	var debug = false      //set to true for debug mode

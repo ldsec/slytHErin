@@ -72,8 +72,6 @@ while [ $i -lt $parties ]; do
   else
     # move only inference binary
     lftp sftp://"${user}":"${pwd}"@ip -e "mkdir ~/keys; cd /root/dnn/config; put inference; exit"
-    #lftp sftp://"${user}":"${pwd}"@iccluster"${id}".iccluster.epfl.ch -e "cd /root/dnn/config; put go_install.sh; exit"
-    #sshpass -p "${pwd}" ssh -o StrictHostKeyChecking=no "${user}"@iccluster"${id}".iccluster.epfl.ch "cd /root/dnn/config; chmod +x go_install.sh; ./go_install.sh;"
   fi
   i=$((i+1))
   cd "$cwd"

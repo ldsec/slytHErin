@@ -69,8 +69,6 @@ var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 //Querier sends encrypted data to server for privacy-preserving inference. Server uses centralized bootstrapping
 //Uses NN50
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
-	//nn50 - 38m for 96 batch
-	//nn50 - 2562717.700000ms for 525 batch. Accuracy 0.8964
 	utils.SetupDirectory()
 
 	var HETrain = false    //model trained with HE SGD, LSE and poly act (HE Friendly)
@@ -187,8 +185,8 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 //Master invokes distributed refresh with a variable number of parties, and finally invokes key switch protocol
 //Prediction is received under Querier public key
 //Use NN20_poly since it was trained with HE friendly parameters
+//Simulates Inter-DC on localhost
 func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
-	//nn20 -  5m5.004224306s 292 batch with logN15_NN20 (inter-DC network). Accuracy = 95.6 (-1.2%)
 	utils.SetupDirectory()
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
@@ -382,7 +380,6 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 //Use NN20_poly since it was trained with HE friendly parameters
 //EDIT: this version attempts to distribute the workload among real servers in LAN setting
 func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
-	//291s for 48 batch, loss in accuracy ~ 0.4%
 	utils.SetupDirectory()
 
 	var HETrain = true //model trained with HE SGD, LSE and poly act (HE Friendly)
@@ -440,7 +437,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	}
 
 	path = fmt.Sprintf("$HOME/gef/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
-	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'E', 'P', 'F', 'L'})
+	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 
 	skP := new(rlwe.SecretKey)
 	skShares := make([]*rlwe.SecretKey, parties)

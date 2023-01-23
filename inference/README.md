@@ -209,7 +209,7 @@ the result, masked with a 128 bit random mask, to the model owner, who offers an
 ##### Network Setting
 - Localhost interface wrapped with `latency` go package:
 Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
-- LAN of EPFL ICCLUSTER
+- LAN of Remote CLUSTER
 ###### How to setup and run on cluster
 - Step 0: go to /cluster and populate config.json as needed
 - Step 1: run ip_scan.sh -- this will collect the ip addresses of the servers in cluster
@@ -218,38 +218,30 @@ Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
 - Step 4: upon ending the experiment (if fail), run cleanup.sh -- this will kill the processes holding the ports
 ##### Experiment 1
 ##### Experiment 1
-| Batch 	| LogN 	| LogQP | Latency(s) 	|
-|-------	|------	|------	|------------	|
-| 41    	| 14   	| 365   | 5.6        	|
+| Batch 	 | LogN 	| LogQP | Latency(s) 	 |
+|---------|------	|------	|--------------|
+| 83    	 | 14   	| 365   | 5.3        	 |
 
-##### Experiment 2 -- localhost
-| Batch 	| LogN 	| LogQP | Latency(s) 	  |
-|-------	|------	|------	|---------------|
-| 41    	| 14   	| 438   | 12.9        	|
 
 ##### Experiment 2 -- Cluster LAN
-| Batch 	| LogN 	| LogQP | Latency(s) 	  |
-|-------	|------	|------	|---------------|
-| 41    	| 14   	| 438   | 11.7          |
+| Batch 	 | LogN 	| LogQP | Latency(s) 	 |
+|---------|------	|-------|--------------|
+| 83    	 | 14   	| 365   | 7.1          |
 
 ##### Experiment 3
-| Batch 	 | LogN 	| LogQP | Latency(s) 	    |
-|---------|--------|------	|-----------------|
-| 96    	 | 16    | 1546   | 2298.3        	 |
-
-##### Experiment 4 -- localhost
-| Batch 	 | LogN 	 | LogQP | Parties | Latency(s) 	   |
-|---------|--------|--------|---------|----------------|
-| 48    	 | 15   	 | 874   	 | 10      | 240.7        	 |
+| Batch 	  | LogN 	| LogQP | Latency(s) 	  |
+|----------|--------|------	|---------------|
+| 525    	 | 16    | 1546   | 2562        	 |
 
 ##### Experiment 4 -- Cluster LAN
-| Batch 	 | LogN 	 | LogQP | Parties | Latency(s) 	   |
-|---------|--------|--------|---------|----------------|
-| 48    	 | 15   	 | 874   	 | 10      | 226.4        	 |
+| Batch 	  | LogN 	 | LogQP | Parties | Latency(s) 	 |
+|----------|--------|--------|---------|--------------|
+| 292    	 | 15   	 | 874   	 | 10      | 273        	 |
+
 ###### Notes
-- Experiment 1 can run in around 4s with batch size = 1
-- Experiment 3 shows a loss in accuracy of around 0.2% over 5 iters
-- Experiment 4 shows a loss in accuracy of around 0.4% over 5 iters
+- Experiment 1 runs in 3.516s for 1 sample
+- Experiment 3 : Accuracy 0.8964 (-1.1%)
+- Experiment 4 : Accuracy = 95.6 (-1.2%)
 
 
 [1] R. Gilad-Bachrach, N. Dowlin, K. Laine, K. Lauter, M. Naehrig, and J. Wernsing. Cryptonets: Applying neural networks to encrypted data with high throughput and accuracy. In ICML, 2016.
