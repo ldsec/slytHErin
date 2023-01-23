@@ -1,8 +1,8 @@
 # What is this about
 This folder contains python scripts using numpy and pytorch which are used for
 training some neural networks used for our test cases. In particular you can
-find training scripts for Cryptonet neural network model, as well as
-a ```.json``` file with the already trained model parameters. For NN in [1] we provide the json file with 
+find training scripts for Cryptonet neural network model [1], as well as
+a ```.json``` file with the already trained model parameters. For NN in [2] we provide the json file with 
 the network parameters.
 ***In any case, you can find all the already trained models as ```.json``` files in ```/models```***
 
@@ -10,7 +10,7 @@ the network parameters.
 The code has been tested using ```Python 3.10```.
 All the dependencies can be installed using ```pip install -r requirements.txt```
 
-## Cryptonet
+## Cryptonet [1]
 You can run ```python3 cryptonet.py``` to train a new cryptonet model.
 After this you should see a ```cryptonet_packed.json``` file in the ```models```
 folder. You can copy this to ```inference/cryptonet```
@@ -122,5 +122,7 @@ Here we provide a graphical sketch of what ```pack_conv```, and the ```gen_kerne
 ![image](../inference/static/conv.png)
 
 
-[1] I. Chillotti, M. Joye, and P. Paillier. Programmable bootstrapping enables efficient homomorphic inference of deep neural networks. Cryptology
+[1] R. Gilad-Bachrach, N. Dowlin, K. Laine, K. Lauter, M. Naehrig, and J. Wernsing. Cryptonets: Applying neural networks to encrypted data with high throughput and accuracy. In ICML, 2016.
+
+[2] I. Chillotti, M. Joye, and P. Paillier. Programmable bootstrapping enables efficient homomorphic inference of deep neural networks. Cryptology
 ePrint Archive, Paper 2021/091, 2021. https://eprint.iacr.org/2021/091.
