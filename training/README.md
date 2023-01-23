@@ -1,4 +1,4 @@
-# What is this about
+# About
 This folder contains python scripts using numpy and pytorch which are used for
 training some neural networks used for our test cases. In particular you can
 find training scripts for Cryptonet neural network model [1], as well as
