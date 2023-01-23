@@ -9,10 +9,10 @@ The code has been tested using ```go1.18.3```. To install [Go](https://go.dev/do
 The main library used by the package is [Lattigo](https://github.com/tuneinsight/lattigo).
 
 ## Examples
-In ```/cryptonet``` and ```nn``` you can find ```*_test.go``` files that
+In ```/cryptonet```[1] and ```nn```[2] you can find ```*_test.go``` files that
 shows many examples on how to use our framework.
 
-### Tutorial: CryptoNet
+### Tutorial: CryptoNet [1]
 Have a look at ```TestCryptonet_EvalBatchEncrypted``` [here](cryptonet/cryptonet_test.go)
 
 #### Defining your own network
@@ -110,7 +110,7 @@ set them in the network with the setter method. That's it!
 
 ### Advanced:
 Have a look at ```TestCryptonet_EvalBatchClearModelEnc``` [here](cryptonet/cryptonet_test.go)
-and to the examples with [Zama NN](nn/nn_test.go) for more advanced usages.
+and to the examples with [NN](nn/nn_test.go) for more advanced usages.
 
 ## Methods
 Understand how things work under the hood.
@@ -198,8 +198,8 @@ the result, masked with a 128 bit random mask, to the model owner, who offers an
 #### Experiments
 - Experiment 1: Evaluation of Cryptonet following scenario 1
 - Experiment 2: Evaluation of Cryptonet following scenario 3
-- Experiment 3: Evaluation of ZAMA NN50 following scenario 1. Centralized bootstrapping is needed
-- Experiment 4: Evaluation of ZAMA NN20 modified to be trained under encryption. Distributed bootstrapping and key switch
+- Experiment 3: Evaluation of NN50 following scenario 1. Centralized bootstrapping is needed
+- Experiment 4: Evaluation of NN20 modified to be trained under encryption. Distributed bootstrapping and key switch
 
 #### Results
 
@@ -250,3 +250,9 @@ Simulated LAN with 1500B MTU (Ethernet) and 200ms latency
 - Experiment 1 can run in around 4s with batch size = 1
 - Experiment 3 shows a loss in accuracy of around 0.2% over 5 iters
 - Experiment 4 shows a loss in accuracy of around 0.4% over 5 iters
+
+
+[1] R. Gilad-Bachrach, N. Dowlin, K. Laine, K. Lauter, M. Naehrig, and J. Wernsing. Cryptonets: Applying neural networks to encrypted data with high throughput and accuracy. In ICML, 2016.
+
+[2] I. Chillotti, M. Joye, and P. Paillier. Programmable bootstrapping enables efficient homomorphic inference of deep neural networks. Cryptology
+ePrint Archive, Paper 2021/091, 2021. https://eprint.iacr.org/2021/091.
