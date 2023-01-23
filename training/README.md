@@ -19,7 +19,7 @@ folder. You can copy this to ```inference/cryptonet```
 You can generate the json with MNIST data with ```python3 dataHandler.py --model cryptonet```
 and find the file in the ```data``` folder as a ```cryptonet_data_nopad.json```
 
-## NN
+## NN [2]
 You are provided with the json files already generated in ```models/```. Move those into ```inference/nn```, including the ```interval.json``` files.
 
 ### Data
