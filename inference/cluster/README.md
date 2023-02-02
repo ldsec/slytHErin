@@ -1,6 +1,7 @@
 # What is this?
 We use a remote cluster to test the remote scenarios for Cryptonets and for ZAMA NN networks
 
+**the scripts assumes you are root on remote machines!**
 ## How to setup remote cluster environment
 - 0) First be sure to build the executable in the ```inference/``` directory
 with ```go build``` and that you have ```config.json``` in this folder

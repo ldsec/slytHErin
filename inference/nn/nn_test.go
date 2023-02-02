@@ -486,7 +486,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 	utils.ThrowErr(err)
 	master.MasterSetup(partiesAddr, parties, skShares, pkP)
 
-	Btp := distributed.NewDistributedBootstrapper(master, poolSize)
+	Btp := distributed.NewDistributedBootstrapper(master, minLevel)
 	//instantiate new he network
 	cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
 
