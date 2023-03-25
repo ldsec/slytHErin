@@ -78,6 +78,6 @@ func (l *NNLoader) Load(path string, initActivations network.Initiator) network.
 	return nn
 }
 
-func (nn *NN) NewNN(splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *NNHE {
-	return &NNHE{nn.NewHE(splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box).(*network.HENetwork)}
+func (nn *NN) NewNN(splits *cipherUtils.Split, encrypted, bootstrappable bool, maxLevel, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) *NNHE {
+	return &NNHE{nn.NewHE(splits, encrypted, bootstrappable, maxLevel, minLevel, btpCapacity, Bootstrapper, poolsize, Box).(*network.HENetwork)}
 }

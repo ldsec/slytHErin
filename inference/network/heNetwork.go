@@ -60,7 +60,7 @@ type HENetwork struct {
 
 // Creates a new network for he inference
 // Needs splits of input and weights and loaded network from json
-func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
+func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootstrappable bool, maxLevel, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
 	if !network.IsInit() {
 		panic("Netowrk in clear is not initialized")
 	}
@@ -92,7 +92,6 @@ func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootst
 		hen.Bootstrapper = Bootstrapper
 	}
 
-	maxLevel := Box.Params.MaxLevel()
 	level := maxLevel
 
 	if encrypted {
@@ -297,7 +296,8 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		tmpBlocks, err := plainUtils.PartitionMatrix(&tmp, res.RowP, res.ColP)
 		utils.ThrowErr(err)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
-		fmt.Printf("Multiplication layer %d\n ^^^", i+1)
+		fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^")
+		fmt.Printf("Multiplication layer %d\n", i+1)
 
 		n.Adder.AddBias(res, n.Bias[i], n.Box)
 
@@ -305,7 +305,8 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		tmp2.Add(&tmp, b[i])
 		tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
-		fmt.Printf("Bias layer %d\n ^^^", i+1)
+		fmt.Println("^^^^^^^^^^^^^^")
+		fmt.Printf("Bias layer %d\n", i+1)
 
 		level = res.Level()
 
@@ -322,11 +323,12 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 			activations[i].ActivatePlain(&tmp2)
 			tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
 			cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
+			fmt.Println("^^^^^^^^^^^^^^^^^^^^")
 			fmt.Printf("Activation layer %d\n", i+1)
 		}
 		*resClear = tmp2
 		level = res.Level()
-		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
+		fmt.Println("[*] Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, resClear, time.Since(start)
 }

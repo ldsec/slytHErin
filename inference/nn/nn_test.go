@@ -15,6 +15,7 @@ import (
 	"github.com/tuneinsight/lattigo/v3/ring"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	lattigoUtils "github.com/tuneinsight/lattigo/v3/utils"
+	"math"
 	"os"
 	"runtime"
 	"strconv"
@@ -562,9 +563,9 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 	utils.SetupDirectory()
 
-	var HETrain = false    //model trained with SGD, LSE and poly act (HE Friendly)
-	var layers = 50        //20 or 50
-	var debug = true       //set to true for debug mode -> currently it consumes too much memory
+	var HETrain = true     //model trained with SGD, LSE and poly act (HE Friendly)
+	var layers = 20        //20 or 50
+	var debug = false      //set to true for debug mode
 	var multiThread = true //set to true to enable multiple threads
 
 	suffix := "_poly"
@@ -578,6 +579,7 @@ func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 
 	params := paramsLogN16
 	btpParams := btpParamsLogN16
+	maxLevel, btpCapacity := 9, 9 //param dependent
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
@@ -608,7 +610,7 @@ func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 	var cne network.HENetworkI
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Creating rotation keys...")
-		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, false, true, maxLevel, 0, btpCapacity, Btp, poolSize, Box)
 		cne.GetRotations(params, &btpParams)
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
@@ -616,7 +618,7 @@ func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 	} else {
 		fmt.Println("Reading keys from disk")
 		Box = cipherUtils.DeserealizeBox(path, params, &btpParams, true)
-		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, false, true, maxLevel, 0, btpCapacity, Btp, poolSize, Box)
 	}
 
 	fmt.Println("Encoded NN...")
@@ -638,7 +640,7 @@ func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 			//dataset completed
 			break
 		}
-		Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
+		Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, maxLevel, params.DefaultScale(), Box)
 		utils.ThrowErr(err)
 		cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
 
@@ -650,7 +652,7 @@ func TestNN20_ModelPt_CentralBtp(t *testing.T) {
 			fmt.Println("Accuracy HE: ", accuracy)
 			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		} else {
-			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 3.0)
+			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, math.Pow(2.0, 63.0))
 			fmt.Println("End", end)
 			resClear := cipherUtils.DecInput(resHE, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
@@ -691,6 +693,7 @@ func TestNN20_ModelPt_DistrBtp(t *testing.T) {
 	nn := loader.Load(path, InitActivations)
 
 	params := paramsLogN15_NN20
+	maxLevel, btpCapacity := params.MaxLevel(), params.MaxLevel()
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
@@ -792,7 +795,7 @@ func TestNN20_ModelPt_DistrBtp(t *testing.T) {
 
 		//we define a new bootstrapper. This one is distributed, i.e will invoke distributed bootstrapping
 		Btp := distributed.NewDistributedBootstrapper(master, poolSize)
-		cne := nn.NewHE(splits, false, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
+		cne := nn.NewHE(splits, false, true, maxLevel, minLevel, btpCapacity, Btp, poolSize, Box)
 
 		fmt.Println("Encryped NN...")
 
@@ -882,6 +885,7 @@ func TestNN20_ModelCt_DistrBtp(t *testing.T) {
 	nn := loader.Load(path, InitActivations)
 
 	params := paramsLogN15_NN20
+	maxLevel, btpCapacity := params.MaxLevel(), params.MaxLevel()
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
@@ -982,7 +986,7 @@ func TestNN20_ModelCt_DistrBtp(t *testing.T) {
 
 		//we define a new bootstrapper. This one is distributed, i.e will invoke distributed bootstrapping
 		Btp := distributed.NewDistributedBootstrapper(master, poolSize)
-		cne := nn.NewHE(splits, true, true, minLevel, params.MaxLevel(), Btp, poolSize, Box)
+		cne := nn.NewHE(splits, true, true, maxLevel, minLevel, btpCapacity, Btp, poolSize, Box)
 
 		fmt.Println("Encryped NN...")
 
@@ -1073,6 +1077,7 @@ func TestNN20_ModelCt_DataPt(t *testing.T) {
 
 	params := paramsLogN16
 	btpParams := btpParamsLogN16
+	maxLevel, btpCapacity := 9, 9
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
@@ -1103,7 +1108,7 @@ func TestNN20_ModelCt_DataPt(t *testing.T) {
 	var cne network.HENetworkI
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Creating rotation keys...")
-		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, false, true, maxLevel, 0, btpCapacity, Btp, poolSize, Box)
 		cne.GetRotations(params, &btpParams)
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
@@ -1111,7 +1116,7 @@ func TestNN20_ModelCt_DataPt(t *testing.T) {
 	} else {
 		fmt.Println("Reading keys from disk")
 		Box = cipherUtils.DeserealizeBox(path, params, &btpParams, true)
-		cne = nn.NewHE(splits, true, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, true, true, maxLevel, 0, btpCapacity, Btp, poolSize, Box)
 	}
 
 	fmt.Println("Encoded NN...")

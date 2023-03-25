@@ -139,7 +139,7 @@ func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense)
 //decides the degree of approximation for each Param
 func SetDegOfParam(Params ApproxParams) ApproxParams {
 	ParamsNew := make([]ApproxParam, len(Params.Params))
-	margin := 2.0
+	margin := 1.0
 	for i, Param := range Params.Params {
 		Param.A = math.Floor(Param.A) - margin
 		Param.B = math.Floor(Param.B) + margin
@@ -154,9 +154,6 @@ func SetDegOfParam(Params ApproxParams) ApproxParams {
 			Param.Deg = 31
 		} else {
 			Param.Deg = 63
-			//if i == 1 { //layer 2
-			//	Param.Deg = 31
-			//}
 		}
 		fmt.Printf("Layer %d Approx: A = %f, B=%f --> deg = %d\n", i+1, Param.A, Param.B, Param.Deg)
 		ParamsNew[i] = Param

@@ -42,7 +42,7 @@ type NetworkI interface {
 	//computes how many levels are needed to complete the pipeline in he version
 	LevelsToComplete(currLayer int, afterMul bool) int
 	//Creates the HE version of this network
-	NewHE(splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI
+	NewHE(splits *cipherUtils.Split, encrypted, bootstrappable bool, maxLevel, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI
 }
 
 //NetworkJ wrapper for json struct
@@ -175,7 +175,7 @@ func (n *Network) IsInit() bool {
 	return n.batchSize != 0 && n.layers != nil && n.activations != nil
 }
 
-func (n *Network) NewHE(splits *cipherUtils.Split, encrypted, bootstrappable bool, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
-	nnhe := NewHENetwork(n, splits, encrypted, bootstrappable, minLevel, btpCapacity, Bootstrapper, poolsize, Box)
+func (n *Network) NewHE(splits *cipherUtils.Split, encrypted, bootstrappable bool, maxLevel, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI {
+	nnhe := NewHENetwork(n, splits, encrypted, bootstrappable, maxLevel, minLevel, btpCapacity, Bootstrapper, poolsize, Box)
 	return nnhe
 }
