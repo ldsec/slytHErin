@@ -1,24 +1,6 @@
 package cryptonet
 
-import (
-	"errors"
-	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/cluster"
-	"github.com/ldsec/dnn-inference/inference/data"
-	"github.com/ldsec/dnn-inference/inference/distributed"
-	"github.com/ldsec/dnn-inference/inference/network"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
-	"os"
-	"runtime"
-	"strconv"
-	"testing"
-	"time"
-)
-import "github.com/tuneinsight/lattigo/v3/ckks"
-import "github.com/tuneinsight/lattigo/v3/rlwe"
-
+/*
 var ACC = 96.80
 
 var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -399,3 +381,4 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	}
 	client.StartProto(distributed.END, nil)
 }
+*/

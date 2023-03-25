@@ -297,7 +297,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		tmpBlocks, err := plainUtils.PartitionMatrix(&tmp, res.RowP, res.ColP)
 		utils.ThrowErr(err)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
-		fmt.Printf("Multiplication layer %d\n", i+1)
+		fmt.Printf("Multiplication layer %d\n ^^^", i+1)
 
 		n.Adder.AddBias(res, n.Bias[i], n.Box)
 
@@ -305,7 +305,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 		tmp2.Add(&tmp, b[i])
 		tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
-		fmt.Printf("Bias layer %d\n", i+1)
+		fmt.Printf("Bias layer %d\n ^^^", i+1)
 
 		level = res.Level()
 

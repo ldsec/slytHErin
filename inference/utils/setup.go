@@ -20,6 +20,13 @@ func SetupDirectory() {
 		if err != nil {
 			log.Println(err)
 		}
+		fmt.Println("Key Directory : OK")
+
+		fmt.Println("Creating test data directory at " + os.ExpandEnv("$HOME/gef/test_data"))
+		err = os.Mkdir(os.ExpandEnv("$HOME/gef/test_data"), os.ModePerm)
+		if err != nil {
+			log.Println(err)
+		}
+		fmt.Println("Test Data Directory : OK")
 	}
-	fmt.Println("Key Directory : OK")
 }

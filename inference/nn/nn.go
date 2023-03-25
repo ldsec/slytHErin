@@ -28,6 +28,8 @@ type NNHE struct {
 	*network.HENetwork
 }
 
+var DEG = 63
+
 //Initialize activation function
 func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
 	layers := args[0].(int)

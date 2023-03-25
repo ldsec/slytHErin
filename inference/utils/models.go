@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"encoding/csv"
 	"fmt"
 	"github.com/ldsec/dnn-inference/inference/plainUtils"
 	"gonum.org/v1/gonum/mat"
+	"math"
+	"os"
 )
 
 /*
@@ -33,9 +36,9 @@ type Layer struct {
 type Stats struct {
 	Iters    int
 	Batch    int
-	Corrects int
-	Accuracy float64
-	Time     int64
+	Corrects []int
+	Accuracy []float64
+	Time     []int64 // Add slice to store time for each evaluation
 }
 
 func NewStats(batch int) Stats {
@@ -44,17 +47,127 @@ func NewStats(batch int) Stats {
 
 func (s *Stats) Accumulate(other Stats) {
 	s.Iters++
-	s.Corrects += other.Corrects
-	s.Accuracy += other.Accuracy
-	s.Time += other.Time
+	s.Corrects = append(s.Corrects, other.Corrects...)
+	s.Accuracy = append(s.Accuracy, other.Accuracy...)
+	s.Time = append(s.Time, other.Time...)
 }
 
-func (s *Stats) PrintResult() {
+func (s *Stats) PrintResult(filePath string) error {
 	fmt.Println("---------------------------------------------------------------------------------")
 	fmt.Println("[!] Results: ")
-	fmt.Printf("Accuracy: %f\n", s.Accuracy/float64(s.Iters))
+	fmt.Println("Accuracy:")
+	fmt.Println(s.Accuracy)
+	avgAcc := calculateAverage(toInterfaceSliceFloat64(s.Accuracy))
+	fmt.Printf("Avg Accuracy: %f", avgAcc)
 	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects, s.Iters*s.Batch)
-	fmt.Printf("Avg Time for Eval: %f\n ms", float64(s.Time)/float64(s.Iters))
+	avgTime, stdTime := calculateAverage(toInterfaceSliceInt64(s.Time)), calculateStdDev(toInterfaceSliceInt64(s.Time))
+	fmt.Printf("Avg Time for Eval: %f ms (+/- %f ms)\n", avgTime, stdTime)
+
+	if filePath == "" {
+		return nil
+	}
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Write the results to the file
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write the header row
+	header := []string{"Batch", "Total", "Accuracy", "Corrects", "Time", "StdDev"}
+	writer.Write(header)
+
+	// Write the data row
+	totCorrects := 0
+	for i := 0; i < len(s.Time); i++ {
+		data := []string{
+			fmt.Sprintf("%d", s.Batch),
+			fmt.Sprintf("%d", s.Iters*s.Batch),
+			fmt.Sprintf("%f", s.Accuracy[i]),
+			fmt.Sprintf("%d", s.Corrects[i]),
+			fmt.Sprintf("%f", s.Time[i]),
+			fmt.Sprintf("%f", 0.0),
+		}
+		totCorrects += s.Corrects[i]
+		writer.Write(data)
+	}
+	data := []string{
+		fmt.Sprintf("%d", s.Batch),
+		fmt.Sprintf("%d", s.Iters*s.Batch),
+		fmt.Sprintf("%f", avgAcc),
+		fmt.Sprintf("%d", totCorrects),
+		fmt.Sprintf("%f", avgTime),
+		fmt.Sprintf("%f", stdTime),
+	}
+	writer.Write(data)
+
+	return nil
+}
+
+func toInterfaceSliceFloat64(slice []float64) []interface{} {
+	interfaceSlice := make([]interface{}, len(slice))
+	for i, v := range slice {
+		interfaceSlice[i] = v
+	}
+	return interfaceSlice
+}
+
+func toInterfaceSliceInt64(slice []int64) []interface{} {
+	interfaceSlice := make([]interface{}, len(slice))
+	for i, v := range slice {
+		interfaceSlice[i] = v
+	}
+	return interfaceSlice
+}
+
+func toInterfaceSliceInt(slice []int) []interface{} {
+	interfaceSlice := make([]interface{}, len(slice))
+	for i, v := range slice {
+		interfaceSlice[i] = v
+	}
+	return interfaceSlice
+}
+
+func calculateAverage(values []interface{}) float64 {
+	sum := 0.0
+	for _, v := range values {
+		switch value := v.(type) {
+		case int:
+			sum += float64(value)
+		case int64:
+			sum += float64(value)
+		case float64:
+			sum += value
+		}
+	}
+	return sum / float64(len(values))
+}
+
+func calculateStdDev(values []interface{}) float64 {
+	n := len(values)
+	if n < 2 {
+		return 0.0
+	}
+	mean := calculateAverage(values)
+	sum := 0.0
+	for _, v := range values {
+		switch value := v.(type) {
+		case int:
+			diff := float64(value) - mean
+			sum += diff * diff
+		case int64:
+			diff := float64(value) - mean
+			sum += diff * diff
+		case float64:
+			diff := value - mean
+			sum += diff * diff
+		}
+	}
+	variance := sum / float64(n-1)
+	return math.Sqrt(variance)
 }
 
 // Returns weight and bias of layer

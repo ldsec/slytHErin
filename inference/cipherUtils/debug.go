@@ -89,6 +89,7 @@ func PrintDebugBlocks(Xenc *EncInput, Pt *plainUtils.BMatrix, thresh float64, Bo
 		}
 	}
 	fmt.Println(precStats.String())
+	fmt.Println("Level:", Xenc.Level())
 	fmt.Println("Distance:", dist)
 	fmt.Println("Max Test:", maxTest)
 	fmt.Println("Max Test:", maxWant)

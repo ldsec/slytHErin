@@ -154,9 +154,9 @@ func SetDegOfParam(Params ApproxParams) ApproxParams {
 			Param.Deg = 31
 		} else {
 			Param.Deg = 63
-			if i == 1 { //layer 2
-				Param.Deg = 31
-			}
+			//if i == 1 { //layer 2
+			//	Param.Deg = 31
+			//}
 		}
 		fmt.Printf("Layer %d Approx: A = %f, B=%f --> deg = %d\n", i+1, Param.A, Param.B, Param.Deg)
 		ParamsNew[i] = Param
