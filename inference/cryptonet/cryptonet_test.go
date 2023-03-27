@@ -1,6 +1,24 @@
 package cryptonet
 
-/*
+import (
+	"errors"
+	"fmt"
+	"github.com/ldsec/dnn-inference/inference/cipherUtils"
+	"github.com/ldsec/dnn-inference/inference/cluster"
+	"github.com/ldsec/dnn-inference/inference/data"
+	"github.com/ldsec/dnn-inference/inference/distributed"
+	"github.com/ldsec/dnn-inference/inference/network"
+	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/tuneinsight/lattigo/v3/ckks"
+	"github.com/tuneinsight/lattigo/v3/rlwe"
+	"os"
+	"runtime"
+	"strconv"
+	"testing"
+	"time"
+)
+
 var ACC = 96.80
 
 var paramsLogN15, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -32,7 +50,7 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 
 //EXPERIMENT 1 - Model in clear - data encrypted:
 //Querier sends encrypted data to server to get privacy preserving prediction
-func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
+func testCryptonet_EvalBatchEncrypted(t *testing.T, batch int) {
 	utils.SetupDirectory()
 
 	var debug = false      //set to true for debug mode
@@ -56,7 +74,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 
 	//we define a new splitter providing all the information needed and we find how to split our model weights
 	//note that we pass -1 as inputRows to heuristically find the best batch size to evaluate
-	possibleSplits := cipherUtils.NewSplitter(-1, features, rows, cols, params).FindSplits()
+	possibleSplits := cipherUtils.NewSplitter(batch, features, rows, cols, params).FindSplits()
 	splitInfo, splitCode := possibleSplits.ExctractInfo()
 	batchSize := splitInfo.BatchSize
 	possibleSplits.Print()
@@ -76,13 +94,13 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
 		// and that is not encrypted (weights are in clear)
-		cne = cn.NewHE(possibleSplits, false, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, false, false, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 		cne.GetRotations(params, nil)
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
 	} else {
 		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
-		cne = cn.NewHE(possibleSplits, false, true, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, false, true, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 	}
 	fmt.Println("Encoded Cryptonet...")
 
@@ -95,7 +113,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 	resultExp := utils.NewStats(batchSize)
 
 	iters := 0
-	maxIters := 15
+	maxIters := 5
 
 	Box = cne.GetBox()
 
@@ -119,7 +137,7 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 			resClear := cipherUtils.DecInput(resHE, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		} else {
 			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, cn, 1.0)
 			fmt.Println("End", end)
@@ -127,18 +145,18 @@ func TestCryptonet_EvalBatchEncrypted(t *testing.T) {
 			utils.Predict(Y, 10, resClear)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
 			fmt.Println("Accuracy Expected: ", accuracy)
-			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			resultExp.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		}
 		iters++
 	}
-	result.PrintResult()
+	result.PrintResult(os.ExpandEnv(fmt.Sprintf("$HOME/gef/data/cryptonet_batch%d.csv", batchSize)))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")
-		resultExp.PrintResult()
+		resultExp.PrintResult("")
 	}
 }
 
@@ -181,13 +199,13 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
 		// and that is not encrypted (weights are in clear)
-		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, true, false, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 		cne.GetRotations(params, nil)
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
 	} else {
 		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
-		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, true, false, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 	}
 	//note that this time the network is encrypted!
 	fmt.Println("Encrypted Cryptonet...")
@@ -235,7 +253,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		} else {
 			start := time.Now()
 			resHE, resExp, _ := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
@@ -246,18 +264,18 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
 			fmt.Println("Accuracy Expected: ", accuracy)
-			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			resultExp.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		}
 		iters++
 	}
-	result.PrintResult()
+	result.PrintResult(os.ExpandEnv("$HOME/gef/data/cryptonet_modelct_datapt.csv"))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")
-		resultExp.PrintResult()
+		resultExp.PrintResult("")
 	}
 }
 
@@ -300,14 +318,14 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		// finally we define our network. Note that this network does not support bootstrapping (we don't need it)
 		// and that is not encrypted (weights are in clear)
-		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, true, false, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 		cne.GetRotations(params, nil)
 
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
 	} else {
 		Box = cipherUtils.DeserealizeBox(path, params, nil, false)
-		cne = cn.NewHE(possibleSplits, true, false, 0, params.MaxLevel(), nil, poolSize, Box)
+		cne = cn.NewHE(possibleSplits, true, false, params.MaxLevel(), 0, params.MaxLevel(), nil, poolSize, Box)
 	}
 	//note that this time the network is encrypted!
 	fmt.Println("Encrypted Cryptonet...")
@@ -355,7 +373,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		} else {
 			start := time.Now()
 			resHE, resExp, _ := cne.EvalDebug(Xp, Xbatch, cn, 1.0)
@@ -366,19 +384,38 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 			resClear := cipherUtils.DecodeInput(resMasked, Box)
 			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
 			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			result.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
 			fmt.Println("Accuracy Expected: ", accuracy)
-			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			resultExp.Accumulate(utils.Stats{Corrects: []int{corrects}, Accuracy: []float64{accuracy}, Time: []int64{end.Milliseconds()}})
 		}
 		iters++
 	}
-	result.PrintResult()
+	result.PrintResult(os.ExpandEnv("$HOME/gef/data/cryptonet_modelct_datapt_cluster.csv"))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")
-		resultExp.PrintResult()
+		resultExp.PrintResult("")
 	}
 	client.StartProto(distributed.END, nil)
 }
-*/
+
+func TestFlexibleBatch(t *testing.T) {
+	tests := []struct {
+		batch int
+	}{
+		{1},
+		{32},
+		{64},
+		{-1},
+		{256 % 83}, //divide batch by optimal batch size and then process the remaining uncomplete batch at the end. Tot will be be time(83) x math.Floor(batch/83) + time of experiment
+		{1024 % 83},
+		{2048 % 83},
+		{4096 % 83},
+	}
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("Flexible batch %d", tc.batch), func(t *testing.T) {
+			testCryptonet_EvalBatchEncrypted(t, tc.batch)
+		})
+	}
+}

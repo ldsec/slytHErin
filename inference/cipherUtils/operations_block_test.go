@@ -131,15 +131,28 @@ func TestMultiplier_Multiply(t *testing.T) {
 }
 
 func TestAdder_AddBias(t *testing.T) {
-	X := pU.RandMatrix(64, 64)
-	B := pU.RandMatrix(64, 64)
-	params, _ := ckks.NewParametersFromLiteral(ckks.PN14QP438)
-
+	X := pU.RandMatrix(512, 512)
+	B := pU.RandMatrix(512, 512)
+	params, _ := ckks.NewParametersFromLiteral(bootstrapping.N16QP1546H192H32.SchemeParams)
+	maxLevel := 9
 	Box := NewBox(params)
 
-	t.Run("Test/Add", func(t *testing.T) {
-		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+	t.Run("Test/AddC2P", func(t *testing.T) {
+		Xenc, _ := NewEncInput(X, 8, 8, maxLevel, params.DefaultScale(), Box)
+		Bpt, _ := NewPlainInput(B, 8, 8, maxLevel, params.DefaultScale(), Box)
+		Ad := NewAdder(1)
+		start := time.Now()
+		Ad.AddBias(Xenc, Bpt, Box)
+		fmt.Println("Done: ", time.Since(start))
+
+		var res mat.Dense
+		res.Add(X, B)
+		resPt, _ := pU.PartitionMatrix(&res, Xenc.RowP, Xenc.ColP)
+		PrintDebugBlocks(Xenc, resPt, 0.01, Box)
+	})
+	t.Run("Test/AddC2C", func(t *testing.T) {
+		Xenc, _ := NewEncInput(X, 8, 8, maxLevel, params.DefaultScale(), Box)
+		Bpt, _ := NewEncInput(B, 8, 8, maxLevel, params.DefaultScale(), Box)
 		Ad := NewAdder(1)
 		start := time.Now()
 		Ad.AddBias(Xenc, Bpt, Box)
@@ -152,8 +165,8 @@ func TestAdder_AddBias(t *testing.T) {
 	})
 	t.Run("Test/Add/Multitrehad", func(t *testing.T) {
 		fmt.Println("Running on:", runtime.NumCPU(), "logical CPUs")
-		Xenc, _ := NewEncInput(X, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
-		Bpt, _ := NewPlainInput(B, 4, 4, params.MaxLevel(), params.DefaultScale(), Box)
+		Xenc, _ := NewEncInput(X, 8, 8, maxLevel, params.DefaultScale(), Box)
+		Bpt, _ := NewPlainInput(B, 8, 8, maxLevel, params.DefaultScale(), Box)
 		Ad := NewAdder(runtime.NumCPU())
 		start := time.Now()
 		Ad.AddBias(Xenc, Bpt, Box)

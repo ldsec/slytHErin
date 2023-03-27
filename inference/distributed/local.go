@@ -346,7 +346,7 @@ func (lmst *LocalMaster) RunEnd() {
 
 	// send message and close
 	for i := 1; i < lmst.Parties; i++ {
-		//fmt.Printf("[*] Master -- Sending end to %d. \n\n", i)
+		fmt.Printf("[*] Master -- Sending end to %d. \n\n", i)
 		addr := lmst.PartiesAddr[i]
 		c, err := net.DialTCP("tcp", nil, addr)
 		utils.ThrowErr(err)
@@ -441,6 +441,7 @@ func (lp *LocalPlayer) Listen() {
 		c, err := lp.Conn.Accept()
 		if err != nil {
 			//player is ending
+			fmt.Printf("[+] Player %d ended\n\n", lp.Id)
 			return
 		}
 		//fmt.Printf("[+] Player %d accepted connection\n\n", lp.Id)
@@ -455,7 +456,7 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 		netData, err := ReadFrom(c)
 		if err == io.EOF {
 			c.Close()
-			break
+			return
 		}
 
 		utils.ThrowErr(err)
@@ -535,11 +536,10 @@ func (lp *LocalPlayer) RunRefresh(c net.Conn, msg ProtocolMsg) {
 	fmt.Printf("[+] Player %d -- Sending Share (%d B) Refresh ID: %d to master. Checksum: %x \n\n", lp.Id, len(dat), msg.Id, sum)
 	err = WriteTo(c, dat)
 	utils.ThrowErr(err)
-	utils.ThrowErr(err)
 }
 
 func (lp *LocalPlayer) End(c net.Conn) {
-	//fmt.Printf("[+] Player %d terminating!\n\n", lp.Id)
+	fmt.Printf("[+] Player %d terminating!\n\n", lp.Id)
 	c.Close()
 	lp.Conn.Close()
 	return

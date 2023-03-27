@@ -7,6 +7,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"math"
 	"os"
+	"path/filepath"
 )
 
 /*
@@ -54,55 +55,74 @@ func (s *Stats) Accumulate(other Stats) {
 
 func (s *Stats) PrintResult(filePath string) error {
 	fmt.Println("---------------------------------------------------------------------------------")
-	fmt.Println("[!] Results: ")
-	fmt.Println("Accuracy:")
-	fmt.Println(s.Accuracy)
-	avgAcc := calculateAverage(toInterfaceSliceFloat64(s.Accuracy))
-	fmt.Printf("Avg Accuracy: %f", avgAcc)
-	fmt.Printf("Corrects / tot: %d / %d \n", s.Corrects, s.Iters*s.Batch)
-	avgTime, stdTime := calculateAverage(toInterfaceSliceInt64(s.Time)), calculateStdDev(toInterfaceSliceInt64(s.Time))
-	fmt.Printf("Avg Time for Eval: %f ms (+/- %f ms)\n", avgTime, stdTime)
+	if filePath != "" {
+		// Check if the file exists, and create it if it doesn't
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm)
+			if err != nil {
+				return err
+			}
+			file, err := os.Create(filePath)
+			if err != nil {
+				return err
+			}
+			file.Close()
+		}
 
-	if filePath == "" {
-		return nil
-	}
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+		// Open the file for writing
+		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
 
-	// Write the results to the file
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
+		// Write the results to the file
+		writer := csv.NewWriter(file)
+		defer writer.Flush()
 
-	// Write the header row
-	header := []string{"Batch", "Total", "Accuracy", "Corrects", "Time", "StdDev"}
-	writer.Write(header)
+		// Write the header row
+		header := []string{"Batch", "Total", "Accuracy", "Corrects", "Time", "StdDev"}
+		writer.Write(header)
 
-	// Write the data row
-	totCorrects := 0
-	for i := 0; i < len(s.Time); i++ {
+		// Write the data row
+		totCorrects := 0
+		for i := 0; i < len(s.Time); i++ {
+			data := []string{
+				fmt.Sprintf("%d", s.Batch),
+				fmt.Sprintf("%d", s.Iters*s.Batch),
+				fmt.Sprintf("%f", s.Accuracy[i]),
+				fmt.Sprintf("%d", s.Corrects[i]),
+				fmt.Sprintf("%d", s.Time[i]),
+				fmt.Sprintf("%f", 0.0),
+			}
+			totCorrects += s.Corrects[i]
+			writer.Write(data)
+		}
+		avgAcc := calculateAverage(toInterfaceSliceFloat64(s.Accuracy))
+		avgTime, stdTime := calculateAverage(toInterfaceSliceInt64(s.Time)), calculateStdDev(toInterfaceSliceInt64(s.Time))
+
 		data := []string{
 			fmt.Sprintf("%d", s.Batch),
 			fmt.Sprintf("%d", s.Iters*s.Batch),
-			fmt.Sprintf("%f", s.Accuracy[i]),
-			fmt.Sprintf("%d", s.Corrects[i]),
-			fmt.Sprintf("%f", s.Time[i]),
-			fmt.Sprintf("%f", 0.0),
+			fmt.Sprintf("%f", avgAcc),
+			fmt.Sprintf("%d", totCorrects),
+			fmt.Sprintf("%f", avgTime),
+			fmt.Sprintf("%f", stdTime),
 		}
-		totCorrects += s.Corrects[i]
 		writer.Write(data)
 	}
-	data := []string{
-		fmt.Sprintf("%d", s.Batch),
-		fmt.Sprintf("%d", s.Iters*s.Batch),
-		fmt.Sprintf("%f", avgAcc),
-		fmt.Sprintf("%d", totCorrects),
-		fmt.Sprintf("%f", avgTime),
-		fmt.Sprintf("%f", stdTime),
+	avgAcc := calculateAverage(toInterfaceSliceFloat64(s.Accuracy))
+	avgTime, stdTime := calculateAverage(toInterfaceSliceInt64(s.Time)), calculateStdDev(toInterfaceSliceInt64(s.Time))
+	totCorrects := 0
+	for i := 0; i < len(s.Time); i++ {
+		totCorrects += s.Corrects[i]
 	}
-	writer.Write(data)
+	fmt.Println("[!] Results: ")
+	fmt.Println("Accuracy:")
+	fmt.Println(s.Accuracy)
+	fmt.Printf("Avg Accuracy: %f\n", avgAcc)
+	fmt.Printf("Corrects / tot: %d / %d\n", totCorrects, s.Iters*s.Batch)
+	fmt.Printf("Avg Time for Eval: %f ms (+/- %f ms)\n", avgTime, stdTime)
 
 	return nil
 }

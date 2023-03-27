@@ -17,7 +17,7 @@ import (
 )
 
 func TestBootstrapDistributed(t *testing.T) {
-	PARTIES := []int{10}
+	PARTIES := []int{3, 5, 10}
 	paramsCentralized, _ := ckks.NewParametersFromLiteral(bootstrapping.N15QP768H192H32.SchemeParams)
 	paramsOptimized, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN:         14,
@@ -78,7 +78,7 @@ func TestBootstrapDistributed(t *testing.T) {
 			fmt.Printf("Test: parties %d, params %d\n\n", parties, params.LogN())
 			fmt.Println("End: ", time.Since(start).Seconds())
 			master.StartProto(END, nil, nil, 0, Box)
-			time.Sleep(1000 * time.Millisecond) //wait for stop
+			time.Sleep(5000 * time.Millisecond) //wait for stop
 		}
 	}
 }

@@ -95,9 +95,9 @@ func NewHENetwork(network NetworkI, splits *cipherUtils.Split, encrypted, bootst
 	level := maxLevel
 
 	if encrypted {
-		fmt.Println("Creating weights encrypted block matrices...")
+		fmt.Println("Creating encrypted weights block matrices...")
 	} else {
-		fmt.Println("Creating weights encoded block matrices...")
+		fmt.Println("Creating encoded weights block matrices...")
 	}
 
 	var err error
@@ -247,13 +247,15 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 			if !n.Bootstrappable {
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
+			//fmt.Println("Bootstrapping...")
 			n.Bootstrapper.Bootstrap(res, n.Box)
+			//fmt.Println("Done")
 		}
 
 		n.Activator.ActivateBlocks(res, i, n.Box)
 
 		level = res.Level()
-		fmt.Println("Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
+		fmt.Println("[*] Layer", i+1, "-Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, time.Since(start)
 }
@@ -282,31 +284,35 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
 			fmt.Println("Bootstrapping...")
+			tBtp := time.Now()
 			n.Bootstrapper.Bootstrap(res, n.Box)
+			fmt.Println("Done. Time: ", time.Since(tBtp).Milliseconds())
 		}
-
+		tMul := time.Now()
 		if i == 0 {
 			res = n.Multiplier.Multiply(Xenc, n.Weights[i], false, n.Box)
 		} else {
 			res = n.Multiplier.Multiply(res, n.Weights[i], true, n.Box)
 		}
-
+		eMul := time.Since(tMul).Milliseconds()
 		var tmp mat.Dense
 		tmp.Mul(resClear, w[i])
 		tmpBlocks, err := plainUtils.PartitionMatrix(&tmp, res.RowP, res.ColP)
 		utils.ThrowErr(err)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
 		fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^")
-		fmt.Printf("Multiplication layer %d\n", i+1)
+		fmt.Printf("Multiplication layer %d. Time: %d\n", i+1, eMul)
 
+		tBias := time.Now()
 		n.Adder.AddBias(res, n.Bias[i], n.Box)
+		eBias := time.Since(tBias).Milliseconds()
 
 		var tmp2 mat.Dense
 		tmp2.Add(&tmp, b[i])
 		tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
 		cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
 		fmt.Println("^^^^^^^^^^^^^^")
-		fmt.Printf("Bias layer %d\n", i+1)
+		fmt.Printf("Bias layer %d. Time %d\n", i+1, eBias)
 
 		level = res.Level()
 
@@ -315,20 +321,23 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 				panic(errors.New("Needs Bootstrapping but not bootstrappable"))
 			}
 			fmt.Println("Bootstrapping...")
+			tBtp := time.Now()
 			n.Bootstrapper.Bootstrap(res, n.Box)
+			fmt.Println("Done. Time: ", time.Since(tBtp).Milliseconds())
 		}
-
+		tAct := time.Now()
 		n.Activator.ActivateBlocks(res, i, n.Box)
+		eAct := time.Since(tAct).Milliseconds()
 		if i < network.GetNumOfActivations() {
 			activations[i].ActivatePlain(&tmp2)
 			tmpBlocks, err = plainUtils.PartitionMatrix(&tmp2, res.RowP, res.ColP)
 			cipherUtils.PrintDebugBlocks(res, tmpBlocks, L1thresh, n.Box)
 			fmt.Println("^^^^^^^^^^^^^^^^^^^^")
-			fmt.Printf("Activation layer %d\n", i+1)
+			fmt.Printf("Activation layer %d. Time: %d\n", i+1, eAct)
 		}
 		*resClear = tmp2
 		level = res.Level()
-		fmt.Println("[*] Layer", i+1, " Duration ms:", time.Since(layerStart).Milliseconds())
+		fmt.Println("[*] Layer", i+1, "-Duration ms:", time.Since(layerStart).Milliseconds())
 	}
 	return res, resClear, time.Since(start)
 }
