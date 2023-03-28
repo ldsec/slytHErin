@@ -4,12 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Define the batch values we're interested in
-batch_values = [1, 32, 64, 83, 256, 1024, 2048, 4096]
+batch_values = [1, 32, 64, 83] #256, 1024, 2048, 4096]
 
 # Loop over the batch values
 x_values = []
-y_values = []
+latency = []
 y_errors = []
+amort = []
 
 optimal_batch_time = 0
 file_name = f'cryptonet_batch{83}.csv'
@@ -44,6 +45,7 @@ for x in batch_values:
     time = last_row['Time'].iloc[0] / 1000.0
     if x == 83:
         optimal_batch_time = time
+        #continue
 
     # If the batch value in the CSV file doesn't match x, adjust the time value
     batch = last_row['Batch'].iloc[0]
@@ -55,20 +57,25 @@ for x in batch_values:
 
     # Append the x and y values to the lists we'll use for plotting
     x_values.append(x)
-    y_values.append(time)
+    latency.append(time)
+    amort.append(time/batch)
     y_errors.append(last_row['StdDev'].iloc[0] / 1000.0)
 
 # Plot the results
-#plt.errorbar(x_values, y_values, yerr=y_errors, elinewidth=2, fmt='o', color="blue")
-plt.plot(x_values, y_values, linewidth=2, color="green", marker="o", linestyle="-.", zorder=0)
-for i,y in enumerate(y_values):
+plt.plot(x_values, latency, linewidth=2, color="blue", marker="o", linestyle="-.", zorder=0, label="Latency(s)")
+plt.plot(x_values, amort, linewidth=2, color="red", marker="s", label="Amortized(s/sample)")
+for i,y in enumerate(latency):
     j = 1
     if i == 2:
         j = 0.5
-    plt.text(x_values[i], y + 2*j, f"{y:.2f}", color="black", ha="center", zorder=1)
+    plt.text(x_values[i], y-.6, f"{y:.2f}", color="blue", ha="center", zorder=1)
+    plt.text(x_values[i], amort[i]+.6, f"{amort[i]:.2f}", color="red", ha="center", zorder=1)
+plt.errorbar(x_values, latency, yerr=y_errors, elinewidth=2, fmt='o', color="blue", zorder=0)
+
 plt.xticks(x_values)
-plt.xscale("log")
-plt.yscale("log")
+plt.legend()
+#plt.xscale("log")
+#plt.yscale("log")
 plt.xlabel("Batch")
-plt.ylabel("Time(s)")
-plt.savefig("flexible_batch.png")
+plt.ylabel("Seconds")
+plt.savefig("little_batch.png")

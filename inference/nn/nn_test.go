@@ -72,11 +72,11 @@ var btpParamsLogN16 = bootstrapping.N16QP1546H192H32.BootstrappingParams
 func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	utils.SetupDirectory()
 
-	var HETrain = false    //model trained with HE SGD, LSE and poly act (HE Friendly)
-	var layers = 50        //20 or 50
-	var debug = false      //set to true for debug mode -> currently it consumes too much memory
+	var HETrain = true     //model trained with HE SGD, LSE and poly act (HE Friendly)
+	var layers = 20        //20 or 50
+	var debug = true       //set to true for debug mode -> currently it consumes too much memory
 	var multiThread = true //set to true to enable multiple threads
-
+	var encrypted = true
 	suffix := "_poly"
 	if !HETrain {
 		suffix = ""
@@ -118,18 +118,20 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	var cne network.HENetworkI
 	if _, err := os.Stat(os.ExpandEnv(path + "_sk")); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Creating rotation keys...")
-		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, encrypted, true, 0, 9, Btp, poolSize, Box)
 		cne.GetRotations(params, &btpParams)
 		fmt.Println("Created rotation keys...")
 		cipherUtils.SerializeBox(path, cne.GetBox())
 	} else {
 		fmt.Println("Reading keys from disk")
 		Box = cipherUtils.DeserealizeBox(path, params, &btpParams, true)
-		cne = nn.NewHE(splits, false, true, 0, 9, Btp, poolSize, Box)
+		cne = nn.NewHE(splits, encrypted, true, 0, 9, Btp, poolSize, Box)
 	}
-
-	fmt.Println("Encoded NN...")
-
+	if !encrypted {
+		fmt.Println("Encoded NN...")
+	} else {
+		fmt.Println("Encrypted NN...")
+	}
 	datacn := data.LoadData("nn_data.json")
 	err := datacn.Init(batchSize)
 	utils.ThrowErr(err)
@@ -139,38 +141,89 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 
 	iters := 0
 	maxIters := 5
+	if !encrypted {
+		for true {
+			X, Y, err := datacn.Batch()
+			Xbatch := plainUtils.NewDense(X)
+			if err != nil || iters >= maxIters {
+				//dataset completed
+				break
+			}
+			Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
+			utils.ThrowErr(err)
+			cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
 
-	for true {
-		X, Y, err := datacn.Batch()
-		Xbatch := plainUtils.NewDense(X)
-		if err != nil || iters >= maxIters {
-			//dataset completed
-			break
+			if !debug {
+				resHE, end := cne.Eval(Xenc)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+
+			} else {
+				resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 2.0)
+				fmt.Println("End", end)
+				resClear := cipherUtils.DecInput(resHE, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				fmt.Println("Accuracy Expected: ", accuracy)
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			}
+			iters++
 		}
-		Xenc, err := cipherUtils.NewEncInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
+	} else {
+		BoxServer := cne.GetBox()
+		BoxClient := cipherUtils.NewBox(params)
+		//start server with decryption oracle
+		serverAddr := "127.0.0.1:8001"
+		client, err := distributed.NewClient(serverAddr, BoxClient, poolSize, true)
 		utils.ThrowErr(err)
-		cipherUtils.PrepackBlocks(Xenc, splitInfo.ColsOfWeights[0], Box)
+		server, err := distributed.NewServer(BoxServer, serverAddr, true)
+		go server.Listen()
+		utils.ThrowErr(err)
 
-		if !debug {
-			resHE, end := cne.Eval(Xenc)
-			fmt.Println("End", end)
-			resClear := cipherUtils.DecInput(resHE, Box)
-			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
-			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+		for true {
+			X, Y, err := datacn.Batch()
+			Xbatch := plainUtils.NewDense(X)
+			if err != nil || iters >= maxIters {
+				//dataset completed
+				break
+			}
+			Xp, err := cipherUtils.NewPlainInput(Xbatch, splitInfo.InputRowP, splitInfo.InputColP, params.MaxLevel(), params.DefaultScale(), Box)
+			utils.ThrowErr(err)
+			cipherUtils.PrepackBlocks(Xp, splitInfo.ColsOfWeights[0], Box)
 
-		} else {
-			resHE, resExp, end := cne.EvalDebug(Xenc, Xbatch, nn, 2.0)
-			fmt.Println("End", end)
-			resClear := cipherUtils.DecInput(resHE, Box)
-			corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
-			fmt.Println("Accuracy HE: ", accuracy)
-			result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
-			corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
-			fmt.Println("Accuracy Expected: ", accuracy)
-			resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			if !debug {
+				start := time.Now()
+				resHE, _ := cne.Eval(Xp)
+				resMasked := client.StartProto(distributed.MASKING, resHE)
+				end := time.Since(start)
+				fmt.Println("End ", end)
+
+				resClear := cipherUtils.DecodeInput(resMasked, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			} else {
+				start := time.Now()
+				resHE, resExp, _ := cne.EvalDebug(Xp, Xbatch, nn, 1.0)
+				resMasked := client.StartProto(distributed.MASKING, resHE)
+				end := time.Since(start)
+				fmt.Println("End ", end)
+
+				resClear := cipherUtils.DecodeInput(resMasked, Box)
+				corrects, accuracy, _ := utils.Predict(Y, 10, resClear)
+				fmt.Println("Accuracy HE: ", accuracy)
+				result.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+				corrects, accuracy, _ = utils.Predict(Y, 10, plainUtils.MatToArray(resExp))
+				fmt.Println("Accuracy Expected: ", accuracy)
+				resultExp.Accumulate(utils.Stats{Corrects: corrects, Accuracy: accuracy, Time: end.Milliseconds()})
+			}
+			iters++
 		}
-		iters++
 	}
 	result.PrintResult()
 	if debug {
@@ -578,7 +631,7 @@ func testCentralBtp(t *testing.T, name string, layers int, encrypted, HETrain, d
 
 	features := 28 * 28
 	rows, cols := nn.GetDimentions()
-	splitter := cipherUtils.NewSplitter(-1, features, rows, cols, params)
+	splitter := cipherUtils.NewSplitter(1, features, rows, cols, params)
 	splits := splitter.FindSplits()
 	splits.Print()
 
@@ -626,7 +679,7 @@ func testCentralBtp(t *testing.T, name string, layers int, encrypted, HETrain, d
 	resultExp := utils.NewStats(batchSize)
 
 	iters := 0
-	maxIters := 1
+	maxIters := 3
 	if !encrypted {
 		for true {
 			X, Y, err := datacn.Batch()
@@ -923,10 +976,10 @@ func Test_CentralizedBtp(t *testing.T) {
 		debug       bool //allow debug statements (takes more time)
 		multithread bool //allow concurrency
 	}{
-		{"nn20_modelpt_centrbtp", 20, false, true, true, true},
-		{"nn20_modelct_datapt", 20, true, true, true, true},
-		//{"nn50_modelpt_centrbtp", 50, false, false, false, true},
-		//{"nn50_modelct_centrbtp", 50, true, false, false, true},
+		//{"nn20_modelpt_centrbtp", 20, false, true, false, true},
+		//{"nn20_modelct_datapt", 20, true, true, false, true},
+		{"nn50_modelpt_centrbtp", 50, false, false, false, true},
+		{"nn50_modelct_centrbtp", 50, true, false, false, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -951,6 +1004,8 @@ func Test_DistrBtp(t *testing.T) {
 		{"nn20_modelct_5parties", 20, 5, true, true, false, true},
 		{"nn20_modelpt_10parties", 20, 10, false, true, false, true},
 		{"nn20_modelct_10parties", 20, 10, true, true, false, true},
+		{"nn20_modelct_20parties", 20, 20, true, true, false, true},
+		{"nn20_modelct_30parties", 20, 30, true, true, false, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
