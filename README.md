@@ -1,5 +1,5 @@
-# slytHErin: A Generic Framework for Encrypted Deep Neural Network Inference
-This repository contains the implementation code for "Gef : A Generic Framework for Secure Neural Network Inference". As the title suggests, "Gef" provides modular blocks
+# slytHErin: A agile Framework for Encrypted Deep Neural Network Inference
+This repository contains the implementation code for "slytherin : A agile Framework for Secure Neural Network Inference". As the title suggests, "slytherin" provides modular blocks
 to easily build neural network which can be used for privacy-preserving inference under.
 homomorphic encryption under different scenarios and threat model
 

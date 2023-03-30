@@ -85,7 +85,7 @@ func testCryptonet_EvalBatchEncrypted(t *testing.T, batch int) {
 	//define a new Box: this is just a wrapper for all the cryptography related objects, like a toolbox
 	Box := cipherUtils.NewBox(params)
 
-	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encdata_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/slytherin/keys/cryptonet_encdata_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -152,7 +152,7 @@ func testCryptonet_EvalBatchEncrypted(t *testing.T, batch int) {
 		}
 		iters++
 	}
-	result.PrintResult(os.ExpandEnv(fmt.Sprintf("$HOME/gef/data/cryptonet_batch%d.csv", batchSize)))
+	result.PrintResult(os.ExpandEnv(fmt.Sprintf("$HOME/slytherin/data/cryptonet_batch%d.csv", batchSize)))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")
@@ -191,7 +191,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/slytherin/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -271,7 +271,7 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 		}
 		iters++
 	}
-	result.PrintResult(os.ExpandEnv("$HOME/gef/data/cryptonet_modelct_datapt.csv"))
+	result.PrintResult(os.ExpandEnv("$HOME/slytherin/data/cryptonet_modelct_datapt.csv"))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")
@@ -310,7 +310,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	batchSize := splitInfo.BatchSize
 	cn.SetBatch(batchSize)
 
-	path := fmt.Sprintf("$HOME/gef/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path := fmt.Sprintf("$HOME/slytherin/keys/cryptonet_encmodel_logN%dlogPQ%d__%s", params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -391,7 +391,7 @@ func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 		}
 		iters++
 	}
-	result.PrintResult(os.ExpandEnv("$HOME/gef/data/cryptonet_modelct_datapt_cluster.csv"))
+	result.PrintResult(os.ExpandEnv("$HOME/slytherin/data/cryptonet_modelct_datapt_cluster.csv"))
 	if debug {
 		fmt.Println()
 		fmt.Println("Expected")

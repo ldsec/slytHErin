@@ -112,7 +112,7 @@ func TestNN_EvalBatchEncrypted_CentralizedBtp(t *testing.T) {
 	//we define a new bootstrapper for centralized bootstrapping. Note that the network is defined as bootstrappable
 	Btp := cipherUtils.NewBootstrapper(poolSize)
 
-	path = fmt.Sprintf("$HOME/gef/keys/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("$HOME/slytherin/keys/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -300,7 +300,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp(t *testing.T) {
 		}
 	}
 
-	path = fmt.Sprintf("$HOME/gef/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("$HOME/slytherin/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 
 	// PARTIES key material
@@ -490,7 +490,7 @@ func TestNN20_EvalBatchEncrypted_DistributedBtp_LAN(t *testing.T) {
 		partiesAddr[i] = clusterConfig.ClusterIps[i]
 	}
 
-	path = fmt.Sprintf("$HOME/gef/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("$HOME/slytherin/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 
 	skP := new(rlwe.SecretKey)
@@ -652,7 +652,7 @@ func testCentralBtp(t *testing.T, name string, layers int, encrypted, HETrain, d
 	//we define a new bootstrapper for centralized bootstrapping. Note that the network is defined as bootstrappable
 	Btp := cipherUtils.NewBootstrapper(poolSize)
 
-	path = fmt.Sprintf("$HOME/gef/keys/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("$HOME/slytherin/keys/nn%d_centralized_logN%dlogPQ%d__%s", layers, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	fmt.Println("Key path: ", path)
 
 	var cne network.HENetworkI
@@ -769,7 +769,7 @@ func testCentralBtp(t *testing.T, name string, layers int, encrypted, HETrain, d
 	if encrypted {
 		scenario = "modelct_datapt"
 	}
-	err = result.PrintResult(os.ExpandEnv(fmt.Sprintf("$HOME/gef/data/nn%d_batch%d_%s_centralBtp.csv", layers, batchSize, scenario)))
+	err = result.PrintResult(os.ExpandEnv(fmt.Sprintf("$HOME/slytherin/data/nn%d_batch%d_%s_centralBtp.csv", layers, batchSize, scenario)))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -835,7 +835,7 @@ func testDistrbtp(t *testing.T, name string, layers int, parties int, encrypted,
 		}
 	}
 
-	path = fmt.Sprintf("$HOME/gef/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
+	path = fmt.Sprintf("$HOME/slytherin/keys/nn%d_parties%d_logN%dlogPQ%d__%s", layers, parties, params.LogN(), params.LogP()+params.LogQ(), splitCode)
 	crs, _ := lattigoUtils.NewKeyedPRNG([]byte{'R', 'A', 'N', 'D'})
 
 	// PARTIES key material
