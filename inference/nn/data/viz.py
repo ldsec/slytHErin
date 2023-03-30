@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# Save the plot to a file
+font = {'size': 14}
+
+plt.rc('font', **font)
+
 X = [3, 5, 10, 20]
 
 time_values = []
@@ -43,7 +48,7 @@ plt.bar([j - bar_width/2 for j in index], time_values, bar_width,
 plt.bar([j + bar_width/2 for j in index], centralized_time, bar_width, color="red", label="centralized", zorder=0)
 
 # Plot a line connecting the values in time_values
-plt.plot([j - bar_width/2 for j in index], time_values, '-o', color="blue", zorder=0)
+plt.plot([j - bar_width/2 for j in index], time_values, color="blue", zorder=0)
 
 # Add labels to the bars
 for j, v in enumerate(time_values):
@@ -57,5 +62,4 @@ plt.ylabel('Amortized Time(s/sample)')
 plt.xticks(index, X)
 plt.legend()
 
-# Save the plot to a file
-plt.savefig("distr_vs_centralized.png")
+plt.savefig("distr_vs_centralized.png",dpi=1600)

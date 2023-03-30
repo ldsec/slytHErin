@@ -1005,7 +1005,7 @@ func Test_DistrBtp(t *testing.T) {
 		{"nn20_modelpt_10parties", 20, 10, false, true, false, true},
 		{"nn20_modelct_10parties", 20, 10, true, true, false, true},
 		{"nn20_modelct_20parties", 20, 20, true, true, false, true},
-		{"nn20_modelct_30parties", 20, 30, true, true, false, true},
+		{"nn50_modelct_3parties", 50, 3, true, false, false, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
