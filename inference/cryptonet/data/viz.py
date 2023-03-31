@@ -8,7 +8,6 @@ font_axis = {'size': 14}
 plt.rc('font', **font)
 figsize = (6,4)
 dpi = 1200
-plt.tight_layout()
 # Define the batch values we're interested in
 batch_values = [1, 32, 64, 83, 256, 1024, 2048, 4096]
 
@@ -68,7 +67,7 @@ for x in batch_values:
     y_errors.append(last_row['StdDev'].iloc[0] / 1000.0)
 
 # Plot the results
-fig1, ax1 = plt.subplots()
+fig1, ax1 = plt.subplots(1,1,figsize=figsize)
 ax1.plot(x_values, latency, linewidth=1, color="blue", marker="o", zorder=0, label="Latency(s)")
 
 for i, y in enumerate(latency):
@@ -86,7 +85,7 @@ for i, y in enumerate(latency):
         offset_x = 50
         offset_y = -10
     if i == 4:
-        offset_x = 200
+        offset_x = 210
         offset_y = -10
     if i == 5:
         offset_x = 1000
@@ -94,7 +93,7 @@ for i, y in enumerate(latency):
         offset_x = -1100
     if i == 7:
         offset_y = -10
-        offset_x = -2000
+        offset_x = -2100
 
     ax1.text(x_values[i]+offset_x, y+offset_y, f"{y:.2f}", color="blue", ha="center", zorder=1)
 
@@ -105,10 +104,11 @@ for i,tick in enumerate(ax1.get_xticklabels()):
     tick.set_rotation(60)
 ax1.set_xlabel("Batch Size", font_axis)
 ax1.set_ylabel("Latency(s)", font_axis)
-fig1.savefig("latency.png", dpi=dpi,bbox_inches="tight")
+ax1.set_yticks([])
+fig1.savefig("latency.png", dpi=dpi, bbox_inches="tight")
 
 
-fig2, ax2 = plt.subplots()
+fig2, ax2 = plt.subplots(1,1, figsize=figsize)
 ax2.plot(x_values, amort, linewidth=1, color="red", marker="s", label="Amortized(s/sample)")
 for i,y in enumerate(amort):
     offset_x = 0
@@ -120,18 +120,18 @@ for i,y in enumerate(amort):
     if i == 2:
         offset_x = -8
     if i == 3:
-        offset_x = 50
+        offset_x = 55
         offset_y = -.35
     if i == 6:
-        offset_y = -.5
+        offset_y = -.7
     if i == 7:
         offset_x = -2000
-        offset_y = 0
+        offset_y = -.3
     ax2.text(x_values[i]+offset_x, y+offset_y, f"{y:.2f}", color="red", ha="center", zorder=1)
-
 ax2.set_xscale('log')
 ax2.set_xticks(x_values)
 ax2.set_xticklabels([str(x) for x in x_values])
+ax2.set_yticks([])
 for i,tick in enumerate(ax2.get_xticklabels()):
     tick.set_rotation(60)
 ax2.set_ylabel('Amortized(s/sample)',font_axis)
