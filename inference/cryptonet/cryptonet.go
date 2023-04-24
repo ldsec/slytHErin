@@ -1,10 +1,10 @@
-//Contains declaration and experiments for CryptoNet model
+// Contains declaration and experiments for CryptoNet model
 package cryptonet
 
 import (
 	"encoding/json"
-	"github.com/ldsec/dnn-inference/inference/network"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/network"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"io/ioutil"
 	"os"
 )

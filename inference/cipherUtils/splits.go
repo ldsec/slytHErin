@@ -6,20 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	utils2 "github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
+	utils2 "github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/utils"
 	"math"
 	"runtime"
 )
 
-//Describes how to split a matrix
+// Describes how to split a matrix
 type BlockSplit struct {
 	Rows, Cols, InnerRows, InnerCols, RowP, ColP int
 }
 
-//Splits for a model
+// Splits for a model
 type Split struct {
 	S []BlockSplit
 }
@@ -28,7 +28,7 @@ func NewSplit(splits []BlockSplit) *Split {
 	return &Split{S: splits}
 }
 
-//Config from splitter
+// Config from splitter
 type Config struct {
 	inputFeatures, inputRows int
 	weightRows, weightCols   []int
@@ -49,7 +49,7 @@ func NewSplitter(inputRows, inputFeatures int, weightRows, weightCols []int, par
 	}}
 }
 
-//Information on the current split
+// Information on the current split
 type SplitsInfo struct {
 	Features          int   `json:"features,omitempty"`
 	InputRows         int   `json:"input_rows,omitempty"`
@@ -71,7 +71,7 @@ func GetFillRatio(rows, cols, replicaFactor int, slotsAvailable float64) float64
 	return consumedSlots / slotsAvailable
 }
 
-//Computes the optimal number of rows for input sub-matrices. Takes the innerCols of the Input and the maxInnerCols of all the weights in the pipeline
+// Computes the optimal number of rows for input sub-matrices. Takes the innerCols of the Input and the maxInnerCols of all the weights in the pipeline
 func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Parameters) int {
 	innerCols := plainUtils.Max(inputInnerCols, maxInnerCols)
 	slotsAvailable := float64(math.Pow(2, float64(params.LogSlots()-1)))
@@ -87,7 +87,7 @@ func GetOptimalInnerRows(inputInnerCols int, maxInnerCols int, params ckks.Param
 	}
 }
 
-//Compute tha average multiplication complexity of a series of splits
+// Compute tha average multiplication complexity of a series of splits
 func GetAvgComplexity(s *Split) float64 {
 	splits := s.S
 	complexity := 0.0
@@ -101,7 +101,7 @@ func GetAvgComplexity(s *Split) float64 {
 	return float64(complexity) / float64(len(splits)-1)
 }
 
-//Compute tha total multiplication complexity of a series of splits
+// Compute tha total multiplication complexity of a series of splits
 func GetComplexity(s *Split) float64 {
 	splits := s.S
 	complexity := 0.0
@@ -126,7 +126,7 @@ func (s *Splitter) FindSplits() *Split {
 	return sp
 }
 
-//Finds splits when LT optimization is not used
+// Finds splits when LT optimization is not used
 func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, weightRows, weightCols []int) (*Split, error) {
 	var colPartitions []int
 	var innerCols []int
@@ -337,7 +337,7 @@ func findSplitsForRegular(params ckks.Parameters, inputFeatures, inputRows int, 
 	return filteredSplits[0], nil
 }
 
-//Exctract info useful for splitting input and weights, plus a hashcode for serialization
+// Exctract info useful for splitting input and weights, plus a hashcode for serialization
 func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	splits := s.S
 	info := SplitsInfo{}
@@ -368,7 +368,7 @@ func (s *Split) ExctractInfo() (SplitsInfo, string) {
 	return info, code
 }
 
-//Exctract info for blocksplit at i: inner rows, inner cols, rowp, colp, original rows and cols
+// Exctract info for blocksplit at i: inner rows, inner cols, rowp, colp, original rows and cols
 func (s *Split) ExctractInfoAt(i int) []int {
 	splits := s.S
 	Rows, Cols := splits[i].Rows, splits[i].Cols
@@ -396,7 +396,7 @@ func (s *Split) Print() {
 	fmt.Println("-------------------------------------------------------------------------------------------")
 }
 
-//Generate the rotations needed to evaluate a network with this Split
+// Generate the rotations needed to evaluate a network with this Split
 func (s *Split) GetRotations(params ckks.Parameters) []int {
 	rs := NewRotationsSet()
 	info, _ := s.ExctractInfo()

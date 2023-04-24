@@ -3,19 +3,19 @@ package cipherUtils
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"math"
 	"sync"
 	"time"
 )
 
-//Deals with multipication between encrypted or plaintext encoded block matrices
+// Deals with multipication between encrypted or plaintext encoded block matrices
 type Multiplier struct {
 	poolSize int
 }
 
-//feeded to the workers to tell them what to do
+// feeded to the workers to tell them what to do
 type MulTask struct {
 	i, j, k         int
 	s               int //k goes from 0 to s
@@ -64,7 +64,7 @@ func (Mul *Multiplier) spawnEvaluators(X BlocksOperand, dimIn, dimMid, dimOut in
 	}
 }
 
-//Multiplication between encrypted input and plaintext weight
+// Multiplication between encrypted input and plaintext weight
 func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, Box CkksBox) *EncInput {
 	xRowP, xColP := X.GetPartitions()
 	xRealRows, _ := X.GetRealDims()
@@ -163,7 +163,7 @@ func (Mul *Multiplier) Multiply(X BlocksOperand, W BlocksOperand, prepack bool, 
 	return Out
 }
 
-//To be called after multiply. Applies the rescaling and removes garbage from imaginary part of slots (from multiplication algo with complex packing)
+// To be called after multiply. Applies the rescaling and removes garbage from imaginary part of slots (from multiplication algo with complex packing)
 func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 
 	poolCh := make(chan struct{}, Mul.poolSize)
@@ -197,7 +197,7 @@ func (Mul *Multiplier) RemoveImagFromBlocks(X *EncInput, Box CkksBox) {
 //  | version with optimized dimentions
 //  v
 
-//Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
+// Multiplies a ciphertext with a weight matrix in diagonal form: W x A.T
 func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights DiagMat, prepack bool, Box CkksBox) (res *ckks.Ciphertext) {
 
 	params := Box.Params
@@ -245,7 +245,7 @@ func DiagMulCt(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, weights DiagMa
 	return
 }
 
-//Multiplies a plaintext with a weight matrix in diagonal form: W x A.T
+// Multiplies a plaintext with a weight matrix in diagonal form: W x A.T
 func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (res *ckks.Ciphertext) {
 
 	//params := Box.Params
@@ -276,7 +276,7 @@ func DiagMulPt(input *ckks.Plaintext, dimIn int, weights DiagMat, Box CkksBox) (
 	return
 }
 
-//Applies complex packing to Blocks. dimOut should be the innerCols of the first weight in the layers
+// Applies complex packing to Blocks. dimOut should be the innerCols of the first weight in the layers
 func PrepackBlocks(X BlocksOperand, dimOut int, Box CkksBox) {
 	eval := Box.Evaluator
 	switch X.(type) {
@@ -298,7 +298,7 @@ func PrepackBlocks(X BlocksOperand, dimOut int, Box CkksBox) {
 	}
 }
 
-//Prepacking cipher
+// Prepacking cipher
 func Prepack(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, eval ckks.Evaluator) {
 	img := eval.MultByiNew(input)
 	eval.Rotate(img, dimIn, img)
@@ -307,7 +307,7 @@ func Prepack(input *ckks.Ciphertext, dimIn, dimMid, dimOut int, eval ckks.Evalua
 	eval.ReplicateLog(input, dimIn*dimMid, replicaFactor, input)
 }
 
-//Prepacking plain
+// Prepacking plain
 func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box CkksBox) *ckks.Plaintext {
 	tmp := Box.Encoder.Decode(input, Box.Params.LogSlots())
 	img := plainUtils.MulByi(plainUtils.ComplexToReal(tmp))
@@ -322,7 +322,7 @@ func PrepackClearText(input *ckks.Plaintext, dimIn, dimMid, dimOut int, Box Ckks
 	return Box.Encoder.EncodeNew(tmp, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box.Params.LogSlots())
 }
 
-//Repacks block matrix column partitions to have newColP = colP. Does not involve multiplication or rescaling
+// Repacks block matrix column partitions to have newColP = colP. Does not involve multiplication or rescaling
 func RepackCols(X *EncInput, colP int, Box CkksBox) {
 	cols := X.ColP * X.InnerCols
 	if cols%colP != 0 {
@@ -433,7 +433,7 @@ func RepackCols(X *EncInput, colP int, Box CkksBox) {
 
 //HELPERS
 
-//Gets the replication factor used for the multipication algorithm given the inner rows and cols of the weight block-matrix
+// Gets the replication factor used for the multipication algorithm given the inner rows and cols of the weight block-matrix
 func GetReplicaFactor(dimMid, dimOut int) int {
 	if dimOut > dimMid {
 		return plainUtils.Max(int(math.Ceil(float64(dimOut)/float64(dimMid)))+1, 3)
@@ -442,7 +442,7 @@ func GetReplicaFactor(dimMid, dimOut int) int {
 	}
 }
 
-//returns map of Plaintexts, where rot[i] plaintext is rotated by rot[i] to the left
+// returns map of Plaintexts, where rot[i] plaintext is rotated by rot[i] to the left
 func RotatePlaintext(pt *ckks.Plaintext, rotations []int, box CkksBox) map[int]*ckks.Plaintext {
 	ptRot := make(map[int]*ckks.Plaintext)
 	for _, rot := range rotations {

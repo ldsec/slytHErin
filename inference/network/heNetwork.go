@@ -1,12 +1,12 @@
-//implements neural networks and he neural networks interfaces
+// implements neural networks and he neural networks interfaces
 package network
 
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"
@@ -182,7 +182,7 @@ func (n *HENetwork) SetBox(box cipherUtils.CkksBox) {
 	n.Box = box
 }
 
-//computes how many levels are needed to complete the pipeline in he version
+// computes how many levels are needed to complete the pipeline in he version
 func (n *HENetwork) LevelsToComplete(currLayer int, afterMul bool) int {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
@@ -202,7 +202,7 @@ func (n *HENetwork) LevelsToComplete(currLayer int, afterMul bool) int {
 	return levelsNeeded
 }
 
-//true if he version needs bootstrapping at this layer with level = level
+// true if he version needs bootstrapping at this layer with level = level
 func (n *HENetwork) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
@@ -214,7 +214,7 @@ func (n *HENetwork) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul
 	return (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel) && level < n.LevelsToComplete(layer, afterMul)
 }
 
-//Runs inference
+// Runs inference
 func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")
@@ -260,7 +260,7 @@ func (n *HENetwork) Eval(X cipherUtils.BlocksOperand) (*cipherUtils.EncInput, ti
 	return res, time.Since(start)
 }
 
-//Eval but with debug statements for checking the HE pipeline step by step
+// Eval but with debug statements for checking the HE pipeline step by step
 func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense, network NetworkI, L1thresh float64) (*cipherUtils.EncInput, *mat.Dense, time.Duration) {
 	if !n.IsInit() {
 		panic("Network is not init")
@@ -342,7 +342,7 @@ func (n *HENetwork) EvalDebug(Xenc cipherUtils.BlocksOperand, Xclear *mat.Dense,
 	return res, resClear, time.Since(start)
 }
 
-//Generate the rotations needed to evaluate the network and updates the network box with the rotation keys
+// Generate the rotations needed to evaluate the network and updates the network box with the rotation keys
 func (n *HENetwork) GetRotations(params ckks.Parameters, btpParams *bootstrapping.Parameters) []int {
 	rs := cipherUtils.NewRotationsSet()
 	for i, w := range n.Weights {

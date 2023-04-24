@@ -3,8 +3,8 @@ package distributed
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
 	"github.com/tuneinsight/lattigo/v3/drlwe"
@@ -21,14 +21,14 @@ import (
 	Thus, they are implemented in a dummy way
 */
 
-//dummy setup msg sent from master to parties
+// dummy setup msg sent from master to parties
 type SetupMsg struct {
 	SkShare *rlwe.SecretKey `json:"skShare,omitempty"`
 	Pk      *rlwe.PublicKey `json:"pk,omitempty"`
 	Id      int             `json:"id,omitempty"`
 }
 
-//setup msg from client to server
+// setup msg from client to server
 type ServerMsg struct {
 	Sk *rlwe.SecretKey `json:"sk,omitempty"`
 }
@@ -36,7 +36,7 @@ type ServerMsg struct {
 var SetupPort = 7777   //port used by remote nodes to receive SetupMsg from master
 var ServicePort = 9999 //port used by remote nodes to receive ProtocolMsg from master
 
-//Invoked by master to spawn players on remote servers
+// Invoked by master to spawn players on remote servers
 func (lmst *LocalMaster) MasterSetup(playersAddr []string, parties int, skShares []*rlwe.SecretKey, pkP *rlwe.PublicKey) {
 	//start players
 	for i := 1; i < parties; i++ {
@@ -60,7 +60,7 @@ func (lmst *LocalMaster) MasterSetup(playersAddr []string, parties int, skShares
 	}
 }
 
-//Invoked by client to setup server listening on setup port
+// Invoked by client to setup server listening on setup port
 func (cl *Client) ClientSetup(serverAddr string, sk *rlwe.SecretKey) {
 	msg := ServerMsg{
 		Sk: sk,
@@ -77,7 +77,7 @@ func (cl *Client) ClientSetup(serverAddr string, sk *rlwe.SecretKey) {
 	c.Close()
 }
 
-//Invoked by remote server for setup. The msg received will create either a player instance for the distributed bootstrap and keyswitch or a server instance for the oblivious decryption
+// Invoked by remote server for setup. The msg received will create either a player instance for the distributed bootstrap and keyswitch or a server instance for the oblivious decryption
 func ListenForSetup(addr string, params ckks.Parameters) Remote {
 	Network := Lan
 	listener, err := net.Listen("tcp", addr+":"+strconv.Itoa(SetupPort))
@@ -147,7 +147,7 @@ func ListenForSetup(addr string, params ckks.Parameters) Remote {
 	}
 }
 
-//Returns array of secret key shares, secret key and collective encryption key
+// Returns array of secret key shares, secret key and collective encryption key
 func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties int) ([]*rlwe.SecretKey, *rlwe.SecretKey, *rlwe.PublicKey, ckks.KeyGenerator) {
 	type Party struct {
 		*dckks.CKGProtocol
@@ -188,7 +188,7 @@ func DummyEncKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, parties
 	return skShares, sk, pk, kgen
 }
 
-//Dummy generation of relin keys
+// Dummy generation of relin keys
 func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, shares []*rlwe.SecretKey) *rlwe.RelinearizationKey {
 	type Party struct {
 		*dckks.RKGProtocol
@@ -231,7 +231,7 @@ func DummyRelinKeyGen(params ckks.Parameters, crs *lattigoUtils.KeyedPRNG, share
 	return rlk
 }
 
-//writes key from experiment to file
+// writes key from experiment to file
 func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet, path string) {
 	fmt.Println("Writing keys to disk: ", os.ExpandEnv(path))
 	dat, err := sk.MarshalBinary()
@@ -261,7 +261,7 @@ func SerializeKeys(sk *rlwe.SecretKey, skshares []*rlwe.SecretKey, rtks *rlwe.Ro
 	f.Close()
 }
 
-//reads keys from file
+// reads keys from file
 func DeserializeKeys(path string, parties int) (sk *rlwe.SecretKey, skShares []*rlwe.SecretKey, rtks *rlwe.RotationKeySet) {
 	sk = new(rlwe.SecretKey)
 	rtks = new(rlwe.RotationKeySet)

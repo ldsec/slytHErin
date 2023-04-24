@@ -3,13 +3,13 @@ package cipherUtils
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/utils"
 	"math"
 )
 
-//Statistics for debug
+// Statistics for debug
 type DebugStats struct {
 	MinPrec  float64
 	AvgPrec  float64
@@ -18,7 +18,7 @@ type DebugStats struct {
 	L2Dist   float64
 }
 
-//Debug stats for one ciphertext
+// Debug stats for one ciphertext
 func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh float64, Box CkksBox) DebugStats {
 	encoder := Box.Encoder
 	params := Box.Params
@@ -58,7 +58,7 @@ func PrintDebug(ciphertext *ckks.Ciphertext, valuesWant []complex128, thresh flo
 	}
 }
 
-//Debug stats for block matrix
+// Debug stats for block matrix
 func PrintDebugBlocks(Xenc *EncInput, Pt *plainUtils.BMatrix, thresh float64, Box CkksBox) {
 	fmt.Println("[?] Debug Info:-------------------------------------------------------------------------")
 

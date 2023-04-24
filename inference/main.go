@@ -3,13 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/distributed"
+	"github.com/ldsec/slytHErin/inference/distributed"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"os"
 )
 
-//Spawns an instance node into a server in the iccluster
-//Suppose connection happens in LAN setting
+// Spawns an instance node into a server in the iccluster
+// Suppose connection happens in LAN setting
 const (
 	usage = `usage: %s
 //Spawns an instance node into a server in the iccluster

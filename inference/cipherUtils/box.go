@@ -2,7 +2,7 @@ package cipherUtils
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
@@ -35,7 +35,7 @@ func (rs *RotationsSet) Rotations() []int {
 	return rots
 }
 
-//wrapper for the classes needed to perform encrypted operations, like a crypto-ToolBox
+// wrapper for the classes needed to perform encrypted operations, like a crypto-ToolBox
 type CkksBox struct {
 	Params       ckks.Parameters
 	BtpParams    *bootstrapping.Parameters
@@ -92,7 +92,7 @@ func BoxShallowCopy(Box CkksBox) CkksBox {
 	return boxNew
 }
 
-//returns Box with Evaluator and Bootstrapper if needed
+// returns Box with Evaluator and Bootstrapper if needed
 func BoxWithRotations(Box CkksBox, rotations []int, withBtp bool, btpParams *bootstrapping.Parameters) CkksBox {
 	if rotations == nil {
 		rotations = []int{}
@@ -180,7 +180,7 @@ func GenRotations(rowIn, colIn, numWeights int, rowsW, colsW, rowPW, colPW []int
 }
 */
 
-//serializes keys to disk
+// serializes keys to disk
 func SerializeBox(path string, Box CkksBox) {
 	path = os.ExpandEnv(path)
 	sk := Box.Sk
@@ -237,7 +237,7 @@ func SerializeBox(path string, Box CkksBox) {
 	}
 }
 
-//loads serialized keys from disk into a fresh box
+// loads serialized keys from disk into a fresh box
 func DeserealizeBox(path string, params ckks.Parameters, btpParams *bootstrapping.Parameters, withBtp bool) CkksBox {
 	path = os.ExpandEnv(path)
 	fmt.Println("Reading keys from disk: ", path)

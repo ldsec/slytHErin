@@ -2,8 +2,8 @@ package cipherUtils
 
 import (
 	"fmt"
-	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	pU "github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"gonum.org/v1/gonum/mat"

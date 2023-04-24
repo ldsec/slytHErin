@@ -2,26 +2,26 @@ package network
 
 import (
 	"errors"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"gonum.org/v1/gonum/mat"
 )
 
-//initiator for activation functions. Must return a list of polynomials which approximate the activation function at each layer
-//note that Identity activations functions are supported only at the end of the network (otherwise adjacent linear layers can be collapsed)
+// initiator for activation functions. Must return a list of polynomials which approximate the activation function at each layer
+// note that Identity activations functions are supported only at the end of the network (otherwise adjacent linear layers can be collapsed)
 type Initiator func(args ...interface{}) []utils.ChebyPolyApprox
 
-//Custom Network Loader.
-//Exposes the method Load to load model from file
-//User should make sure that this method initiates also activation functions with a user-defined init method:
-//this means that Load should return an initiliazed network, with the activations field populated by SetActivations.
-//It is user responsability to provide and invoke an initiator method within Load
-//The json structure should be compatible with Network
+// Custom Network Loader.
+// Exposes the method Load to load model from file
+// User should make sure that this method initiates also activation functions with a user-defined init method:
+// this means that Load should return an initiliazed network, with the activations field populated by SetActivations.
+// It is user responsability to provide and invoke an initiator method within Load
+// The json structure should be compatible with Network
 type NetworkLoader interface {
 	Load(path string, initActivations Initiator) NetworkI
 }
 
-//Network loaded from json
+// Network loaded from json
 type NetworkI interface {
 	SetBatch(batchSize int)
 	SetLayers(layers []utils.Layer)
@@ -45,13 +45,13 @@ type NetworkI interface {
 	NewHE(splits *cipherUtils.Split, encrypted, bootstrappable bool, maxLevel, minLevel, btpCapacity int, Bootstrapper cipherUtils.IBootstrapper, poolsize int, Box cipherUtils.CkksBox) HENetworkI
 }
 
-//NetworkJ wrapper for json struct
+// NetworkJ wrapper for json struct
 type NetworkJ struct {
 	Layers    []utils.Layer `json:"layers,omitempty"`
 	NumLayers int           `json:"numLayers,omitempty"`
 }
 
-//Network loaded from json. Implements INetwork. Abstract type
+// Network loaded from json. Implements INetwork. Abstract type
 type Network struct {
 	layers           []utils.Layer
 	activations      []utils.ChebyPolyApprox
@@ -82,7 +82,7 @@ func (n *Network) GetNumOfActivations() int {
 	return n.numOfActivations
 }
 
-//Gets weights and biases
+// Gets weights and biases
 func (n *Network) GetParams() ([]*mat.Dense, []*mat.Dense) {
 	if !n.IsInit() {
 		panic(errors.New("Not init"))
@@ -110,7 +110,7 @@ func (n *Network) SetBatch(batchSize int) {
 	n.batchSize = batchSize
 }
 
-//Gets weight and bias rescaled before activation (e.g for activation in Chebychev base)
+// Gets weight and bias rescaled before activation (e.g for activation in Chebychev base)
 func (n *Network) GetParamsRescaled() ([]*mat.Dense, []*mat.Dense) {
 	if !n.IsInit() {
 		panic("Not init")
@@ -129,7 +129,7 @@ func (n *Network) GetParamsRescaled() ([]*mat.Dense, []*mat.Dense) {
 	return scaledW, scaledB
 }
 
-//Returns the levels needed to complete the pipeline from current layers, before or after the weigth multplication
+// Returns the levels needed to complete the pipeline from current layers, before or after the weigth multplication
 func (n *Network) LevelsToComplete(currLayer int, afterMul bool) int {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
@@ -149,7 +149,7 @@ func (n *Network) LevelsToComplete(currLayer int, afterMul bool) int {
 	return levelsNeeded
 }
 
-//True if bootstrap is needed
+// True if bootstrap is needed
 func (n *Network) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul bool) bool {
 	if !n.IsInit() {
 		panic(errors.New("Not Inited!"))
@@ -161,7 +161,7 @@ func (n *Network) CheckLvlAtLayer(level, minLevel, layer int, forAct, afterMul b
 	return (level < levelsOfAct || level <= minLevel || level-levelsOfAct < minLevel) && level < n.LevelsToComplete(layer, afterMul)
 }
 
-//Returns array of rows and cols of weights
+// Returns array of rows and cols of weights
 func (n *Network) GetDimentions() ([]int, []int) {
 	w := n.getWeights()
 	rows, cols := make([]int, len(w)), make([]int, len(w))

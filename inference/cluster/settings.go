@@ -1,9 +1,9 @@
-//Contains configuration variables for tests on the iccluster
+// Contains configuration variables for tests on the iccluster
 package cluster
 
 import (
 	"encoding/json"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"io/ioutil"
 	"os"
 )

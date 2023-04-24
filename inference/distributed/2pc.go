@@ -1,4 +1,4 @@
-//defines all protocols and entities for distributed refresh, key switch and oblivious decryption
+// defines all protocols and entities for distributed refresh, key switch and oblivious decryption
 package distributed
 
 import (
@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"google.golang.org/grpc/benchmark/latency"
 	"io"
@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-//Client in the 2PC oblivious decryption protocol
+// Client in the 2PC oblivious decryption protocol
 type Client struct {
 	ProtoBuf *sync.Map //ct id -> protocol instance *Protocol
 
@@ -32,7 +32,7 @@ type Client struct {
 	done     chan bool //flag caller that client is done with all instances
 }
 
-//Server offers decryption as a service for oblivious decryption protocol
+// Server offers decryption as a service for oblivious decryption protocol
 type Server struct {
 	Remote
 	Box  cipherUtils.CkksBox
@@ -40,8 +40,8 @@ type Server struct {
 	Conn net.Listener
 }
 
-//Creates new client. Client runs inference on plaintext data with encrypted model
-//Set localhost to true if LAN is simulated on localhost
+// Creates new client. Client runs inference on plaintext data with encrypted model
+// Set localhost to true if LAN is simulated on localhost
 func NewClient(ServerAddr string, Box cipherUtils.CkksBox, poolSize int, localhost bool) (*Client, error) {
 	cl := new(Client)
 	cl.Box = Box
@@ -92,7 +92,7 @@ func (cl *Client) spawnEvaluators(X *cipherUtils.EncInput, res *cipherUtils.Plai
 	}
 }
 
-//starts protocol instances in parallel
+// starts protocol instances in parallel
 func (cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *cipherUtils.PlainInput {
 	var err error
 	if proto == END {
@@ -144,7 +144,7 @@ func (cl *Client) StartProto(proto ProtocolType, X *cipherUtils.EncInput) *ciphe
 	return res
 }
 
-//initiate protocol instance
+// initiate protocol instance
 func (cl *Client) initProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (*ckks.Plaintext, error) {
 	switch proto {
 	case MASKING:
@@ -170,7 +170,7 @@ func (cl *Client) initProto(proto ProtocolType, ct *ckks.Ciphertext, ctId int) (
 	return res, nil
 }
 
-//reads reply from open connection to player
+// reads reply from open connection to player
 func (cl *Client) Dispatch(c net.Conn) {
 	buf, err := ReadFrom(c)
 	utils.ThrowErr(err)
@@ -187,7 +187,7 @@ func (cl *Client) Dispatch(c net.Conn) {
 	}
 }
 
-//Runs the Masking protocol
+// Runs the Masking protocol
 func (cl *Client) RunMasking(ctId int) {
 	//create protocol instance
 	entry, ok := cl.ProtoBuf.Load(ctId)
@@ -242,7 +242,7 @@ func (cl *Client) RunEnd() {
 
 }
 
-//Listen for shares and aggregates
+// Listen for shares and aggregates
 func (cl *Client) DispatchMasking(resp ProtocolMsg) {
 	entry, ok := cl.ProtoBuf.Load(resp.Id)
 	if !ok {
@@ -257,7 +257,7 @@ func (cl *Client) DispatchMasking(resp ProtocolMsg) {
 
 //Server PROTOCOL
 
-//Accepts an incoming TCP connection and handles it (blocking)
+// Accepts an incoming TCP connection and handles it (blocking)
 func (s *Server) Listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
@@ -271,7 +271,7 @@ func (s *Server) Listen() {
 	}
 }
 
-//Handler for the connection
+// Handler for the connection
 func (s *Server) Dispatch(c net.Conn) {
 	//listen from Master
 	for {
@@ -300,7 +300,7 @@ func (s *Server) Dispatch(c net.Conn) {
 	}
 }
 
-//Generates and send share to Master
+// Generates and send share to Master
 func (s *Server) RunMask(c net.Conn, msg ProtocolMsg) {
 	//fmt.Printf("[+] Player %d -- Received msg PCKS ID: %d from master\n\n", lp.Id, msg.Id)
 	ct := new(ckks.Ciphertext)

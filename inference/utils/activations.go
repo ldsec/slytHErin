@@ -1,9 +1,9 @@
-//various utils, including methods for matrices in plaintext, model definitions and activation functions
+// various utils, including methods for matrices in plaintext, model definitions and activation functions
 package utils
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 	"math"
@@ -33,7 +33,7 @@ type PolyApprox interface {
 	Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense)
 }
 
-//Polynomial approximation from ckks Approximate
+// Polynomial approximation from ckks Approximate
 type ChebyPolyApprox struct {
 	PolyApprox
 	A, B      float64
@@ -43,19 +43,19 @@ type ChebyPolyApprox struct {
 	F         func(x float64) float64
 }
 
-//Stores interval and degree of approximation in chebychev basis. Deg is set via SetDegOfParam
+// Stores interval and degree of approximation in chebychev basis. Deg is set via SetDegOfParam
 type ApproxParam struct {
 	A   float64 `json:"a"`
 	B   float64 `json:"b"`
 	Deg int
 }
 
-//Approximation parameters for each layers
+// Approximation parameters for each layers
 type ApproxParams struct {
 	Params []ApproxParam `json:"intervals"`
 }
 
-//Initialize ReLU with coeffs not in cheby form from Matlab -> used by cryptonet
+// Initialize ReLU with coeffs not in cheby form from Matlab -> used by cryptonet
 func InitReLU(deg int) *ChebyPolyApprox {
 	relu := new(ChebyPolyApprox)
 	relu.ChebyBase = false
@@ -81,7 +81,7 @@ func InitReLU(deg int) *ChebyPolyApprox {
 	return relu
 }
 
-//Initiliazes activation layer with function to approximate
+// Initiliazes activation layer with function to approximate
 func InitActivationCheby(act string, a, b float64, deg int) *ChebyPolyApprox {
 	approx := new(ChebyPolyApprox)
 	approx.A = a
@@ -121,12 +121,12 @@ func (activation *ChebyPolyApprox) ActivatePlain(X *mat.Dense) {
 	}
 }
 
-//computes how many levels are consumed by activation func
+// computes how many levels are consumed by activation func
 func (approx *ChebyPolyApprox) LevelsOfAct() int {
 	return approx.Poly.Depth()
 }
 
-//rescale weights for polynomial activation
+// rescale weights for polynomial activation
 func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense) {
 	mulC := 2.0 / (approx.B - approx.A)
 	addC := (-approx.A - approx.B) / (approx.B - approx.A)
@@ -136,7 +136,7 @@ func (approx *ChebyPolyApprox) Rescale(w, b *mat.Dense) (*mat.Dense, *mat.Dense)
 	return wR, bR
 }
 
-//decides the degree of approximation for each Param
+// decides the degree of approximation for each Param
 func SetDegOfParam(Params ApproxParams) ApproxParams {
 	ParamsNew := make([]ApproxParam, len(Params.Params))
 	margin := 1.0

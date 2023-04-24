@@ -2,7 +2,7 @@ package cipherUtils
 
 import (
 	"fmt"
-	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
+	pU "github.com/ldsec/slytHErin/inference/plainUtils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
@@ -12,12 +12,14 @@ import (
 	"time"
 )
 
-/********************************************
+/*
+*******************************************
 REGULAR MATRICES OPS
 |
 |
 v
-*********************************************/
+********************************************
+*/
 func TestPrepackClearText(t *testing.T) {
 	X := pU.RandMatrix(40, 90)
 	W := pU.RandMatrix(90, 90)

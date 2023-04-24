@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/dckks"
 	"github.com/tuneinsight/lattigo/v3/drlwe"
@@ -25,7 +25,7 @@ import (
 Distributed protocol in LAN environment, either on distributed servers or on LAN simulated via Localhost
 */
 
-//Local master is the master node for LAN setting
+// Local master is the master node for LAN setting
 type LocalMaster struct {
 	ProtoBuf *sync.Map //ct id -> protocol instance *Protocol
 	sk       *rlwe.SecretKey
@@ -44,7 +44,7 @@ type LocalMaster struct {
 	Done     chan bool //flag caller that master is done with all instances
 }
 
-//Local players hold sk shares for LAN Setting
+// Local players hold sk shares for LAN Setting
 type LocalPlayer struct {
 	Remote
 	PCKS   *dckks.PCKSProtocol    //PubKeySwitch
@@ -57,9 +57,9 @@ type LocalPlayer struct {
 	Conn   net.Listener
 }
 
-//Creates and returns new master node. This node is in charge of the computations using the encrypted model
-//and orchestrates the distributed bootstrap and refresh
-//Set localhost to true if LAN is simulated on localhost
+// Creates and returns new master node. This node is in charge of the computations using the encrypted model
+// and orchestrates the distributed bootstrap and refresh
+// Set localhost to true if LAN is simulated on localhost
 func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, parties int, partiesAddr []string, poolSize int, localhost bool) (*LocalMaster, error) {
 	master := new(LocalMaster)
 	master.sk = sk
@@ -89,8 +89,8 @@ func NewLocalMaster(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Paramet
 	return master, nil
 }
 
-//Returns a player node, which will take part in distributed bootstrap and key switch protocol
-//Set localhost to true if LAN is simulated on localhost
+// Returns a player node, which will take part in distributed bootstrap and key switch protocol
+// Set localhost to true if LAN is simulated on localhost
 func NewLocalPlayer(sk *rlwe.SecretKey, cpk *rlwe.PublicKey, params ckks.Parameters, id int, addr string, localhost bool) (*LocalPlayer, error) {
 	Network := Lan
 	if localhost {
@@ -131,7 +131,7 @@ func (lmst *LocalMaster) spawnEvaluators(X *cipherUtils.EncInput, minLevel int, 
 	}
 }
 
-//starts protocol instances in parallel
+// starts protocol instances in parallel
 func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput, pkQ *rlwe.PublicKey, minLevel int, Box cipherUtils.CkksBox) {
 	var err error
 	if proto == END {
@@ -170,7 +170,7 @@ func (lmst *LocalMaster) StartProto(proto ProtocolType, X *cipherUtils.EncInput,
 	}
 }
 
-//initiate protocol instance
+// initiate protocol instance
 func (lmst *LocalMaster) initProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) (*ckks.Ciphertext, error) {
 	switch proto {
 	case CKSWITCH:
@@ -222,7 +222,7 @@ func (lmst *LocalMaster) initProto(proto ProtocolType, pkQ *rlwe.PublicKey, ct *
 	return res, nil
 }
 
-//reads reply from open connection to player
+// reads reply from open connection to player
 func (lmst *LocalMaster) Dispatch(c net.Conn) {
 	buf, err := ReadFrom(c)
 	utils.ThrowErr(err)
@@ -242,7 +242,7 @@ func (lmst *LocalMaster) Dispatch(c net.Conn) {
 	}
 }
 
-//Runs the PCKS protocol from master and sends messages to players
+// Runs the PCKS protocol from master and sends messages to players
 func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.PublicKey, ct *ckks.Ciphertext, ctId int) {
 	//create protocol instance
 	entry, ok := lmst.ProtoBuf.Load(ctId)
@@ -288,7 +288,7 @@ func (lmst *LocalMaster) RunPubKeySwitch(proto *dckks.PCKSProtocol, pkQ *rlwe.Pu
 	}
 }
 
-//Runs the Refresh protocol from master and sends messages to players
+// Runs the Refresh protocol from master and sends messages to players
 func (lmst *LocalMaster) RunRefresh(proto *dckks.RefreshProtocol, ct *ckks.Ciphertext, crp drlwe.CKSCRP, minLevel int, logBound int, ctId int) {
 	//setup
 	entry, ok := lmst.ProtoBuf.Load(ctId)
@@ -358,7 +358,7 @@ func (lmst *LocalMaster) RunEnd() {
 	}
 }
 
-//Listen for shares and aggregates
+// Listen for shares and aggregates
 func (lmst *LocalMaster) DispatchPCKS(resp ProtocolResp) {
 	if resp.PlayerId == 0 {
 		//ignore invalid
@@ -394,7 +394,7 @@ func (lmst *LocalMaster) DispatchPCKS(resp ProtocolResp) {
 	entry.(*Protocol).muxProto.Unlock()
 }
 
-//Listen for shares and Finalize
+// Listen for shares and Finalize
 func (lmst *LocalMaster) DispatchRef(resp ProtocolResp) {
 	if resp.PlayerId == 0 {
 		//ignore invalid
@@ -434,7 +434,7 @@ func (lmst *LocalMaster) DispatchRef(resp ProtocolResp) {
 
 //PLAYERS PROTOCOL
 
-//Accepts an incoming TCP connection and handles it (blocking)
+// Accepts an incoming TCP connection and handles it (blocking)
 func (lp *LocalPlayer) Listen() {
 	//fmt.Printf("[+] Player %d started at %s\n\n", lp.Id, lp.Addr.String())
 	for {
@@ -449,7 +449,7 @@ func (lp *LocalPlayer) Listen() {
 	}
 }
 
-//Handler for the connection
+// Handler for the connection
 func (lp *LocalPlayer) Dispatch(c net.Conn) {
 	//listen from Master
 	for {
@@ -480,7 +480,7 @@ func (lp *LocalPlayer) Dispatch(c net.Conn) {
 	}
 }
 
-//Generates and send share to Master
+// Generates and send share to Master
 func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg ProtocolMsg) {
 	//fmt.Printf("[+] Player %d -- Received msg PCKS ID: %d from master\n\n", lp.Id, msg.Id)
 	proto := dckks.NewPCKSProtocol(lp.Params, 3.2)
@@ -508,7 +508,7 @@ func (lp *LocalPlayer) RunPubKeySwitch(c net.Conn, msg ProtocolMsg) {
 	utils.ThrowErr(err)
 }
 
-//Generate and send share to master
+// Generate and send share to master
 func (lp *LocalPlayer) RunRefresh(c net.Conn, msg ProtocolMsg) {
 	var ct ring.Poly
 	//fmt.Printf("[+] Player %d -- Received msg Refresh ID: %d from master\n\n", lp.Id, msg.Id)

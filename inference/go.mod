@@ -1,4 +1,4 @@
-module github.com/ldsec/dnn-inference/inference
+module github.com/ldsec/slytHErin/inference
 
 go 1.18
 

@@ -3,8 +3,8 @@ package cipherUtils
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"gonum.org/v1/gonum/mat"
 	"math"
@@ -23,7 +23,7 @@ type BlocksOperand interface {
 	Scale() float64
 }
 
-//Encrypted block matrix, to be used for input or bias layer
+// Encrypted block matrix, to be used for input or bias layer
 type EncInput struct {
 	Blocks             [][]*ckks.Ciphertext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP         int                  //num of partitions
@@ -32,7 +32,7 @@ type EncInput struct {
 	RealRows, RealCols int
 }
 
-//Plaintext block matrix, to be used for input or bias layer
+// Plaintext block matrix, to be used for input or bias layer
 type PlainInput struct {
 	Blocks             [][]*ckks.Plaintext //all the sub-matrixes, encrypted as flatten(A.T)
 	RowP, ColP         int                 //num of partitions
@@ -41,14 +41,14 @@ type PlainInput struct {
 	RealRows, RealCols int
 }
 
-//A matrix in diagonal form
+// A matrix in diagonal form
 type DiagMat interface {
 	GetDiags() map[int]ckks.Operand
 	GetRotations(parameters ckks.Parameters) []int
 	IsEncrypted() bool
 }
 
-//Encrypted matrix in diagonal form
+// Encrypted matrix in diagonal form
 type EncDiagMat struct {
 	//store an encrypted weight matrix in diagonal form
 	Diags        map[int]*ckks.Ciphertext //enc diagonals
@@ -85,7 +85,7 @@ func (W *EncDiagMat) IsEncrypted() bool {
 	return W.Encrypted
 }
 
-//Encrypted block matrix, weight of dense or convolutional layer
+// Encrypted block matrix, weight of dense or convolutional layer
 type EncWeightDiag struct {
 	Blocks             [][]*EncDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP         int
@@ -95,7 +95,7 @@ type EncWeightDiag struct {
 	RealRows, RealCols int
 }
 
-//Plaintext matrix in diagonal form
+// Plaintext matrix in diagonal form
 type PlainDiagMat struct {
 	//store a plaintext weight matrix in diagonal form
 	Diags                map[int]*ckks.Plaintext //diagonals
@@ -131,7 +131,7 @@ func (W *PlainDiagMat) IsEncrypted() bool {
 	return W.Encrypted
 }
 
-//Plaintext block matrix, weight of dense or convolutional layer
+// Plaintext block matrix, weight of dense or convolutional layer
 type PlainWeightDiag struct {
 	Blocks             [][]*PlainDiagMat //blocks of the matrix, each is a sub-matrix in diag form
 	RowP, ColP         int
@@ -244,8 +244,8 @@ func (X *PlainInput) GetRotations(params ckks.Parameters) []int {
 	return []int{}
 }
 
-//	Given a block input matrix, decrypts and returns the underlying original matrix
-//	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
+// Given a block input matrix, decrypts and returns the underlying original matrix
+// The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	Xb := new(plainUtils.BMatrix)
 	Xb.RealRows = XEnc.RealRows
@@ -270,8 +270,8 @@ func DecInput(XEnc *EncInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-//Decrypts input without decoding nor further transformation, i.e applies transformation:
-//Block_ct(i,j) --> Block_pt(i,j)
+// Decrypts input without decoding nor further transformation, i.e applies transformation:
+// Block_ct(i,j) --> Block_pt(i,j)
 func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
 	Xb := new(PlainInput)
 	Xb.RealRows = XEnc.RealRows
@@ -290,8 +290,8 @@ func DecInputNoDecode(XEnc *EncInput, Box CkksBox) *PlainInput {
 	return Xb
 }
 
-//	Given a block input matrix, decrypts and returns the underlying original matrix
-//	The sub-matrices are also transposed (remember that they are in form flatten(A.T))
+// Given a block input matrix, decrypts and returns the underlying original matrix
+// The sub-matrices are also transposed (remember that they are in form flatten(A.T))
 func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
 	Xb := new(plainUtils.BMatrix)
 	Xb.RealRows = XEnc.RealRows
@@ -315,9 +315,9 @@ func DecodeInput(XEnc *PlainInput, Box CkksBox) [][]float64 {
 	return plainUtils.MatToArray(plainUtils.ExpandBlocks(Xb))
 }
 
-//Return encrypted weight in block matrix form. The matrix is also block-transposed
-//i.e the first column of block is stored as row for cache efficiency
-//must provide the partitions and the rows and cols of the input inner sumbatrices (as when it will be multiplied)
+// Return encrypted weight in block matrix form. The matrix is also block-transposed
+// i.e the first column of block is stored as row for cache efficiency
+// must provide the partitions and the rows and cols of the input inner sumbatrices (as when it will be multiplied)
 func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Box CkksBox) (*EncWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
@@ -345,9 +345,9 @@ func NewEncWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Bo
 	return WEnc, nil
 }
 
-//Return plaintex weight in block matrix form. The matrix is also block-transposed
-//i.e the first column of block is stored as row for cache efficiency
-//takes block partions, rows of input inner submatrices, level, whether to use the complex trick, and box
+// Return plaintex weight in block matrix form. The matrix is also block-transposed
+// i.e the first column of block is stored as row for cache efficiency
+// takes block partions, rows of input inner submatrices, level, whether to use the complex trick, and box
 func NewPlainWeightDiag(Wm *mat.Dense, rowP, colP, leftR, leftC int, level int, Box CkksBox) (*PlainWeightDiag, error) {
 	Wb, err := plainUtils.PartitionMatrix(Wm, rowP, colP)
 	Wbt := plainUtils.TransposeBlocks(Wb)
@@ -380,7 +380,7 @@ func (W *EncWeightDiag) GetBlock(i, j int) interface{} {
 	return W.Blocks[i][j]
 }
 
-//colP, rowP
+// colP, rowP
 func (W *EncWeightDiag) GetPartitions() (int, int) {
 	//weights are block transposed
 	return W.RowP, W.ColP
@@ -416,7 +416,7 @@ func (W *PlainWeightDiag) GetBlock(i, j int) interface{} {
 	return W.Blocks[i][j]
 }
 
-//colP, rowP
+// colP, rowP
 func (W *PlainWeightDiag) GetPartitions() (int, int) {
 	return W.RowP, W.ColP
 }

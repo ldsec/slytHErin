@@ -3,13 +3,13 @@ package cryptonet
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/cluster"
-	"github.com/ldsec/dnn-inference/inference/data"
-	"github.com/ldsec/dnn-inference/inference/distributed"
-	"github.com/ldsec/dnn-inference/inference/network"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/cluster"
+	"github.com/ldsec/slytHErin/inference/data"
+	"github.com/ldsec/slytHErin/inference/distributed"
+	"github.com/ldsec/slytHErin/inference/network"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/rlwe"
 	"os"
@@ -48,8 +48,8 @@ var paramsLogN14Mask, _ = ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 	DefaultScale: float64(1 << 30),
 })
 
-//EXPERIMENT 1 - Model in clear - data encrypted:
-//Querier sends encrypted data to server to get privacy preserving prediction
+// EXPERIMENT 1 - Model in clear - data encrypted:
+// Querier sends encrypted data to server to get privacy preserving prediction
 func testCryptonet_EvalBatchEncrypted(t *testing.T, batch int) {
 	utils.SetupDirectory()
 
@@ -160,10 +160,10 @@ func testCryptonet_EvalBatchEncrypted(t *testing.T, batch int) {
 	}
 }
 
-//EXPERIMENT 2 - Model encrypted,data in clear:
-//In this scenario the model is sent by server to the client in encrypted form
-//Server offers an oblivious decryption service
-//EDIT: this version uses localhost to simulate Inter-DC network
+// EXPERIMENT 2 - Model encrypted,data in clear:
+// In this scenario the model is sent by server to the client in encrypted form
+// Server offers an oblivious decryption service
+// EDIT: this version uses localhost to simulate Inter-DC network
 func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	utils.SetupDirectory()
 
@@ -279,10 +279,10 @@ func TestCryptonet_EvalBatchClearModelEnc(t *testing.T) {
 	}
 }
 
-//EXPERIMENT 2 - Model encrypted,data in clear:
-//In this scenario the model is sent by server to the client in encrypted form
-//Server offers an oblivious decryption service
-//This version spawns the server on a server on remote cluster
+// EXPERIMENT 2 - Model encrypted,data in clear:
+// In this scenario the model is sent by server to the client in encrypted form
+// Server offers an oblivious decryption service
+// This version spawns the server on a server on remote cluster
 func TestCryptonet_EvalBatchClearModelEnc_LAN(t *testing.T) {
 	utils.SetupDirectory()
 

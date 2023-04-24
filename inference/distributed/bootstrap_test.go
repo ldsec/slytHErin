@@ -2,9 +2,9 @@ package distributed
 
 import (
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	pU "github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	pU "github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"github.com/tuneinsight/lattigo/v3/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v3/dckks"

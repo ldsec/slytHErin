@@ -1,20 +1,20 @@
-//Package contains the logic for all operations between ciphertext and plaintexts
+// Package contains the logic for all operations between ciphertext and plaintexts
 package cipherUtils
 
 import (
 	"errors"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"github.com/tuneinsight/lattigo/v3/ckks"
 	"sync"
 )
 
-//Wrapper for polynomial activation function
+// Wrapper for polynomial activation function
 type activationPoly struct {
 	polynomial  *ckks.Polynomial
 	term0VecEcd *ckks.Plaintext
 }
 
-//Handles an activation layer with a polynomial function on an EncInput
+// Handles an activation layer with a polynomial function on an EncInput
 type Activator struct {
 	poly             []activationPoly
 	isCheby          bool
@@ -24,9 +24,9 @@ type Activator struct {
 
 type EvalFunc func(X *EncInput, i, j int, poly activationPoly, Box CkksBox)
 
-//Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
-//output of the previous linear layer
-//Identity is not considered an activation, so don't count it for numOfActivations
+// Creates a new Activator. Takes lavel, scale, as well as the blocks and sub-matrices dimentions, of the
+// output of the previous linear layer
+// Identity is not considered an activation, so don't count it for numOfActivations
 func NewActivator(numOfActivations int, poolSize int) (*Activator, error) {
 	Act := new(Activator)
 	Act.poolSize = poolSize
@@ -35,8 +35,8 @@ func NewActivator(numOfActivations int, poolSize int) (*Activator, error) {
 	return Act, nil
 }
 
-//Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimention
-//You don't have to add identity activations
+// Add activation functions at layer. Takes level and scale of ct to activate at layer, as well its inner dimention
+// You don't have to add identity activations
 func (Act *Activator) AddActivation(activation utils.ChebyPolyApprox, layer, level int, scale float64, innerRows, innerCols int, Box CkksBox) {
 	poly := new(ckks.Polynomial)
 	i := layer
@@ -92,7 +92,7 @@ func (Act *Activator) spawnEvaluators(f EvalFunc, poly activationPoly, X *EncInp
 	}
 }
 
-//Evaluates a polynomial on the ciphertext. If no activation is at layer, applies identity
+// Evaluates a polynomial on the ciphertext. If no activation is at layer, applies identity
 func (Act *Activator) ActivateBlocks(X *EncInput, layer int, Box CkksBox) {
 	if layer >= Act.NumOfActivations {
 		//no more act -> identity
@@ -133,7 +133,7 @@ func (Act *Activator) ActivateBlocks(X *EncInput, layer int, Box CkksBox) {
 	}
 }
 
-//Evaluates a polynomial on the ciphertext
+// Evaluates a polynomial on the ciphertext
 func evalPolyBlocks(X *EncInput, i, j int, poly activationPoly, Box CkksBox) {
 	eval := Box.Evaluator.ShallowCopy()
 	ct, _ := eval.EvaluatePoly(X.Blocks[i][j], poly.polynomial, X.Blocks[i][j].Scale)
@@ -141,7 +141,7 @@ func evalPolyBlocks(X *EncInput, i, j int, poly activationPoly, Box CkksBox) {
 	X.Blocks[i][j] = ct
 }
 
-//Evaluates a polynomial on the ciphertext using ckks.Evaluator.EvaluatePolyVector. This should be called via Activator.ActivateBlocks
+// Evaluates a polynomial on the ciphertext using ckks.Evaluator.EvaluatePolyVector. This should be called via Activator.ActivateBlocks
 func evalPolyBlocksVector(X *EncInput, i, j int, poly activationPoly, Box CkksBox) {
 	//build map of all slots with legit values
 	eval := Box.Evaluator.ShallowCopy()

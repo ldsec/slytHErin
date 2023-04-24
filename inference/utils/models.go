@@ -3,7 +3,7 @@ package utils
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
 	"gonum.org/v1/gonum/mat"
 	"math"
 	"os"
@@ -11,7 +11,7 @@ import (
 )
 
 /*
-	Define layer type for the various models
+Define layer type for the various models
 */
 type Bias struct {
 	B   []float64 `json:"b"`
@@ -19,8 +19,8 @@ type Bias struct {
 }
 
 /*
-	Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample
-	Clearly it can be generalized to a simple dense layer
+Matrix M s.t X @ M = conv(X, layer).flatten() where X is a row-flattened data sample
+Clearly it can be generalized to a simple dense layer
 */
 type Kernel struct {
 	W    []float64 `json:"w"`
@@ -28,7 +28,7 @@ type Kernel struct {
 	Cols int       `json:"cols"`
 }
 
-//A Kernel (convolution in Toeplitz form or dense) and A Bias
+// A Kernel (convolution in Toeplitz form or dense) and A Bias
 type Layer struct {
 	Weight Kernel `json:"weight"`
 	Bias   Bias   `json:"bias"`
@@ -228,7 +228,7 @@ func buildBiasMatrix(b Bias, cols, batchSize int) *mat.Dense {
 	return res
 }
 
-//Returns number of correct values, accuracy and predicted values
+// Returns number of correct values, accuracy and predicted values
 func Predict(Y []int, labels int, result [][]float64) (int, float64, []int) {
 	batchSize := len(Y)
 	predictions := make([]int, batchSize)

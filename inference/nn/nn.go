@@ -1,12 +1,12 @@
-//definitions and experiments for zama nn models
+// definitions and experiments for zama nn models
 package nn
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ldsec/dnn-inference/inference/cipherUtils"
-	"github.com/ldsec/dnn-inference/inference/network"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/cipherUtils"
+	"github.com/ldsec/slytHErin/inference/network"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -30,7 +30,7 @@ type NNHE struct {
 
 var DEG = 63
 
-//Initialize activation function
+// Initialize activation function
 func InitActivations(args ...interface{}) []utils.ChebyPolyApprox {
 	layers := args[0].(int)
 	HEtrain := args[1].(bool)

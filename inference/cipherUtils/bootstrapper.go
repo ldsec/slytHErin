@@ -2,17 +2,17 @@ package cipherUtils
 
 import "C"
 import (
-	"github.com/ldsec/dnn-inference/inference/plainUtils"
-	"github.com/ldsec/dnn-inference/inference/utils"
+	"github.com/ldsec/slytHErin/inference/plainUtils"
+	"github.com/ldsec/slytHErin/inference/utils"
 	"sync"
 )
 
-//Interface for bootstrappers
+// Interface for bootstrappers
 type IBootstrapper interface {
 	Bootstrap(input *EncInput, Box CkksBox)
 }
 
-//Centralized bootstrapper. Homomorphically evaluates decryption circuit
+// Centralized bootstrapper. Homomorphically evaluates decryption circuit
 type Bootstrapper struct {
 	poolSize int
 }
@@ -36,7 +36,7 @@ func (Btp *Bootstrapper) spawnEvaluators(X *EncInput, ch chan []int, Box CkksBox
 	}
 }
 
-//Centralized Bootstrapping
+// Centralized Bootstrapping
 func (Btp *Bootstrapper) Bootstrap(X *EncInput, Box CkksBox) {
 
 	if Btp.poolSize == 1 {
@@ -70,7 +70,7 @@ func (Btp *Bootstrapper) Bootstrap(X *EncInput, Box CkksBox) {
 	}
 }
 
-//Dummy Bootstrap where cipher is freshly encrypted
+// Dummy Bootstrap where cipher is freshly encrypted
 func DummyBootStrapBlocks(X *EncInput, Box CkksBox) *EncInput {
 	pt := DecInput(X, Box)
 	Xnew, err := NewEncInput(plainUtils.NewDense(pt), X.RowP, X.ColP, Box.Params.MaxLevel(), Box.Params.DefaultScale(), Box)
