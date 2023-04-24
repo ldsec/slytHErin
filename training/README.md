@@ -10,7 +10,7 @@ the network parameters.
 The code has been tested using ```Python 3.10```.
 All the dependencies can be installed using ```pip install -r requirements.txt```
 
-## Cryptonet [1]
+## Cryptonets [1]
 You can run ```python3 cryptonet.py``` to train a new cryptonet model.
 After this you should see a ```cryptonet_packed.json``` file in the ```models```
 folder. You can copy this to ```inference/cryptonet```
@@ -20,7 +20,7 @@ You can generate the json with MNIST data with ```python3 dataHandler.py --model
 and find the file in the ```data``` folder as a ```cryptonet_data_nopad.json```
 
 ## NN [2]
-You are provided with the json files already generated in ```models/```. Move those into ```inference/nn```, including the ```interval.json``` files.
+You are provided with the json files re-trained from the models described in [2] and generated in ```models/```. Move those into ```inference/nn```, including the ```interval.json``` files.
 
 ### Data
 Same as cryptonet, use dataHandler with ```--model nn``` and find the
